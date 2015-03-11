@@ -1,0 +1,37 @@
+dependencies: \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/src/yassl_int.cpp \
+  /Users/sens/Developer/mysql-5.6.23/project/include/my_config.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/runtime.hpp \
+  /Users/sens/Developer/mysql-5.6.23/project/include/config.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/yassl_int.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/yassl_imp.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/yassl_types.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/type_traits.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/types.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/factory.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/vector.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/helpers.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/algorithm.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/pair.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/list.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/yassl_error.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/crypto_wrapper.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/cert_wrapper.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/buffer.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/memory.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/mySTL/memory_array.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/asn.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/misc.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/block.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/taocrypt/include/error.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/openssl/ssl.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/openssl/prefix_ssl.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/openssl/opensslv.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/openssl/rsa.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/openssl/transport_types.h \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/log.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/socket_wrapper.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/lock.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/handshake.hpp \
+  /Users/sens/Developer/mysql-5.6.23/extra/yassl/include/timer.hpp \
+  /Users/sens/Developer/mysql-5.6.23/include/mysql/get_password.h
