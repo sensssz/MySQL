@@ -1,20 +1,23 @@
 #include "my_global.h"
 #include "trace_tool.h"
-
+#include <algorithm>
 #include <pthread.h>
 #include <fstream>
 #include <time.h>
 #include <cstring>
-#include <execinfo.h>
 #include <sstream>
 
 #define TARGET_PATH_COUNT 2
-#define NUMBER_OF_FUNCTIONS 4
+#define NUMBER_OF_FUNCTIONS 0
+#define LATENCY
+
+#define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
 using std::endl;
 using std::ofstream;
 using std::vector;
 using std::stringstream;
+using std::sort;
 
 long transaction_id = 0;
 
@@ -27,53 +30,64 @@ __thread timespec TraceTool::last_query;
 timespec TraceTool::start_time = {0, 0};
 timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
 __thread bool TraceTool::commit_successful = false;
+__thread bool TraceTool::new_transaction = true;
 
+#ifdef MONITOR
 static __thread timespec function_start;
 static __thread timespec function_end;
 static __thread timespec call_start;
 static __thread timespec call_end;
+#endif
 
-__thread bool TraceTool::new_transaction = true;
 
 static int log_index = 0;
 
 void TRACE_FUNCTION_START()
 {
+#ifdef MONITOR
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &function_start);
   }
+#endif
 }
 
 void TRACE_FUNCTION_END()
 {
+#ifdef MONITOR
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &function_end);
     TraceTool::get_instance()->add_record(0, TraceTool::difftime(function_start, function_end));
   }
+#endif
 }
 
 bool TRACE_START()
 {
+#ifdef MONITOR
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &call_start);
   }
+#endif
   return false;
 }
 
 bool TRACE_END(int index)
 {
+#ifdef MONITOR
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &call_end);
     TraceTool::get_instance()->add_record(index, TraceTool::difftime(call_start, call_end));
   }
+#endif
   return false;
 }
 
@@ -85,9 +99,11 @@ TraceTool *TraceTool::get_instance()
     if (instance == NULL)
     {
       instance = new TraceTool;
+#ifdef LATENCY
       start_time = get_time();
       pthread_t write_thread;
       pthread_create(&write_thread, NULL, check_write_log, NULL);
+#endif
     }
     pthread_mutex_unlock(&instance_mutex);
   }
@@ -97,10 +113,10 @@ TraceTool *TraceTool::get_instance()
 TraceTool::TraceTool() : function_times()
 {
   log_file.open("/usr/local/mysql/data/trace.log");
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
   for (int index = 0; index < number_of_functions; index++)
   {
-    vector<long> function_time;
+    vector<long> function_time(500000);
     function_time.push_back(0);
     function_times.push_back(function_time);
   }
@@ -154,8 +170,54 @@ long now_micro()
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
+bool lock_equal(lock_info *lock1, lock_info *lock2)
+{
+  return EQUAL(lock1, lock2, space_id) && EQUAL(lock1, lock2, page_no) &&
+  EQUAL(lock1, lock2, heap_no) && EQUAL(lock1, lock2, type_mode);
+}
+
+record_lock *TraceTool::find_record_lock(lock_info *lock_info)
+{
+//  for (vector<record_lock *>::iterator iterator = record_locks.begin(); iterator != record_locks.end(); ++iterator)
+//  {
+//    if (lock_equal(&(*iterator)->info, lock_info))
+//    {
+//      return *iterator;
+//    }
+//  }
+  return NULL;
+}
+
+void TraceTool::start_waiting(lock_info *lock_info, lock_request *request)
+{
+  pthread_mutex_lock(&record_lock_mutex);
+  record_lock *lock_waiting_on = record_lock_map[*lock_info];
+  if (lock_waiting_on == NULL)
+  {
+    lock_waiting_on = new record_lock;
+    lock_waiting_on->info.space_id = lock_info->space_id;
+    lock_waiting_on->info.page_no = lock_info->page_no;
+    lock_waiting_on->info.heap_no = lock_info->heap_no;
+    lock_waiting_on->info.type_mode = lock_info->type_mode;
+    record_lock_map[*lock_info] = lock_waiting_on;
+  }
+  pthread_mutex_unlock(&record_lock_mutex);
+  request->lock = lock_waiting_on;
+  request->start_waiting_time = get_time();
+}
+
+void TraceTool::end_waiting(lock_request *request)
+{
+  if (request != NULL && request->lock_object != NULL)
+  {
+    long waiting_time = difftime(request->start_waiting_time, get_time());
+    request->lock->waiting_times.push_back(waiting_time);
+  }
+}
+
 void TraceTool::start_new_query()
 {
+#ifdef LATENCY
   if (new_transaction)
   {
     new_transaction = false;
@@ -175,10 +237,12 @@ void TraceTool::start_new_query()
   pthread_mutex_lock(&last_query_mutex);
   clock_gettime(CLOCK_REALTIME, &global_last_query);
   pthread_mutex_unlock(&last_query_mutex);
+#endif
 }
 
 void TraceTool::end_query()
 {
+#ifdef LATENCY
   if (current_transaction_id > transaction_id)
   {
     current_transaction_id = 0;
@@ -188,10 +252,12 @@ void TraceTool::end_query()
   pthread_rwlock_rdlock(&data_lock);
   function_times.back()[current_transaction_id] += latency;
   pthread_rwlock_unlock(&data_lock);
+#endif
 }
 
 void TraceTool::end_transaction()
 {
+#ifdef LATENCY
   if (commit_successful)
   {
     new_transaction = true;
@@ -200,6 +266,7 @@ void TraceTool::end_transaction()
   {
     function_times.back()[current_transaction_id] = 0;
   }
+#endif
 }
 
 void TraceTool::add_record(int function_index, long duration)
@@ -211,6 +278,11 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);
+}
+
+bool compare_record_lock(record_lock *lock1, record_lock *lock2)
+{
+  return lock1->waiting_times.size() > lock2->waiting_times.size();
 }
 
 void TraceTool::write_log()
@@ -225,6 +297,7 @@ void TraceTool::write_log()
   {
     log << transaction_start_times[index] << endl;
   }
+  
   for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     long number_of_transactions = iterator->size();
@@ -238,4 +311,22 @@ void TraceTool::write_log()
   function_times.clear();
   pthread_rwlock_unlock(&data_lock);
   log.close();
+  
+  ofstream lock_waiting_log("lock");
+  pthread_mutex_lock(&record_lock_mutex);
+  lock_waiting_log << "Number of locks: " << record_lock_map.size() << endl;
+  for (auto lock_map : record_lock_map)
+  {
+    record_lock *lock = lock_map.second;
+    lock_waiting_log << "Lock: " << lock->info.space_id << "," << lock->info.page_no << ","
+    << lock->info.heap_no << "," << lock->info.type_mode << "," << lock->waiting_times.size() << endl;
+    for (auto time : lock->waiting_times)
+    {
+      lock_waiting_log << time << endl;
+    }
+    delete lock;
+  }
+  pthread_mutex_unlock(&record_lock_mutex);
+  record_lock_map.clear();
+  lock_waiting_log.close();
 }

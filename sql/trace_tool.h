@@ -1,18 +1,23 @@
 #ifndef MY_TRACE_TOOL_H
 #define MY_TRACE_TOOL_H
 
+#include "../storage/innobase/include/lock0types.h"
 #include <fstream>
 #include <deque>
 #include <vector>
 #include <pthread.h>
 #include <time.h>
+#include <unordered_map>
 
 #define TRACE_S_E(function_call, index) (TRACE_START()|(function_call)|TRACE_END(index))
+
+typedef unsigned long int ulint;
 
 using std::ofstream;
 using std::deque;
 using std::vector;
 using std::endl;
+using std::unordered_map;
 
 extern long transaction_id;
 void TRACE_FUNCTION_START();
@@ -32,6 +37,7 @@ private:
     static timespec start_time;
     static timespec global_last_query;
     static pthread_mutex_t last_query_mutex;
+    static pthread_mutex_t record_lock_mutex;
     
     static __thread timespec function_start;
     static __thread timespec function_end;
@@ -43,6 +49,8 @@ private:
     static pthread_rwlock_t data_lock;
     vector<vector<long> > function_times;
     vector<long> transaction_start_times;
+    unordered_map<lock_info, record_lock *> record_lock_map;
+//    vector<record_lock *> record_locks;
     
     TraceTool();
     TraceTool(TraceTool const&){};
@@ -61,6 +69,9 @@ public:
     static void *check_write_log(void *);
     static timespec get_time();
     
+    record_lock *find_record_lock(lock_info *lock_info);
+    void start_waiting(lock_info *lock_info, lock_request *request);
+    void end_waiting(lock_request *request);
     ofstream &get_log()
     {
         return log_file;

@@ -50,6 +50,8 @@ Created 5/7/1996 Heikki Tuuri
 #include "dict0boot.h"
 #include <set>
 
+#include "trace_tool.h"
+
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
 #define LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK 1000000
@@ -1567,7 +1569,7 @@ Checks if some other transaction has a conflicting explicit lock request
 in the queue, so that we have to wait.
 @return	lock or NULL */
 static
-const lock_t*
+lock_t*
 lock_rec_other_has_conflicting(
 /*===========================*/
 	enum lock_mode		mode,	/*!< in: LOCK_S or LOCK_X,
@@ -1579,7 +1581,7 @@ lock_rec_other_has_conflicting(
 	ulint			heap_no,/*!< in: heap number of the record */
 	const trx_t*		trx)	/*!< in: our transaction */
 {
-	const lock_t*		lock;
+	lock_t*		lock;
 	ibool			is_supremum;
 
 	ut_ad(lock_mutex_own());
@@ -1588,7 +1590,7 @@ lock_rec_other_has_conflicting(
 
 	for (lock = lock_rec_get_first(block, heap_no);
 	     lock != NULL;
-	     lock = lock_rec_get_next_const(heap_no, lock)) {
+	     lock = lock_rec_get_next(heap_no, lock)) {
 
 		if (lock_rec_has_to_wait(trx, mode, lock, is_supremum)) {
 			return(lock);
@@ -1837,6 +1839,8 @@ lock_rec_create(
 	lock->un_member.rec_lock.space = space;
 	lock->un_member.rec_lock.page_no = page_no;
 	lock->un_member.rec_lock.n_bits = n_bytes * 8;
+  lock->request = NULL;
+  lock->trx_waiting = 0;
 
 	/* Reset to zero the bitmap which resides immediately after the
 	lock struct */
@@ -1895,6 +1899,8 @@ lock_rec_enqueue_waiting(
 					waiting lock request is set
 					when performing an insert of
 					an index record */
+  lock_t *conflict_lock,  /*!< in: the conflict lock that causes
+                           the waiting*/
 	const buf_block_t*	block,	/*!< in: buffer block containing
 					the record */
 	ulint			heap_no,/*!< in: heap number of the record */
@@ -1992,8 +1998,19 @@ lock_rec_enqueue_waiting(
 	}
 #endif /* UNIV_DEBUG */
 
-	MONITOR_INC(MONITOR_LOCKREC_WAIT);
-
+  MONITOR_INC(MONITOR_LOCKREC_WAIT);
+  
+  lock_info lock_to_wait;
+  lock_to_wait.space_id = block->page.space;
+  lock_to_wait.page_no = block->page.offset;
+  lock_to_wait.heap_no = heap_no;
+  lock_to_wait.type_mode = conflict_lock->type_mode;
+  lock_request *request = new lock_request;
+  request->lock_object = conflict_lock;
+  TraceTool::get_instance()->start_waiting(&lock_to_wait, request);
+  lock->request = request;
+  conflict_lock->trx_waiting++;
+  
 	return(DB_LOCK_WAIT);
 }
 
@@ -2216,6 +2233,7 @@ lock_rec_lock_slow(
 {
 	trx_t*			trx;
 	dberr_t			err = DB_SUCCESS;
+  lock_t*     conflict_lock;
 
 	ut_ad(lock_mutex_own());
 	ut_ad((LOCK_MODE_MASK & mode) != LOCK_S
@@ -2239,9 +2257,9 @@ lock_rec_lock_slow(
 		/* The trx already has a strong enough lock on rec: do
 		nothing */
 
-	} else if (lock_rec_other_has_conflicting(
+	} else if ((conflict_lock = lock_rec_other_has_conflicting(
 			static_cast<enum lock_mode>(mode),
-			block, heap_no, trx)) {
+			block, heap_no, trx))) {
 
 		/* If another transaction has a non-gap conflicting
 		request in the queue, as this transaction does not
@@ -2249,7 +2267,7 @@ lock_rec_lock_slow(
 		record, we have to wait. */
 
 		err = lock_rec_enqueue_waiting(
-			mode, block, heap_no, index, thr);
+			mode, conflict_lock, block, heap_no, index, thr);
 
 	} else if (!impl) {
 		/* Set the requested lock on the record, note that
@@ -2495,16 +2513,35 @@ lock_rec_dequeue_from_page(
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
 
+  ulint max_trx_waiting = -1;
+  const lock_t *conflict_lock;
 	for (lock = lock_rec_get_first_on_page_addr(space, page_no);
 	     lock != NULL;
 	     lock = lock_rec_get_next_on_page(lock)) {
 
-		if (lock_get_wait(lock)
-		    && !lock_rec_has_to_wait_in_queue(lock)) {
-
-			/* Grant the lock */
-			ut_ad(lock->trx != in_lock->trx);
-			lock_grant(lock);
+		if (lock_get_wait(lock))
+    {
+      if (!(conflict_lock = lock_rec_has_to_wait_in_queue(lock)))
+      {
+        /* Grant the lock */
+        ut_ad(lock->trx != in_lock->trx);
+        lock_grant(lock);
+        
+        TraceTool::get_instance()->end_waiting(lock->request);
+        delete lock->request;
+        lock->request = NULL;
+      }
+      else if(lock->request != NULL && lock->request->lock_object != conflict_lock)
+      {
+        // Waiting for the original lock has stopped
+        TraceTool::get_instance()->end_waiting(lock->request);
+//        TraceTool::get_instance()->get_log() << "End waiting, ";
+        // Start waiting for a new lock
+        lock->request->lock_object = conflict_lock;
+        lock->request->lock->info.type_mode = conflict_lock->type_mode;
+        lock->request->start_waiting_time = TraceTool::get_instance()->get_time();
+//        TraceTool::get_instance()->get_log() << "and start waiting for lock " << conflict_lock << endl;
+      }
 		}
 	}
 }
@@ -5925,6 +5962,7 @@ lock_rec_insert_check_and_lock(
 	dberr_t		err;
 	ulint		next_rec_heap_no;
 	ibool		inherit_in = *inherit;
+  const lock_t* conflict_lock;
 
 	ut_ad(block->frame == page_align(rec));
 	ut_ad(!dict_index_is_online_ddl(index)
@@ -5981,17 +6019,17 @@ lock_rec_insert_check_and_lock(
 	had to wait for their insert. Both had waiting gap type lock requests
 	on the successor, which produced an unnecessary deadlock. */
 
-	if (lock_rec_other_has_conflicting(
+	if ((conflict_lock = lock_rec_other_has_conflicting(
 		    static_cast<enum lock_mode>(
 			    LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION),
-		    block, next_rec_heap_no, trx)) {
+		    block, next_rec_heap_no, trx))) {
 
 		/* Note that we may get DB_SUCCESS also here! */
 		trx_mutex_enter(trx);
 
 		err = lock_rec_enqueue_waiting(
 			LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION,
-			block, next_rec_heap_no, index, thr);
+			conflict_lock, block, next_rec_heap_no, index, thr);
 
 		trx_mutex_exit(trx);
 	} else {

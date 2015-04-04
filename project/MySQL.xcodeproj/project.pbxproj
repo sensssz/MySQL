@@ -6743,7 +6743,7 @@
 		C48BB916643F45FFA0A0890E /* thr_mutex.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.c; fileEncoding = 4; name = thr_mutex.c; path = mysys/thr_mutex.c; sourceTree = SOURCE_ROOT; };
 		C4BDB7D997F34FD89D95EB75 /* table_setup_actors.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 4; name = table_setup_actors.h; path = storage/perfschema/table_setup_actors.h; sourceTree = SOURCE_ROOT; };
 		C4F4949D0808437FA8D983D2 /* hp_create.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.c; fileEncoding = 4; name = hp_create.c; path = storage/heap/hp_create.c; sourceTree = SOURCE_ROOT; };
-		C4FC7921EA0146C89F0FBA4B /* libmysqlclient.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; name = libmysqlclient.dylib; path = libmysqlclient.18.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		C4FC7921EA0146C89F0FBA4B /* libmysqlclient.18.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; path = libmysqlclient.18.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4FF60EA8E264B2A8FE3A6E1 /* common.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.c; fileEncoding = 4; name = common.c; path = "cmd-line-utils/libedit/common.c"; sourceTree = SOURCE_ROOT; };
 		C50118452E634B64B57B8676 /* gen_lex_hash.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = gen_lex_hash.cc; path = sql/gen_lex_hash.cc; sourceTree = SOURCE_ROOT; };
 		C538362A18F643A28C31AEA2 /* srv0mon.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = srv0mon.cc; path = storage/innobase/srv/srv0mon.cc; sourceTree = SOURCE_ROOT; };
@@ -10007,7 +10007,7 @@
 				F20C1F7DEA2B486B8B75930E /* thr_lock */,
 				ED487A1B46D14BDBB9ACDD9F /* libmysys_ssl.a */,
 				60E5C410B7CE4E43AFEB28B8 /* libclientlib.a */,
-				C4FC7921EA0146C89F0FBA4B /* libmysqlclient.dylib */,
+				C4FC7921EA0146C89F0FBA4B /* libmysqlclient.18.dylib */,
 				3868E85A81F44D5DBFC96D64 /* libmysqlclient.a */,
 				92572E4D1CE34714BB2E2513 /* no_plan-t */,
 				EA4E0179ED5F47D18A7B9939 /* simple-t */,
@@ -12221,7 +12221,7 @@
 			);
 			name = libmysql;
 			productName = libmysql;
-			productReference = C4FC7921EA0146C89F0FBA4B /* libmysqlclient.dylib */;
+			productReference = C4FC7921EA0146C89F0FBA4B /* libmysqlclient.18.dylib */;
 			productType = "com.apple.product-type.library.dynamic";
 		};
 		F026C14DC665435FACB1D32B /* perfschema */ = {

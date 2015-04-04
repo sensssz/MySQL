@@ -25,6 +25,13 @@ Created 5/7/1996 Heikki Tuuri
 
 #ifndef lock0types_h
 #define lock0types_h
+#include "ut0rnd.h"
+#include "univ.i"
+#include <vector>
+#include <list>
+
+using std::vector;
+using std::list;
 
 #define lock_t ib_lock_t
 struct lock_t;
@@ -43,5 +50,48 @@ enum lock_mode {
 	LOCK_NONE_UNSET = 255
 };
 
+struct struct_lock_info
+{
+    ulint space_id;
+    ulint page_no;
+    ulint heap_no;
+    ulint type_mode;
+    
+    bool operator==(const struct struct_lock_info &lock_info) const
+    {
+        return space_id == lock_info.space_id && page_no == lock_info.page_no
+        && heap_no == lock_info.heap_no && type_mode == lock_info.type_mode;
+    }
+};
+typedef struct_lock_info lock_info;
+
+struct struct_record_lock
+{
+    lock_info info;
+    list<long> waiting_times;
+};
+typedef struct struct_record_lock record_lock;
+
+struct struct_lock_request
+{
+    record_lock *lock;
+    const lock_t *lock_object;
+    timespec start_waiting_time;
+};
+typedef struct struct_lock_request lock_request;
+
+namespace std
+{
+    template<>
+    struct hash<lock_info>
+    {
+        ulint operator()(const struct struct_lock_info &lock_info) const
+        {
+            ulint page_fold = ut_fold_ulint_pair(lock_info.space_id, lock_info.page_no);
+            ulint record_fold = ut_fold_ulint_pair(lock_info.space_id, lock_info.page_no);
+            return ut_fold_ulint_pair(page_fold, record_fold);
+        }
+    };
+}
 
 #endif
