@@ -26,6 +26,8 @@ Created 3/26/1996 Heikki Tuuri
 #ifndef trx0trx_h
 #define trx0trx_h
 
+#include <time.h>
+
 #include "univ.i"
 #include "trx0types.h"
 #include "dict0types.h"
@@ -738,6 +740,16 @@ struct trx_t{
 	ro_trx_list the first time they try to acquire a lock ie. by default
 	we treat all read-only transactions as non-locking.  */
 	trx_state_t	state;
+    
+    ulint       total_waiting_time; /*!< Total time spent on waiting for
+                         locks*/
+    
+    bool        in_conflict;    /*!< Indicates whether or not there is a
+                         rw-dependency from a concurrent transaction
+                         to this transaction. */
+    bool        out_conflict;   /*!< Indicates whether or not there is a
+                         rw-dependency from this transaction to a
+                         concurrent transaction. */
 
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by
@@ -1037,7 +1049,10 @@ struct trx_t{
 						in locking reads to block
 						insertions into gaps */
 
-#define TRX_ISO_SERIALIZABLE		3	/* all plain SELECTs are
+#define TRX_ISO_SNAPSHOT_SERIALIZABLE   3   /* same as serializable
+                                    but using snapshot isolation */
+
+#define TRX_ISO_SERIALIZABLE		4	/* all plain SELECTs are
 						converted to LOCK IN SHARE
 						MODE reads */
 

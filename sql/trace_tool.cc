@@ -32,6 +32,10 @@ timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+long TraceTool::total_release_time = 0;
+long TraceTool::have_choice_time = 0;
+long TraceTool::needs_to_grant = 0;
+
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
 __thread bool TraceTool::commit_successful = false;
@@ -112,15 +116,16 @@ TraceTool *TraceTool::get_instance()
 
 TraceTool::TraceTool() : function_times()
 {
-  log_file.open("/usr/local/mysql/data/trace.log");
+  log_file.open("trace.log");
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
   for (int index = 0; index < number_of_functions; index++)
   {
-    vector<long> function_time(500000);
+    vector<long> function_time;
+    function_time.reserve(500000);
     function_time.push_back(0);
     function_times.push_back(function_time);
   }
-  transaction_start_times.push_back(0);
+//  transaction_start_times.push_back(0);
 }
 
 bool TraceTool::should_monitor()
@@ -136,8 +141,8 @@ void *TraceTool::check_write_log(void *arg)
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
-      std::ifstream src("/usr/local/mysql/data/trace.log", std::ios::binary);
-      std::ofstream dst("/usr/local/mysql/data/trace.bak", std::ios::binary);
+      std::ifstream src("trace.log", std::ios::binary);
+      std::ofstream dst("trace.bak", std::ios::binary);
       dst << src.rdbuf();
       
       TraceTool *old_instace = instance;
@@ -146,6 +151,9 @@ void *TraceTool::check_write_log(void *arg)
       
       old_instace->write_log();
       delete old_instace;
+      
+      total_release_time = 0;
+      have_choice_time = 0;
     }
   }
   return NULL;
@@ -223,13 +231,13 @@ void TraceTool::start_new_query()
     new_transaction = false;
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
-    transaction_start_times[current_transaction_id] = now_micro();
+//    transaction_start_times[current_transaction_id] = now_micro();
     
     for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
     {
       iterator->push_back(0);
     }
-    transaction_start_times.push_back(0);
+//    transaction_start_times.push_back(0);
     
     pthread_rwlock_unlock(&data_lock);
   }
@@ -287,17 +295,20 @@ bool compare_record_lock(record_lock *lock1, record_lock *lock2)
 
 void TraceTool::write_log()
 {
+  log_file << "Total Lock Release: " << total_release_time << endl;
+  log_file << "Needs to Grant: " << needs_to_grant << endl;
+  log_file << "Have Choices: " << have_choice_time << endl;
   ofstream log;
   stringstream sstream;
-  sstream << "/usr/local/mysql/data/trace" << log_index++;
+  sstream << "trace" << log_index++;
   log.open(sstream.str().c_str());
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
-  for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
-  {
-    log << transaction_start_times[index] << endl;
-  }
-  
+//  for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
+//  {
+//    log << transaction_start_times[index] << endl;
+//  }
+//  
   for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     long number_of_transactions = iterator->size();

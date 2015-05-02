@@ -50,11 +50,13 @@ private:
     vector<vector<long> > function_times;
     vector<long> transaction_start_times;
     unordered_map<lock_info, record_lock *> record_lock_map;
-//    vector<record_lock *> record_locks;
     
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
+    static long total_release_time;
+    static long have_choice_time;
+    static long needs_to_grant;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;

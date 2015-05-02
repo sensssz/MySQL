@@ -110,6 +110,8 @@ trx_create(void)
 	trx->magic_n = TRX_MAGIC_N;
 
 	trx->state = TRX_STATE_NOT_STARTED;
+  
+  trx->number_of_locks = 0;
 
 	trx->isolation_level = TRX_ISO_REPEATABLE_READ;
 
@@ -852,6 +854,10 @@ trx_start_low(
 		trx->rseg = trx_assign_rseg_low(
 			srv_undo_logs, srv_undo_tablespaces);
 	}
+  
+  trx->in_conflict = false;
+  trx->out_conflict = false;
+  trx->total_waiting_time = 0;
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */

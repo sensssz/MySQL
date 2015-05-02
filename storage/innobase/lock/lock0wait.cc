@@ -33,6 +33,8 @@ Created 25/5/2010 Sunny Bains
 #include "ha_prototypes.h"
 #include "lock0priv.h"
 
+#include "trace_tool.h"
+
 /*********************************************************************//**
 Print the contents of the lock_sys_t::waiting_threads array. */
 static
@@ -197,6 +199,7 @@ lock_wait_suspend_thread(
     que_thr_t*	thr)	/*!< in: query thread associated with the
 				user OS thread */
 {
+    TRACE_FUNCTION_START();
     srv_slot_t*	slot;
     double		wait_time;
     trx_t*		trx;
@@ -241,6 +244,7 @@ lock_wait_suspend_thread(
 
         lock_wait_mutex_exit();
         trx_mutex_exit(trx);
+        TRACE_FUNCTION_END();
         return;
     }
 
@@ -319,7 +323,9 @@ lock_wait_suspend_thread(
         thd_wait_begin(trx->mysql_thd, THD_WAIT_TABLE_LOCK);
     }
 
+    TRACE_START();
     os_event_wait(slot->event);
+    TRACE_END(1);
 
     thd_wait_end(trx->mysql_thd);
 
@@ -385,6 +391,7 @@ lock_wait_suspend_thread(
 
         trx->error_state = DB_INTERRUPTED;
     }
+    TRACE_FUNCTION_END();
 }
 
 /********************************************************************//**

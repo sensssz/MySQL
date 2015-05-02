@@ -48,6 +48,7 @@ Created 5/7/1996 Heikki Tuuri
 #include "ut0vec.h"
 #include "btr0btr.h"
 #include "dict0boot.h"
+#include "os0sync.h"
 #include <set>
 
 #include "trace_tool.h"
@@ -1569,7 +1570,7 @@ Checks if some other transaction has a conflicting explicit lock request
 in the queue, so that we have to wait.
 @return	lock or NULL */
 static
-lock_t*
+const lock_t*
 lock_rec_other_has_conflicting(
 /*===========================*/
 	enum lock_mode		mode,	/*!< in: LOCK_S or LOCK_X,
@@ -1581,7 +1582,7 @@ lock_rec_other_has_conflicting(
 	ulint			heap_no,/*!< in: heap number of the record */
 	const trx_t*		trx)	/*!< in: our transaction */
 {
-	lock_t*		lock;
+	const lock_t*		lock;
 	ibool			is_supremum;
 
 	ut_ad(lock_mutex_own());
@@ -1590,7 +1591,7 @@ lock_rec_other_has_conflicting(
 
 	for (lock = lock_rec_get_first(block, heap_no);
 	     lock != NULL;
-	     lock = lock_rec_get_next(heap_no, lock)) {
+	     lock = lock_rec_get_next_const(heap_no, lock)) {
 
 		if (lock_rec_has_to_wait(trx, mode, lock, is_supremum)) {
 			return(lock);
@@ -1840,7 +1841,6 @@ lock_rec_create(
 	lock->un_member.rec_lock.page_no = page_no;
 	lock->un_member.rec_lock.n_bits = n_bytes * 8;
   lock->request = NULL;
-  lock->trx_waiting = 0;
 
 	/* Reset to zero the bitmap which resides immediately after the
 	lock struct */
@@ -1899,7 +1899,7 @@ lock_rec_enqueue_waiting(
 					waiting lock request is set
 					when performing an insert of
 					an index record */
-  lock_t *conflict_lock,  /*!< in: the conflict lock that causes
+  const lock_t *conflict_lock,  /*!< in: the conflict lock that causes
                            the waiting*/
 	const buf_block_t*	block,	/*!< in: buffer block containing
 					the record */
@@ -2000,6 +2000,7 @@ lock_rec_enqueue_waiting(
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
   
+#ifdef LOCK_MONITOR
   lock_info lock_to_wait;
   lock_to_wait.space_id = block->page.space;
   lock_to_wait.page_no = block->page.offset;
@@ -2009,7 +2010,7 @@ lock_rec_enqueue_waiting(
   request->lock_object = conflict_lock;
   TraceTool::get_instance()->start_waiting(&lock_to_wait, request);
   lock->request = request;
-  conflict_lock->trx_waiting++;
+#endif
   
 	return(DB_LOCK_WAIT);
 }
@@ -2233,7 +2234,7 @@ lock_rec_lock_slow(
 {
 	trx_t*			trx;
 	dberr_t			err = DB_SUCCESS;
-  lock_t*     conflict_lock;
+  const lock_t*     conflict_lock;
 
 	ut_ad(lock_mutex_own());
 	ut_ad((LOCK_MODE_MASK & mode) != LOCK_S
@@ -2335,6 +2336,51 @@ lock_rec_lock(
 
 	ut_error;
 	return(DB_ERROR);
+}
+
+/*********************************************************************//**
+Checks if a waiting record lock request still has to wait in a queue.
+@return	lock that is causing the wait */
+static
+const lock_t*
+lock_rec_has_to_wait_in_queue_no_wait_lock(
+/*==========================*/
+	const lock_t*	wait_lock)	/*!< in: waiting record lock */
+{
+	const lock_t*	lock;
+	ulint		space;
+	ulint		page_no;
+	ulint		heap_no;
+	ulint		bit_mask;
+	ulint		bit_offset;
+
+	ut_ad(lock_mutex_own());
+	ut_ad(lock_get_wait(wait_lock));
+	ut_ad(lock_get_type_low(wait_lock) == LOCK_REC);
+
+	space = wait_lock->un_member.rec_lock.space;
+	page_no = wait_lock->un_member.rec_lock.page_no;
+	heap_no = lock_rec_find_set_bit(wait_lock);
+
+	bit_offset = heap_no / 8;
+	bit_mask = static_cast<ulint>(1 << (heap_no % 8));
+
+	for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+	     lock != wait_lock;
+	     lock = lock_rec_get_next_on_page_const(lock)) {
+
+		const byte*	p = (const byte*) &lock[1];
+
+		if (!lock_get_wait(lock)
+        && heap_no < lock_rec_get_n_bits(lock)
+		    && (p[bit_offset] & bit_mask)
+		    && lock_has_to_wait(wait_lock, lock)) {
+
+			return(lock);
+		}
+	}
+
+	return(NULL);
 }
 
 /*********************************************************************//**
@@ -2513,37 +2559,99 @@ lock_rec_dequeue_from_page(
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
 
-  ulint max_trx_waiting = -1;
+  // Most recent lock first
   const lock_t *conflict_lock;
-	for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-	     lock != NULL;
-	     lock = lock_rec_get_next_on_page(lock)) {
-
-		if (lock_get_wait(lock))
+  bool have_choice = false;
+  lock_t *target_lock = NULL;
+  // One lock object may represent locks on multiple records. Itereate over all the records.
+  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock); heap_no < n_bits; ++heap_no)
+  {
+    vector<lock_t *> grantable_locks;
+    // Not a lock for this record, skip
+    if (!lock_rec_get_nth_bit(in_lock, heap_no))
     {
-      if (!(conflict_lock = lock_rec_has_to_wait_in_queue(lock)))
+      continue;
+    }
+    
+    // Find all lock request on the this record
+    for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+         lock != NULL;
+         lock = lock_rec_get_next_on_page(lock))
+    {
+      // Heap number matches. This is a lock request on the same record.
+      if (heap_no < lock_rec_get_n_bits(lock) &&
+          lock_rec_get_nth_bit(lock, heap_no) &&
+          lock_get_wait(lock))
       {
-        /* Grant the lock */
-        ut_ad(lock->trx != in_lock->trx);
-        lock_grant(lock);
-        
-        TraceTool::get_instance()->end_waiting(lock->request);
-        delete lock->request;
-        lock->request = NULL;
+        // Find candidates for granting the lock
+        if (!(conflict_lock =
+              lock_rec_has_to_wait_in_queue_no_wait_lock(lock)))
+        {
+          grantable_locks.push_back(lock);
+          if (target_lock == NULL)
+          {
+            target_lock = lock;
+          }
+          else
+          {
+            have_choice = true;
+            if (lock->trx->start_time < target_lock->trx->start_time)
+            {
+              target_lock = lock;
+            }
+          }
+          /* Grant the lock */
+          ut_ad(lock->trx != in_lock->trx);
+          lock_grant(lock);
+          
+#ifdef LOCK_MONITOR
+          TraceTool::get_instance()->end_waiting(lock->request);
+          delete lock->request;
+          lock->request = NULL;
+#endif
+        }
+#ifdef LOCK_MONITOR
+        else if(lock->request != NULL && lock->request->lock_object != conflict_lock)
+        {
+          // Waiting for the original lock has stopped
+          TraceTool::get_instance()->end_waiting(lock->request);
+          // Start waiting for a new lock
+          lock->request->lock_object = conflict_lock;
+          lock->request->lock->info.type_mode = conflict_lock->type_mode;
+          lock->request->start_waiting_time = TraceTool::get_instance()->get_time();
+        }
+#endif
       }
-      else if(lock->request != NULL && lock->request->lock_object != conflict_lock)
+    }
+    
+    if (target_lock != NULL)
+    {
+      // Grant the target lock(under the current heuristic)
+      lock_grant(target_lock);
+      for (int index = 0, size = grantable_locks.size(); index < size; ++index)
       {
-        // Waiting for the original lock has stopped
-        TraceTool::get_instance()->end_waiting(lock->request);
-//        TraceTool::get_instance()->get_log() << "End waiting, ";
-        // Start waiting for a new lock
-        lock->request->lock_object = conflict_lock;
-        lock->request->lock->info.type_mode = conflict_lock->type_mode;
-        lock->request->start_waiting_time = TraceTool::get_instance()->get_time();
-//        TraceTool::get_instance()->get_log() << "and start waiting for lock " << conflict_lock << endl;
+        lock_t *lock_request = grantable_locks[index];
+        if (lock_request != target_lock)
+        {
+          if (!lock_has_to_wait(lock_request, target_lock))
+          {
+            lock_grant(lock_request);
+          }
+        }
       }
-		}
-	}
+    }
+    grantable_locks.clear();
+    
+    os_atomic_increment_lint(&TraceTool::total_release_time, 1);
+    if (target_lock != NULL)
+    {
+      os_atomic_increment_lint(&TraceTool::needs_to_grant, 1);
+    }
+    if (have_choice)
+    {
+      os_atomic_increment_lint(&TraceTool::have_choice_time, 1);
+    }
+  }
 }
 
 /*************************************************************//**
