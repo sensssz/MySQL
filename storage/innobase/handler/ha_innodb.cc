@@ -3514,8 +3514,7 @@ innobase_start_trx_and_assign_read_view(
     trx->isolation_level = innobase_map_isolation_level(
                                thd_get_trx_isolation(thd));
 
-    if (trx->isolation_level == TRX_ISO_REPEATABLE_READ ||
-        trx->isolation_level == TRX_ISO_SNAPSHOT_SERIALIZABLE) {
+    if (trx->isolation_level == TRX_ISO_REPEATABLE_READ) {
         trx_assign_read_view(trx);
     } else {
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
@@ -12147,8 +12146,6 @@ innobase_map_isolation_level(
         return(TRX_ISO_READ_COMMITTED);
     case ISO_SERIALIZABLE:
         return(TRX_ISO_SERIALIZABLE);
-    case ISO_SNAPSHOT_SERIALIZABLE:
-      return(TRX_ISO_SNAPSHOT_SERIALIZABLE);
     case ISO_READ_UNCOMMITTED:
         return(TRX_ISO_READ_UNCOMMITTED);
     }
@@ -12275,20 +12272,22 @@ ha_innobase::external_lock(
     }
 
     if (lock_type == F_WRLCK) {
+        prebuilt->select_lock_type = LOCK_X;
+        prebuilt->stored_select_lock_type = LOCK_X;
 
-        if (trx->isolation_level == TRX_ISO_SNAPSHOT_SERIALIZABLE &&
-            (thd_sql_command(thd) == SQLCOM_UPDATE
-             || thd_sql_command(thd) == SQLCOM_INSERT
-             || thd_sql_command(thd) == SQLCOM_REPLACE
-             || thd_sql_command(thd) == SQLCOM_DELETE)) {
-            prebuilt->select_lock_type = LOCK_NONE;
-            prebuilt->stored_select_lock_type = LOCK_NONE;
-        } else {
-            /* If this is a SELECT, then it is in UPDATE TABLE ...
-            or SELECT ... FOR UPDATE */
-            prebuilt->select_lock_type = LOCK_X;
-            prebuilt->stored_select_lock_type = LOCK_X;
-        }
+//        if (trx->isolation_level == TRX_ISO_SNAPSHOT_SERIALIZABLE &&
+//            (thd_sql_command(thd) == SQLCOM_UPDATE
+//             || thd_sql_command(thd) == SQLCOM_INSERT
+//             || thd_sql_command(thd) == SQLCOM_REPLACE
+//             || thd_sql_command(thd) == SQLCOM_DELETE)) {
+//            prebuilt->select_lock_type = LOCK_NONE;
+//            prebuilt->stored_select_lock_type = LOCK_NONE;
+//        } else {
+//            /* If this is a SELECT, then it is in UPDATE TABLE ...
+//            or SELECT ... FOR UPDATE */
+//            prebuilt->select_lock_type = LOCK_X;
+//            prebuilt->stored_select_lock_type = LOCK_X;
+//        }
     }
 
     if (lock_type != F_UNLCK) {
@@ -16932,7 +16931,10 @@ int
 ha_innobase::multi_range_read_next(
     char**		range_info)
 {
-    return(ds_mrr.dsmrr_next(range_info));
+    TraceTool::path_count++;
+    int result = ds_mrr.dsmrr_next(range_info);
+    TraceTool::path_count--;
+    return result;
 }
 
 ha_rows

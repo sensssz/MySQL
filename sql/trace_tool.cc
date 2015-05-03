@@ -7,9 +7,10 @@
 #include <cstring>
 #include <sstream>
 
-#define TARGET_PATH_COUNT 2
+#define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define MONITOR
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
@@ -117,7 +118,11 @@ TraceTool *TraceTool::get_instance()
 TraceTool::TraceTool() : function_times()
 {
   log_file.open("trace.log");
+#ifdef MONITOR
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+#else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
+#endif
   for (int index = 0; index < number_of_functions; index++)
   {
     vector<long> function_time;
@@ -125,7 +130,7 @@ TraceTool::TraceTool() : function_times()
     function_time.push_back(0);
     function_times.push_back(function_time);
   }
-//  transaction_start_times.push_back(0);
+  transaction_start_times.push_back(0);
 }
 
 bool TraceTool::should_monitor()
@@ -231,13 +236,13 @@ void TraceTool::start_new_query()
     new_transaction = false;
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
-//    transaction_start_times[current_transaction_id] = now_micro();
+    transaction_start_times[current_transaction_id] = now_micro();
     
     for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
     {
       iterator->push_back(0);
     }
-//    transaction_start_times.push_back(0);
+    transaction_start_times.push_back(0);
     
     pthread_rwlock_unlock(&data_lock);
   }
@@ -295,20 +300,17 @@ bool compare_record_lock(record_lock *lock1, record_lock *lock2)
 
 void TraceTool::write_log()
 {
-  log_file << "Total Lock Release: " << total_release_time << endl;
-  log_file << "Needs to Grant: " << needs_to_grant << endl;
-  log_file << "Have Choices: " << have_choice_time << endl;
   ofstream log;
   stringstream sstream;
   sstream << "trace" << log_index++;
   log.open(sstream.str().c_str());
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
-//  for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
-//  {
-//    log << transaction_start_times[index] << endl;
-//  }
-//  
+  for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
+  {
+    log << transaction_start_times[index] << endl;
+  }
+  
   for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     long number_of_transactions = iterator->size();

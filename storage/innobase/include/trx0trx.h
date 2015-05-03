@@ -1049,10 +1049,7 @@ struct trx_t{
 						in locking reads to block
 						insertions into gaps */
 
-#define TRX_ISO_SNAPSHOT_SERIALIZABLE   3   /* same as serializable
-                                    but using snapshot isolation */
-
-#define TRX_ISO_SERIALIZABLE		4	/* all plain SELECTs are
+#define TRX_ISO_SERIALIZABLE		3	/* all plain SELECTs are
 						converted to LOCK IN SHARE
 						MODE reads */
 

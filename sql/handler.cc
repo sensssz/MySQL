@@ -6380,7 +6380,10 @@ int DsMrr_impl::dsmrr_next(char **range_info)
     uchar *rowid;
 
     if (use_default_impl) {
-        return h->handler::multi_range_read_next(range_info);
+        TraceTool::path_count++;
+        int result = h->handler::multi_range_read_next(range_info);
+        TraceTool::path_count--;
+        return result;
     }
 
     do
