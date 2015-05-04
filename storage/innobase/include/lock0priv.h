@@ -39,6 +39,8 @@ those functions in lock/ */
 #include "trx0types.h"
 #include "ut0lst.h"
 
+#define MAX_STARVATION 4
+
 /** A table lock */
 struct lock_table_t {
 	dict_table_t*	table;		/*!< database table in dictionary
@@ -62,6 +64,9 @@ struct lock_rec_t {
 struct lock_t {
 	trx_t*		trx;		/*!< transaction owning the
 					lock */
+    int starvation_count;   /*!< How many times a lock
+                    request after it is granted before
+                    this one is granted */
 	UT_LIST_NODE_T(lock_t)
 			trx_locks;	/*!< list of the locks of the
 					transaction */

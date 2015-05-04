@@ -63,6 +63,7 @@ public:
     static long needs_to_grant;
     static double average_latency;
     static double average_work_time;
+    static double max_work_time;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;

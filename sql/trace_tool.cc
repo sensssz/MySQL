@@ -35,6 +35,7 @@ pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
 long TraceTool::commited_trans = 0;
 double TraceTool::average_latency = 0;
 double TraceTool::average_work_time = 0;
+double TraceTool::max_work_time = 0;
 
 long TraceTool::total_release_time = 0;
 long TraceTool::have_choice_time = 0;
@@ -283,6 +284,7 @@ void TraceTool::end_transaction()
     pthread_mutex_lock(&average_mutex);
     average_latency = (average_latency * commited_trans + latency) / (commited_trans + 1);
     average_work_time = (average_work_time * commited_trans + work_time) / (commited_trans + 1);
+    max_work_time = (work_time > max_work_time) ? work_time : max_work_time;
     ++commited_trans;
     pthread_mutex_unlock(&average_mutex);
   }

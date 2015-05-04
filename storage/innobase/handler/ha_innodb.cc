@@ -12272,6 +12272,9 @@ ha_innobase::external_lock(
     }
 
     if (lock_type == F_WRLCK) {
+        
+        /* If this is a SELECT, then it is in UPDATE TABLE ...
+        or SELECT ... FOR UPDATE */
         prebuilt->select_lock_type = LOCK_X;
         prebuilt->stored_select_lock_type = LOCK_X;
 

@@ -1835,6 +1835,8 @@ lock_rec_create(
 		mem_heap_alloc(trx->lock.lock_heap, sizeof(lock_t) + n_bytes));
 
 	lock->trx = trx;
+  
+  lock->starvation_count = 0;
 
 	lock->type_mode = (type_mode & ~LOCK_TYPE_MASK) | LOCK_REC;
 	lock->index = index;
@@ -2518,6 +2520,53 @@ lock_rec_cancel(
 	trx_mutex_exit(lock->trx);
 }
 
+static
+void
+try_grant(vector<lock_t *> waiting_locks, int target_index, double average_work_time, double max_work_time)
+{
+  vector<double> latencies;
+  lock_t *lock_to_grant = waiting_locks[target_index];
+  latencies.push_back(average_work_time + lock_to_grant->trx->total_waiting_time);
+  
+  double remaining_time_for_holding_lock = 0;
+  
+  /* Case 1: This is a read lock, so we also grant other read locks.
+   Their latencies can be estimated using the average working time */
+  if (lock_get_mode(lock_to_grant) == LOCK_S)
+  {
+    for (int index = 0, size = waiting_locks.size(); index < size; ++index)
+    {
+      if (index != target_index)
+      {
+        lock_t *lock = waiting_locks[index];
+        double estimated_latency = average_work_time + lock->trx->total_waiting_time;
+        latencies.push_back(estimated_latency);
+        
+        double current_work_time = ut_time() - lock->trx->start_time;
+        double estimated_remaining_time = (average_work_time - current_work_time);
+        
+        if (current_work_time < average_work_time)
+        {
+          estimated_remaining_time = average_work_time - current_work_time;
+        }
+        else if (current_work_time < max_work_time)
+        {
+          estimated_remaining_time = max_work_time - current_work_time;
+        }
+        else
+        {
+          
+        }
+        
+        if (estimated_remaining_time > remaining_time_for_holding_lock)
+        {
+          remaining_time_for_holding_lock = estimated_remaining_time;
+        }
+      }
+    }
+  }
+}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2594,20 +2643,22 @@ lock_rec_dequeue_from_page(
   }
    */
 
-  // Most recent lock first
-  const lock_t *conflict_lock;
-  bool have_choice = false;
   lock_t *target_lock = NULL;
+  vector<lock_t *> waiting_locks;
+  vector<int> read_locks;
+  double average_work_time = TraceTool::average_work_time;
+  double max_work_time = TraceTool::max_work_time;
   // One lock object may represent locks on multiple records. Itereate over all the records.
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock); heap_no < n_bits; ++heap_no)
   {
-    vector<lock_t *> grantable_locks;
     // Not a lock for this record, skip
     if (!lock_rec_get_nth_bit(in_lock, heap_no))
     {
       continue;
     }
     
+    int target_index = -1;
+    int index = 0;
     // Find all lock request on the this record
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
          lock != NULL;
@@ -2618,47 +2669,54 @@ lock_rec_dequeue_from_page(
           lock_rec_get_nth_bit(lock, heap_no) &&
           lock_get_wait(lock))
       {
-        // Find candidates for granting the lock
-        if (!(conflict_lock =
-              lock_rec_has_to_wait_in_queue_no_wait_lock(lock)))
+        waiting_locks.push_back(lock);
+        if (lock->starvation_count > MAX_STARVATION && target_lock == NULL)
         {
-          grantable_locks.push_back(lock);
-          if (target_lock == NULL)
-          {
-            target_lock = lock;
-          }
-          else
-          {
-            have_choice = true;
-            time_t now = ut_time();
-            long lock_working_time = now - lock->trx->start_time - lock->trx->total_waiting_time;
-            long target_lock_working_time = now - target_lock->trx->start_time - target_lock->trx->total_waiting_time;
-            if (lock_working_time < target_lock_working_time)
-            {
-              target_lock = lock;
-            }
-          }
+          target_lock = lock;
+          target_index = index;
+        }
+        if (lock_get_mode(lock) == LOCK_S)
+        {
+          read_locks.push_back(index);
+        }
+        ++index;
+        
+        if(index > SEE_NEXT_K_LOCKS)
+        {
+          break;
         }
       }
     }
     
+    /* Prevent starvation. */
     if (target_lock != NULL)
     {
-      // Grant the target lock(under the current heuristic)
-      lock_grant(target_lock);
-      for (int index = 0, size = grantable_locks.size(); index < size; ++index)
+      if (!lock_rec_has_to_wait_in_queue_no_wait_lock(target_lock))
       {
-        lock_t *lock_request = grantable_locks[index];
-        if (lock_request != target_lock)
+        lock_grant(target_lock);
+        
+        for (int size = waiting_locks.size(); target_index < size; ++target_index)
         {
-          if (!lock_has_to_wait(lock_request, target_lock))
+          lock_t *lock = waiting_locks[target_index];
+          if (!lock_rec_has_to_wait_in_queue(lock))
           {
-            lock_grant(lock_request);
+            lock_grant(lock);
           }
         }
       }
     }
-    grantable_locks.clear();
+    else
+    {
+      for (int index = 0, size = waiting_locks.size(); index < size; ++index)
+      {
+        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(waiting_locks[index]))
+        {
+          try_grant(waiting_locks, index, average_work_time, max_work_time);
+        }
+      }
+    }
+    
+    waiting_locks.clear();
   }
 }
 
