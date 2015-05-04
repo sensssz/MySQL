@@ -2623,11 +2623,6 @@ lock_rec_dequeue_from_page(
               lock_rec_has_to_wait_in_queue_no_wait_lock(lock)))
         {
           grantable_locks.push_back(lock);
-          if (grantable_locks.size() >= SEE_NEXT_K_LOCKS)
-          {
-            break;
-          }
-          
           if (target_lock == NULL)
           {
             target_lock = lock;
@@ -2643,27 +2638,7 @@ lock_rec_dequeue_from_page(
               target_lock = lock;
             }
           }
-          
-          ut_ad(lock->trx != in_lock->trx);
-          lock_grant(lock);
-          
-#ifdef LOCK_MONITOR
-          TraceTool::get_instance()->end_waiting(lock->request);
-          delete lock->request;
-          lock->request = NULL;
-#endif
         }
-#ifdef LOCK_MONITOR
-        else if(lock->request != NULL && lock->request->lock_object != conflict_lock)
-        {
-          // Waiting for the original lock has stopped
-          TraceTool::get_instance()->end_waiting(lock->request);
-          // Start waiting for a new lock
-          lock->request->lock_object = conflict_lock;
-          lock->request->lock->info.type_mode = conflict_lock->type_mode;
-          lock->request->start_waiting_time = TraceTool::get_instance()->get_time();
-        }
-#endif
       }
     }
     
@@ -2684,16 +2659,6 @@ lock_rec_dequeue_from_page(
       }
     }
     grantable_locks.clear();
-    
-    os_atomic_increment_lint(&TraceTool::total_release_time, 1);
-    if (target_lock != NULL)
-    {
-      os_atomic_increment_lint(&TraceTool::needs_to_grant, 1);
-    }
-    if (have_choice)
-    {
-      os_atomic_increment_lint(&TraceTool::have_choice_time, 1);
-    }
   }
 }
 
