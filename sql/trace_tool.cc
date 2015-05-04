@@ -10,7 +10,6 @@
 #define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define MONITOR
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
@@ -32,6 +31,10 @@ timespec TraceTool::start_time = {0, 0};
 timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
+long TraceTool::commited_trans = 0;
+double TraceTool::average_latency = 0;
+double TraceTool::average_work_time = 0;
 
 long TraceTool::total_release_time = 0;
 long TraceTool::have_choice_time = 0;
@@ -41,6 +44,7 @@ __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
 __thread bool TraceTool::commit_successful = false;
 __thread bool TraceTool::new_transaction = true;
+
 
 #ifdef MONITOR
 static __thread timespec function_start;
@@ -274,6 +278,13 @@ void TraceTool::end_transaction()
   if (commit_successful)
   {
     new_transaction = true;
+    long latency = function_times.back()[current_transaction_id];
+    long work_time = latency - trx->total_waiting_time;
+    pthread_mutex_lock(&average_mutex);
+    average_latency = (average_latency * commited_trans + latency) / (commited_trans + 1);
+    average_work_time = (average_work_time * commited_trans + work_time) / (commited_trans + 1);
+    ++commited_trans;
+    pthread_mutex_unlock(&average_mutex);
   }
   else
   {

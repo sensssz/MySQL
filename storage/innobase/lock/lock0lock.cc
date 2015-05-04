@@ -53,6 +53,8 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
+#define SEE_NEXT_K_LOCKS  2
+
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
 #define LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK 1000000
@@ -2558,6 +2560,39 @@ lock_rec_dequeue_from_page(
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
+  
+  /*
+  const lock_t *conflict_lock;
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock)) {
+    
+    if (lock_get_wait(lock))
+    {
+      if (!(conflict_lock = lock_rec_has_to_wait_in_queue(lock)))
+      {
+        ut_ad(lock->trx != in_lock->trx);
+        lock_grant(lock);
+#ifdef LOCK_MONITOR
+        TraceTool::get_instance()->end_waiting(lock->request);
+        delete lock->request;
+        lock->request = NULL;
+#endif
+      }
+#ifdef LOCK_MONITOR
+      else if(lock->request != NULL && lock->request->lock_object != conflict_lock)
+      {
+        // Waiting for the original lock has stopped
+        TraceTool::get_instance()->end_waiting(lock->request);
+        // Start waiting for a new lock
+        lock->request->lock_object = conflict_lock;
+        lock->request->lock->info.type_mode = conflict_lock->type_mode;
+        lock->request->start_waiting_time = TraceTool::get_instance()->get_time();
+      }
+#endif
+    }
+  }
+   */
 
   // Most recent lock first
   const lock_t *conflict_lock;
@@ -2588,6 +2623,11 @@ lock_rec_dequeue_from_page(
               lock_rec_has_to_wait_in_queue_no_wait_lock(lock)))
         {
           grantable_locks.push_back(lock);
+          if (grantable_locks.size() >= SEE_NEXT_K_LOCKS)
+          {
+            break;
+          }
+          
           if (target_lock == NULL)
           {
             target_lock = lock;
@@ -2595,12 +2635,15 @@ lock_rec_dequeue_from_page(
           else
           {
             have_choice = true;
-            if (lock->trx->start_time < target_lock->trx->start_time)
+            time_t now = ut_time();
+            long lock_working_time = now - lock->trx->start_time - lock->trx->total_waiting_time;
+            long target_lock_working_time = now - target_lock->trx->start_time - target_lock->trx->total_waiting_time;
+            if (lock_working_time < target_lock_working_time)
             {
               target_lock = lock;
             }
           }
-          /* Grant the lock */
+          
           ut_ad(lock->trx != in_lock->trx);
           lock_grant(lock);
           

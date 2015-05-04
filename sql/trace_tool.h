@@ -1,6 +1,7 @@
 #ifndef MY_TRACE_TOOL_H
 #define MY_TRACE_TOOL_H
 
+#include "../storage/innobase/include/trx0trx.h"
 #include "../storage/innobase/include/lock0types.h"
 #include <fstream>
 #include <deque>
@@ -38,6 +39,8 @@ private:
     static timespec global_last_query;
     static pthread_mutex_t last_query_mutex;
     static pthread_mutex_t record_lock_mutex;
+    static pthread_mutex_t average_mutex;
+    static long commited_trans;
     
     static __thread timespec function_start;
     static __thread timespec function_end;
@@ -45,6 +48,7 @@ private:
     static __thread timespec call_end;
     static __thread bool new_transaction;
     
+    trx_t *trx;
     ofstream log_file;
     static pthread_rwlock_t data_lock;
     vector<vector<long> > function_times;
@@ -57,6 +61,8 @@ public:
     static long total_release_time;
     static long have_choice_time;
     static long needs_to_grant;
+    static double average_latency;
+    static double average_work_time;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;
@@ -71,6 +77,10 @@ public:
     static void *check_write_log(void *);
     static timespec get_time();
     
+    void set_trx(trx_t trx)
+    {
+        this->trx = trx;
+    }
     record_lock *find_record_lock(lock_info *lock_info);
     void start_waiting(lock_info *lock_info, lock_request *request);
     void end_waiting(lock_request *request);
