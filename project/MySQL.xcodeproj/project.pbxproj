@@ -6994,7 +6994,7 @@
 		FE24ABB7808C4160869B6DCA /* read.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.c; fileEncoding = 4; name = read.c; path = "cmd-line-utils/libedit/read.c"; sourceTree = SOURCE_ROOT; };
 		FE31A03351054BC3A7631595 /* fut0fut.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = fut0fut.cc; path = storage/innobase/fut/fut0fut.cc; sourceTree = SOURCE_ROOT; };
 		FE672EA250D44EA7BD984B4C /* myrg_locking.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.c; fileEncoding = 4; name = myrg_locking.c; path = storage/myisammrg/myrg_locking.c; sourceTree = SOURCE_ROOT; };
-		FE84719DD6814204B7ED527A /* trace_tool.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = trace_tool.cc; path = sql/trace_tool.cc; sourceTree = SOURCE_ROOT; };
+		FE84719DD6814204B7ED527A /* trace_tool.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; indentWidth = 2; name = trace_tool.cc; path = sql/trace_tool.cc; sourceTree = SOURCE_ROOT; tabWidth = 2; };
 		FE9258E90CE04BEDB00EB946 /* sql_base.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sql_base.cc; path = sql/sql_base.cc; sourceTree = SOURCE_ROOT; };
 		FF67B2D5E7EC4B56A4742A58 /* page0cur.cc */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = page0cur.cc; path = storage/innobase/page/page0cur.cc; sourceTree = SOURCE_ROOT; };
 		FF9029CB271147B4AB794FC3 /* misc.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = misc.cpp; path = extra/yassl/taocrypt/src/misc.cpp; sourceTree = SOURCE_ROOT; };
@@ -8661,7 +8661,9 @@
 				0C21BC6F41BC450889778BEA /* Resources */,
 				F04932692A1E41D9BB2204C3 /* Products */,
 			);
+			indentWidth = 2;
 			sourceTree = "<group>";
+			tabWidth = 2;
 		};
 		7CFB5D17BCF44335B513ABA5 /* pfs_account-oom-t */ = {
 			isa = PBXGroup;

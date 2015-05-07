@@ -324,9 +324,7 @@ lock_wait_suspend_thread(
         thd_wait_begin(trx->mysql_thd, THD_WAIT_TABLE_LOCK);
     }
 
-    TRACE_START();
     os_event_wait(slot->event);
-    TRACE_END(1);
 
     thd_wait_end(trx->mysql_thd);
 
@@ -392,8 +390,6 @@ lock_wait_suspend_thread(
 
         trx->error_state = DB_INTERRUPTED;
     }
-    long duration = ut_time() - now;
-    trx->total_waiting_time += duration;
     TRACE_FUNCTION_END();
 }
 

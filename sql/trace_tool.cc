@@ -8,8 +8,9 @@
 #include <sstream>
 
 #define TARGET_PATH_COUNT 13
-#define NUMBER_OF_FUNCTIONS 0
+#define NUMBER_OF_FUNCTIONS 1
 #define LATENCY
+#define MONITOR
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
@@ -140,6 +141,7 @@ TraceTool::TraceTool() : function_times()
 
 bool TraceTool::should_monitor()
 {
+  return true;
   return path_count == TARGET_PATH_COUNT;
 }
 
@@ -280,13 +282,20 @@ void TraceTool::end_transaction()
   {
     new_transaction = true;
     long latency = function_times.back()[current_transaction_id];
-    long work_time = latency - trx->total_waiting_time;
+    long wait_time = function_times[0][current_transaction_id];
+    long work_time = latency - wait_time;
+    pthread_rwlock_rdlock(&data_lock);
+    function_times[1][current_transaction_id] = work_time;
+    pthread_rwlock_unlock(&data_lock);
+    /*
     pthread_mutex_lock(&average_mutex);
     average_latency = (average_latency * commited_trans + latency) / (commited_trans + 1);
     average_work_time = (average_work_time * commited_trans + work_time) / (commited_trans + 1);
     max_work_time = (work_time > max_work_time) ? work_time : max_work_time;
     ++commited_trans;
     pthread_mutex_unlock(&average_mutex);
+    */
+      
   }
   else
   {
@@ -295,12 +304,19 @@ void TraceTool::end_transaction()
 #endif
 }
 
+lock_t *find_lock_to_grant(vector<lock_t *> locks)
+{
+  
+}
+
 void TraceTool::add_record(int function_index, long duration)
 {
   if (current_transaction_id > transaction_id)
   {
     current_transaction_id = 0;
   }
+  // We use a read lock here becuase only the
+  // current thread can change the corresponing record
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);

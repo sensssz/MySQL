@@ -1835,8 +1835,6 @@ lock_rec_create(
 		mem_heap_alloc(trx->lock.lock_heap, sizeof(lock_t) + n_bytes));
 
 	lock->trx = trx;
-  
-  lock->starvation_count = 0;
 
 	lock->type_mode = (type_mode & ~LOCK_TYPE_MASK) | LOCK_REC;
 	lock->index = index;
@@ -1844,7 +1842,7 @@ lock_rec_create(
 	lock->un_member.rec_lock.space = space;
 	lock->un_member.rec_lock.page_no = page_no;
 	lock->un_member.rec_lock.n_bits = n_bytes * 8;
-  lock->request = NULL;
+    lock->request = NULL;
 
 	/* Reset to zero the bitmap which resides immediately after the
 	lock struct */
@@ -2610,7 +2608,6 @@ lock_rec_dequeue_from_page(
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
   
-  /*
   const lock_t *conflict_lock;
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
@@ -2641,8 +2638,8 @@ lock_rec_dequeue_from_page(
 #endif
     }
   }
-   */
-
+  
+  /*
   lock_t *target_lock = NULL;
   vector<lock_t *> waiting_locks;
   vector<int> read_locks;
@@ -2687,8 +2684,7 @@ lock_rec_dequeue_from_page(
         }
       }
     }
-    
-    /* Prevent starvation. */
+   
     if (target_lock != NULL)
     {
       if (!lock_rec_has_to_wait_in_queue_no_wait_lock(target_lock))
@@ -2718,6 +2714,7 @@ lock_rec_dequeue_from_page(
     
     waiting_locks.clear();
   }
+   */
 }
 
 /*************************************************************//**
