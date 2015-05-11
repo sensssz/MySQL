@@ -93,9 +93,10 @@ public:
     }
     static TraceTool *get_instance();
     static bool should_monitor();
-    static long difftime(timespec start, timespec end);
+    static ulint difftime(timespec start, timespec end);
     static void *check_write_log(void *);
     static timespec get_time();
+    static ulint now_micro();
     
     void start_waiting(lock_info *lock_info, lock_request *request);
     void end_waiting(lock_request *request);

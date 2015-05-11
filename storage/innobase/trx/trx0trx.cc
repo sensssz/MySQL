@@ -566,7 +566,8 @@ trx_resurrect_insert(
 	/* trx_start_low() is not called with resurrect, so need to initialize
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
-	    || trx->state == TRX_STATE_PREPARED) {
+      || trx->state == TRX_STATE_PREPARED) {
+    trx->trx_start_time = TraceTool::get_time();
 		trx->start_time = ut_time();
 	}
 
@@ -660,7 +661,8 @@ trx_resurrect_update(
 	/* trx_start_low() is not called with resurrect, so need to initialize
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
-	    || trx->state == TRX_STATE_PREPARED) {
+      || trx->state == TRX_STATE_PREPARED) {
+    trx->trx_start_time = TraceTool::get_time();
 		trx->start_time = ut_time();
 	}
 
@@ -858,6 +860,7 @@ trx_start_low(
   trx->in_conflict = false;
   trx->out_conflict = false;
   trx->total_waiting_time = 0;
+  trx->trx_start_time = TraceTool::get_time();
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -1400,8 +1403,8 @@ trx_commit_low(
 	}
 
 	trx_commit_in_memory(trx, lsn);
-  ulint now = ut_time();
-  ulint total_work = now - trx->start_time - trx->total_waiting_time;
+  timespec now = TraceTool::get_time();
+  ulint total_work = TraceTool::difftime(trx->trx_start_time, now);
   TraceTool::get_instance()->add_record(0, total_work);
 }
 

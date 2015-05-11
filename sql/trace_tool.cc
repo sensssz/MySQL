@@ -169,12 +169,12 @@ timespec TraceTool::get_time()
   return now;
 }
 
-long TraceTool::difftime(timespec start, timespec end)
+ulint TraceTool::difftime(timespec start, timespec end)
 {
   return (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
 }
 
-long now_micro()
+ulint TraceTool::now_micro()
 {
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);

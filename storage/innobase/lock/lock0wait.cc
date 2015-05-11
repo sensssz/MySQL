@@ -200,7 +200,6 @@ lock_wait_suspend_thread(
 				user OS thread */
 {
     TRACE_FUNCTION_START();
-    time_t now = ut_time();
     srv_slot_t*	slot;
     double		wait_time;
     trx_t*		trx;
@@ -392,8 +391,6 @@ lock_wait_suspend_thread(
 
         trx->error_state = DB_INTERRUPTED;
     }
-    long duration = ut_time() - now;
-    trx->total_waiting_time += duration;
     TRACE_FUNCTION_END();
 }
 

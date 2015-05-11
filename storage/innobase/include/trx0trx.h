@@ -743,6 +743,7 @@ struct trx_t{
     
     ulint       total_waiting_time; /*!< Total time spent on waiting for
                          locks*/
+    timespec    trx_start_time;
     
     bool        in_conflict;    /*!< Indicates whether or not there is a
                          rw-dependency from a concurrent transaction

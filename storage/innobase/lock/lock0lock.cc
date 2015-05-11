@@ -1842,6 +1842,7 @@ lock_rec_create(
 	lock->un_member.rec_lock.space = space;
 	lock->un_member.rec_lock.page_no = page_no;
 	lock->un_member.rec_lock.n_bits = n_bytes * 8;
+  lock->wait_start = TraceTool::get_time();
   lock->request = NULL;
 
 	/* Reset to zero the bitmap which resides immediately after the
@@ -2480,7 +2481,18 @@ lock_grant(
 		}
 	}
 
-	trx_mutex_exit(lock->trx);
+  trx_mutex_exit(lock->trx);
+  
+  if (TraceTool::do_monitor)
+  {
+    timespec now = TraceTool::get_time();
+    ulint total_time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    ulint wait_time = TraceTool::difftime(lock->wait_start, now);
+    lock->trx->total_waiting_time += wait_time;
+    ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
+    TraceTool::get_instance()->lock_wait_info(work_time,
+                                              lock->trx->total_waiting_time);
+  }
 }
 
 /*************************************************************//**
@@ -2561,19 +2573,10 @@ lock_rec_dequeue_from_page(
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
   
-  ulint now = ut_time();
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
   {
-    if (TraceTool::do_monitor)
-    {
-      ulint total_time_so_far = now - lock->trx->start_time;
-      ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
-      TraceTool::get_instance()->lock_wait_info(work_time,
-                                                lock->trx->total_waiting_time);
-    }
-    
     if (lock_get_wait(lock))
     {
       if (!lock_rec_has_to_wait_in_queue(lock))
