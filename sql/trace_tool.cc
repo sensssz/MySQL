@@ -35,6 +35,7 @@ pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
 long TraceTool::commited_trans = 0;
 double TraceTool::average_latency = 0;
 double TraceTool::average_work_time = 0;
+ulint TraceTool::num_of_deadlocks = 0;
 
 long TraceTool::total_release_time = 0;
 long TraceTool::have_choice_time = 0;
@@ -234,6 +235,7 @@ void TraceTool::end_waiting(lock_request *request)
 
 void TraceTool::start_new_query()
 {
+  is_commit = false;
 #ifdef LATENCY
   if (new_transaction)
   {
@@ -278,16 +280,10 @@ void TraceTool::end_transaction()
   if (commit_successful)
   {
     new_transaction = true;
-    long latency = function_times.back()[current_transaction_id];
-    long work_time = latency - trx->total_waiting_time;
-    pthread_mutex_lock(&average_mutex);
-    average_latency = (average_latency * commited_trans + latency) / (commited_trans + 1);
-    average_work_time = (average_work_time * commited_trans + work_time) / (commited_trans + 1);
-    ++commited_trans;
-    pthread_mutex_unlock(&average_mutex);
   }
   else
   {
+    // Reuse the last transaction
     function_times.back()[current_transaction_id] = 0;
   }
 #endif
@@ -335,6 +331,8 @@ void TraceTool::write_log()
   function_times.clear();
   pthread_rwlock_unlock(&data_lock);
   log.close();
+  
+  log_file << "Number of deadlocks: " << num_of_deadlocks << endl;
   
   ofstream lock_waiting_log("lock");
   pthread_mutex_lock(&record_lock_mutex);

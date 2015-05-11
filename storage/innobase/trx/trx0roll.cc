@@ -46,6 +46,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "srv0mon.h"
 #include "trx0sys.h"
 
+#include "trace_tool.h"
+
 /** This many pages must be undone before a truncate is tried within
 rollback */
 #define TRX_ROLL_TRUNC_THRESHOLD	1
@@ -117,6 +119,8 @@ trx_rollback_to_savepoint_low(
 	}
 
 	if (savept == NULL) {
+    TraceTool::commit_successful = false;
+    TraceTool::get_instance()->end_transaction();
 		trx_rollback_finish(trx);
 		MONITOR_INC(MONITOR_TRX_ROLLBACK);
 	} else {

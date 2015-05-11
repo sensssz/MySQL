@@ -48,6 +48,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "srv0mon.h"
 #include "ut0vec.h"
 
+#include "trace_tool.h"
+
 #include<set>
 
 /** Set of table_id */
@@ -110,8 +112,6 @@ trx_create(void)
 	trx->magic_n = TRX_MAGIC_N;
 
 	trx->state = TRX_STATE_NOT_STARTED;
-  
-  trx->number_of_locks = 0;
 
 	trx->isolation_level = TRX_ISO_REPEATABLE_READ;
 
@@ -1410,6 +1410,7 @@ trx_commit(
 /*=======*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
+  TraceTool::is_commit = true;
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 

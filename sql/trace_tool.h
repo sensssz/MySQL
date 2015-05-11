@@ -1,7 +1,6 @@
 #ifndef MY_TRACE_TOOL_H
 #define MY_TRACE_TOOL_H
 
-#include "../storage/innobase/include/trx0trx.h"
 #include "../storage/innobase/include/lock0types.h"
 #include <fstream>
 #include <deque>
@@ -26,6 +25,13 @@ void TRACE_FUNCTION_END();
 bool TRACE_START();
 bool TRACE_END(int index);
 
+struct lock_time_info
+{
+    long work_time_so_far;
+    long wait_time_so_far;
+    long &total_work_time;
+};
+
 class TraceTool
 {
 private:
@@ -48,7 +54,6 @@ private:
     static __thread timespec call_end;
     static __thread bool new_transaction;
     
-    trx_t *trx;
     ofstream log_file;
     static pthread_rwlock_t data_lock;
     vector<vector<long> > function_times;
@@ -63,6 +68,7 @@ public:
     static long needs_to_grant;
     static double average_latency;
     static double average_work_time;
+    static ulint num_of_deadlocks;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;
@@ -77,10 +83,6 @@ public:
     static void *check_write_log(void *);
     static timespec get_time();
     
-    void set_trx(trx_t trx)
-    {
-        this->trx = trx;
-    }
     record_lock *find_record_lock(lock_info *lock_info);
     void start_waiting(lock_info *lock_info, lock_request *request);
     void end_waiting(lock_request *request);
