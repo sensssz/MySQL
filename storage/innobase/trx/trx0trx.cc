@@ -1400,6 +1400,9 @@ trx_commit_low(
 	}
 
 	trx_commit_in_memory(trx, lsn);
+  ulint now = ut_time();
+  ulint total_work = now - trx->start_time - trx->total_waiting_time;
+  TraceTool::get_instance()->add_record(0, total_work);
 }
 
 /****************************************************************//**

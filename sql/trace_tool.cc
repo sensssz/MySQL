@@ -37,6 +37,10 @@ double TraceTool::average_latency = 0;
 double TraceTool::average_work_time = 0;
 ulint TraceTool::num_of_deadlocks = 0;
 
+vector<lock_time_info> TraceTool::lock_time_infos;
+os_ib_mutex_t TraceTool::lock_time_mutex = os_mutex_create();
+__thread bool TraceTool::do_monitor = false;
+
 long TraceTool::total_release_time = 0;
 long TraceTool::have_choice_time = 0;
 long TraceTool::needs_to_grant = 0;
@@ -126,11 +130,11 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
-    vector<long> function_time;
+    vector<ulint> function_time;
     function_time.reserve(500000);
     function_time.push_back(0);
     function_times.push_back(function_time);
@@ -244,7 +248,7 @@ void TraceTool::start_new_query()
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
     
-    for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+    for (vector<vector<ulint> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
     {
       iterator->push_back(0);
     }
@@ -318,7 +322,7 @@ void TraceTool::write_log()
     log << transaction_start_times[index] << endl;
   }
   
-  for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+  for (vector<vector<ulint> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     long number_of_transactions = iterator->size();
     for (long index = 0; index < number_of_transactions; ++index)
@@ -351,4 +355,13 @@ void TraceTool::write_log()
   pthread_mutex_unlock(&record_lock_mutex);
   record_lock_map.clear();
   lock_waiting_log.close();
+  
+  ofstream work_wait("lock_wait");
+  os_mutex_enter(lock_time_mutex);
+  for (auto info : lock_time_infos)
+  {
+    work_wait << info.work_time_so_far << "," << info.wait_time_so_far << "," << info.total_work_time << endl;
+  }
+  os_mutex_exit(lock_time_mutex);
+  work_wait.close();
 }

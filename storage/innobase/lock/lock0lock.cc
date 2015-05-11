@@ -2561,111 +2561,30 @@ lock_rec_dequeue_from_page(
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
   
-  /*
-  const lock_t *conflict_lock;
+  ulint now = ut_time();
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
-       lock = lock_rec_get_next_on_page(lock)) {
+       lock = lock_rec_get_next_on_page(lock))
+  {
+    if (TraceTool::do_monitor)
+    {
+      ulint total_time_so_far = now - lock->trx->start_time;
+      ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
+      TraceTool::get_instance()->lock_wait_info(work_time,
+                                                lock->trx->total_waiting_time);
+    }
     
     if (lock_get_wait(lock))
     {
-      if (!(conflict_lock = lock_rec_has_to_wait_in_queue(lock)))
+      if (!lock_rec_has_to_wait_in_queue(lock))
       {
         ut_ad(lock->trx != in_lock->trx);
         lock_grant(lock);
-#ifdef LOCK_MONITOR
-        TraceTool::get_instance()->end_waiting(lock->request);
-        delete lock->request;
-        lock->request = NULL;
-#endif
       }
-#ifdef LOCK_MONITOR
-      else if(lock->request != NULL && lock->request->lock_object != conflict_lock)
-      {
-        // Waiting for the original lock has stopped
-        TraceTool::get_instance()->end_waiting(lock->request);
-        // Start waiting for a new lock
-        lock->request->lock_object = conflict_lock;
-        lock->request->lock->info.type_mode = conflict_lock->type_mode;
-        lock->request->start_waiting_time = TraceTool::get_instance()->get_time();
-      }
-#endif
     }
   }
-   */
   
-  lock_t *first_lock = lock_rec_get_first_on_page_addr(space, page_no);
-  if (first_lock == NULL)
-  {
-    return;
-  }
-  const lock_t *conflict_lock;
-  vector<lock_t *> grantable_locks;
-  // One lock object may represent locks on multiple records. Itereate over all the records.
-  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-       heap_no < n_bits; ++heap_no)
-  {
-    // Not a lock for this record, skip
-    if (!lock_rec_get_nth_bit(in_lock, heap_no))
-    {
-      continue;
-    }
-    
-    if (!lock_rec_get_nth_bit(first_lock, heap_no))
-    {
-      lock = lock_rec_get_next(heap_no, first_lock);
-    }
-    else
-    {
-      lock = first_lock;
-    }
-    
-    lock_t *target_lock = NULL;
-    // Find all lock request on the this record
-    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-    {
-      if (lock_get_wait(lock) &&
-          !(conflict_lock =
-              lock_rec_has_to_wait_in_queue_no_wait_lock(lock)))
-      {
-        grantable_locks.push_back(lock);
-        if (target_lock == NULL)
-        {
-          target_lock = lock;
-        }
-        else
-        {
-          // Least work time
-          time_t now = ut_time();
-          long lock_work_time = now - lock->trx->start_time - lock->trx->total_waiting_time;
-          long target_lock_work_time = now - target_lock->trx->start_time - target_lock->trx->total_waiting_time;
-          if (lock_work_time < target_lock_work_time)
-          {
-            target_lock = lock;
-          }
-        }
-      }
-    }
-    
-    if (target_lock != NULL)
-    {
-      // Grant the target lock(under the current heuristic)
-      lock_grant(target_lock);
-      for (int index = 0, size = grantable_locks.size(); index < size; ++index)
-      {
-        lock_t *lock_request = grantable_locks[index];
-        if (lock_request != target_lock)
-        {
-          if (!lock_has_to_wait(lock_request, target_lock) &&
-              !lock_rec_has_to_wait_in_queue(lock_request))
-          {
-            lock_grant(lock_request);
-          }
-        }
-      }
-    }
-    grantable_locks.clear();
-  }
+  TraceTool::do_monitor = false;
 }
 
 /*************************************************************//**
@@ -4792,6 +4711,8 @@ lock_release(
 
 	ut_ad(lock_mutex_own());
 	ut_ad(!trx_mutex_own(trx));
+  
+  TraceTool::start_release();
 
 	max_trx_id = trx_sys_get_max_trx_id();
 
