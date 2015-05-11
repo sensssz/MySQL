@@ -317,6 +317,7 @@ void TraceTool::write_log()
   {
     work_wait << info.work_time_so_far << "," << info.wait_time_so_far << "," << info.total_work_time << endl;
   }
+  lock_time_infos.clear();
   os_mutex_exit(lock_time_mutex);
   work_wait.close();
   
