@@ -87,9 +87,7 @@ public:
     }
     static void start_release()
     {
-        srand(ut_time());
-        int random = rand() % 100;
-        do_monitor = random < 50;
+        do_monitor = true;
     }
     static TraceTool *get_instance();
     static bool should_monitor();

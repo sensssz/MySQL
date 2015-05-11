@@ -2483,16 +2483,13 @@ lock_grant(
 
   trx_mutex_exit(lock->trx);
   
-  if (TraceTool::do_monitor)
-  {
-    timespec now = TraceTool::get_time();
-    ulint total_time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-    lock->trx->total_waiting_time += wait_time;
-    ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
-    TraceTool::get_instance()->lock_wait_info(work_time,
-                                              lock->trx->total_waiting_time);
-  }
+  timespec now = TraceTool::get_time();
+  ulint total_time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
+  lock->trx->total_waiting_time += wait_time;
+  ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
+  TraceTool::get_instance()->lock_wait_info(work_time,
+                                            lock->trx->total_waiting_time);
 }
 
 /*************************************************************//**
@@ -2586,8 +2583,6 @@ lock_rec_dequeue_from_page(
       }
     }
   }
-  
-  TraceTool::do_monitor = false;
 }
 
 /*************************************************************//**
@@ -4714,8 +4709,6 @@ lock_release(
 
 	ut_ad(lock_mutex_own());
 	ut_ad(!trx_mutex_own(trx));
-  
-  TraceTool::start_release();
 
 	max_trx_id = trx_sys_get_max_trx_id();
 
