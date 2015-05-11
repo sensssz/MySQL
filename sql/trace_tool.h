@@ -21,7 +21,7 @@ using std::vector;
 using std::endl;
 using std::unordered_map;
 
-extern long transaction_id;
+extern ulint transaction_id;
 void TRACE_FUNCTION_START();
 void TRACE_FUNCTION_END();
 bool TRACE_START();
@@ -31,11 +31,11 @@ struct lock_time_info
 {
     ulint work_time_so_far;
     ulint wait_time_so_far;
-    ulint &total_work_time;
+    ulint trx_id;
     
-    lock_time_info(ulint work_time, ulint wait_time, ulint &total):
+    lock_time_info(ulint work_time, ulint wait_time, ulint tid):
     work_time_so_far(work_time), wait_time_so_far(wait_time),
-    total_work_time(total)
+    trx_id(tid)
     {}
 };
 
@@ -47,7 +47,7 @@ private:
     static TraceTool *instance;
     static pthread_mutex_t instance_mutex;
     
-    static __thread long current_transaction_id;
+    static __thread ulint current_transaction_id;
     static __thread timespec last_query;
     
     static timespec start_time;
@@ -55,10 +55,7 @@ private:
     static pthread_mutex_t last_query_mutex;
     static pthread_mutex_t record_lock_mutex;
     static pthread_mutex_t average_mutex;
-    static long commited_trans;
-    
-    static vector<lock_time_info> lock_time_infos;
-    static os_ib_mutex_t lock_time_mutex;
+    static ulint commited_trans;
     
     static __thread timespec function_start;
     static __thread timespec function_end;
@@ -72,21 +69,19 @@ private:
     vector<ulint> transaction_start_times;
     unordered_map<lock_info, record_lock *> record_lock_map;
     
+    vector<lock_time_info> lock_time_infos;
+    os_ib_mutex_t lock_time_mutex;
+    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
-    static long total_release_time;
-    static long have_choice_time;
-    static long needs_to_grant;
-    static double average_latency;
-    static double average_work_time;
     static ulint num_of_deadlocks;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;
     static __thread bool do_monitor;
     
-    static long get_current_transaction_id()
+    static ulint get_current_transaction_id()
     {
         return current_transaction_id;
     }
@@ -102,7 +97,6 @@ public:
     static void *check_write_log(void *);
     static timespec get_time();
     
-    record_lock *find_record_lock(lock_info *lock_info);
     void start_waiting(lock_info *lock_info, lock_request *request);
     void end_waiting(lock_request *request);
     ofstream &get_log()
@@ -113,7 +107,7 @@ public:
     {
         os_mutex_enter(lock_time_mutex);
         lock_time_info info(work_time, wait_time,
-                            function_times[current_transaction_id][0]);
+                            current_transaction_id);
         lock_time_infos.push_back(info);
         os_mutex_exit(lock_time_mutex);
     }
