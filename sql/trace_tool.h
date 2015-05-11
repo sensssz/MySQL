@@ -25,13 +25,6 @@ void TRACE_FUNCTION_END();
 bool TRACE_START();
 bool TRACE_END(int index);
 
-struct lock_time_info
-{
-    long work_time_so_far;
-    long wait_time_so_far;
-    long &total_work_time;
-};
-
 class TraceTool
 {
 private:
