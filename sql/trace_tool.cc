@@ -311,6 +311,15 @@ bool compare_record_lock(record_lock *lock1, record_lock *lock2)
 
 void TraceTool::write_log()
 {
+  ofstream work_wait("lock_wait");
+  os_mutex_enter(lock_time_mutex);
+  for (auto info : lock_time_infos)
+  {
+    work_wait << info.work_time_so_far << "," << info.wait_time_so_far << "," << info.total_work_time << endl;
+  }
+  os_mutex_exit(lock_time_mutex);
+  work_wait.close();
+  
   ofstream log;
   stringstream sstream;
   sstream << "trace" << log_index++;
@@ -355,13 +364,4 @@ void TraceTool::write_log()
   pthread_mutex_unlock(&record_lock_mutex);
   record_lock_map.clear();
   lock_waiting_log.close();
-  
-  ofstream work_wait("lock_wait");
-  os_mutex_enter(lock_time_mutex);
-  for (auto info : lock_time_infos)
-  {
-    work_wait << info.work_time_so_far << "," << info.wait_time_so_far << "," << info.total_work_time << endl;
-  }
-  os_mutex_exit(lock_time_mutex);
-  work_wait.close();
 }
