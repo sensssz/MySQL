@@ -47,7 +47,6 @@ private:
     static __thread timespec call_end;
     static __thread bool new_transaction;
     
-//    trx_t *trx;
     ofstream log_file;
     static pthread_rwlock_t data_lock;
     vector<vector<long> > function_times;
@@ -77,11 +76,6 @@ public:
     static void *check_write_log(void *);
     static timespec get_time();
     
-//    void set_trx(trx_t *trx)
-//    {
-//        this->trx = trx;
-//    }
-    record_lock *find_record_lock(lock_info *lock_info);
     void start_waiting(lock_info *lock_info, lock_request *request);
     void end_waiting(lock_request *request);
     ofstream &get_log()
