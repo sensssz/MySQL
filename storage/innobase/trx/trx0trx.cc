@@ -1403,9 +1403,9 @@ trx_commit_low(
 	}
 
 	trx_commit_in_memory(trx, lsn);
-  timespec now = TraceTool::get_time();
-  ulint total_work = TraceTool::difftime(trx->trx_start_time, now);
-  TraceTool::get_instance()->add_record(0, total_work);
+    timespec now = TraceTool::get_time();
+    ulint total_work = TraceTool::difftime(trx->trx_start_time, now);
+    TraceTool::get_instance()->add_record(0, total_work);
 }
 
 /****************************************************************//**

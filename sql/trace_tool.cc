@@ -6,6 +6,7 @@
 #include <time.h>
 #include <cstring>
 #include <sstream>
+#include <cstdlib>
 
 #define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 0
@@ -132,6 +133,7 @@ TraceTool::TraceTool() : function_times()
   }
   transaction_start_times.push_back(0);
   lock_time_mutex = os_mutex_create();
+  srand(now_micro());
 }
 
 bool TraceTool::should_monitor()

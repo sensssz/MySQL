@@ -2484,12 +2484,17 @@ lock_grant(
   trx_mutex_exit(lock->trx);
   
   timespec now = TraceTool::get_time();
-  ulint total_time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   lock->trx->total_waiting_time += wait_time;
-  ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
-  TraceTool::get_instance()->lock_wait_info(work_time,
-                                            lock->trx->total_waiting_time);
+  
+  if (rand() % 100 < 50)
+  {
+    ulint total_time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    ut_ad(total_time_so_far > lock->trx->total_waiting_time);
+    ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
+    TraceTool::get_instance()->lock_wait_info(work_time,
+                                              lock->trx->total_waiting_time);
+  }
 }
 
 /*************************************************************//**
