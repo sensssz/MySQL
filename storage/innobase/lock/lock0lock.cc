@@ -1881,6 +1881,8 @@ lock_rec_create(
 
 	MONITOR_INC(MONITOR_RECLOCK_CREATED);
 	MONITOR_INC(MONITOR_NUM_RECLOCK);
+  
+  lock->start_wait_time = TraceTool::get_time();
 
 	return(lock);
 }
@@ -2445,7 +2447,9 @@ lock_grant(
 	ut_ad(lock_mutex_own());
 
 	lock_reset_lock_and_trx_wait(lock);
-  lock->grant_time = TraceTool::get_time();
+  timespec now = TraceTool::get_time();
+  ulint duration = TraceTool::difftime(lock->start_wait_time, now);
+  lock->trx->total_waiting_time += duration;
 
 	trx_mutex_enter(lock->trx);
 
@@ -2584,16 +2588,11 @@ lock_rec_dequeue_from_page(
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
-  
-  timespec now = TraceTool::get_time();
-  ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
-  update_access(real_remaining);
 
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
   
-  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
      lock != NULL;
      lock = lock_rec_get_next_on_page(lock))
@@ -2607,16 +2606,15 @@ lock_rec_dequeue_from_page(
       }
     }
   }
-  */
   
-  
+  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
       return;
   }
   ulint rec_fold = lock_rec_fold(space, page_no);
-  vector<lock_t *> grantable_locks;
+  lock_t *lock_to_grant = NULL;
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
@@ -2640,7 +2638,22 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
         {
-          grantable_locks.push_back(lock);
+          if (lock_to_grant == NULL)
+          {
+            lock_to_grant = lock;
+          }
+          else
+          {
+            timespec now = TraceTool::get_time();
+            ulint target_duration = TraceTool::difftime(lock_to_grant->trx->trx_start_time, now);
+            ulint duration = TraceTool::difftime(lock_to_grant->trx->trx_start_time, now);
+            ulint target_work = target_duration - lock_to_grant->trx->total_waiting_time;
+            ulint work = duration - lock->trx->total_waiting_time;
+            if (work < target_work)
+            {
+              lock_to_grant = lock;
+            }
+          }
         }
         if (first_wait_lock == NULL)
         {
@@ -2649,11 +2662,8 @@ lock_rec_dequeue_from_page(
       }
     }
     
-    if (grantable_locks.size() > 0)
+    if (lock_to_grant != NULL)
     {
-      lock_t *lock_to_grant = find_min_var_lock(grantable_locks);
-      grantable_locks.clear();
-      
       if (first_wait_lock != lock_to_grant)
       {
         // Move the target lock before the first wait lock.
@@ -2690,6 +2700,7 @@ lock_rec_dequeue_from_page(
       }
     }
   }
+   */
 }
 
 /*************************************************************//**
@@ -4202,6 +4213,8 @@ lock_deadlock_check_and_resolve(
 			lock_deadlock_trx_rollback(&ctx);
 
 			lock_deadlock_found = TRUE;
+      
+      os_atomic_increment(&TraceTool::num_deadlocks, 1);
 
 			MONITOR_INC(MONITOR_DEADLOCK);
 		}
@@ -4210,7 +4223,8 @@ lock_deadlock_check_and_resolve(
 
 	/* If the joining transaction was selected as the victim. */
 	if (victim_trx_id != 0) {
-		ut_a(victim_trx_id == trx->id);
+    ut_a(victim_trx_id == trx->id);
+    os_atomic_increment(&TraceTool::num_deadlocks, 1);
 
 		lock_deadlock_fputs("*** WE ROLL BACK TRANSACTION (2)\n");
 

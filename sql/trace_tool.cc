@@ -41,6 +41,7 @@ pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
 ulint TraceTool::commited_trx = 0;
 double TraceTool::average_latency = 0;
 double TraceTool::average_work_time = 0;
+ulint TraceTool::num_deadlocks = 0;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
@@ -176,7 +177,13 @@ timespec TraceTool::get_time()
   return now;
 }
 
-long TraceTool::difftime(timespec start, timespec end)
+bool TraceTool::time_before(timespec &time1, timespec &time2)
+{
+  return (time1.tv_sec < time2.tv_sec) ||
+      (time1.tv_sec == time2.tv_sec && time1.tv_nsec < time2.tv_nsec);
+}
+
+long TraceTool::difftime(timespec &start, timespec &end)
 {
   return (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
 }
@@ -216,7 +223,8 @@ void TraceTool::end_waiting(lock_request *request)
 {
   if (request != NULL && request->lock_object != NULL)
   {
-    long waiting_time = difftime(request->start_waiting_time, get_time());
+    timespec now =  get_time();
+    long waiting_time = difftime(request->start_waiting_time, now);
     request->lock->waiting_times.push_back(waiting_time);
   }
 }
@@ -310,8 +318,10 @@ void TraceTool::write_log()
   stringstream sstream;
   sstream << "trace" << log_index++;
   log.open(sstream.str().c_str());
-  int function_index = 0;
+  ulint function_index = 0;
+  double num_trx = 0;
   pthread_rwlock_wrlock(&data_lock);
+  num_trx = transaction_start_times.size();
   for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
   {
     log << transaction_start_times[index] << endl;
@@ -333,6 +343,7 @@ void TraceTool::write_log()
   
   ofstream lock_waiting_log("lock");
   pthread_mutex_lock(&record_lock_mutex);
+  lock_waiting_log << "Rate of deadlocks: " << num_deadlocks / num_trx << endl;
   lock_waiting_log << "Number of locks: " << record_lock_map.size() << endl;
   for (auto lock_map : record_lock_map)
   {

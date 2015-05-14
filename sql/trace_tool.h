@@ -58,6 +58,7 @@ private:
 public:
     static double average_latency;
     static double average_work_time;
+    static ulint num_deadlocks;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;
@@ -68,7 +69,8 @@ public:
     }
     static TraceTool *get_instance();
     static bool should_monitor();
-    static long difftime(timespec start, timespec end);
+    static bool time_before(timespec &time1, timespec &time2);
+    static long difftime(timespec &start, timespec &end);
     static void *check_write_log(void *);
     static timespec get_time();
     

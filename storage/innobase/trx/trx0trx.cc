@@ -858,6 +858,7 @@ trx_start_low(
   trx->in_conflict = false;
   trx->out_conflict = false;
   trx->total_waiting_time = 0;
+  trx->trx_start_time = TraceTool::get_time();
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -1410,6 +1411,7 @@ trx_commit(
 /*=======*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
+  TraceTool::is_commit = true;
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 
