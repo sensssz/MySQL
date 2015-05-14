@@ -33,6 +33,7 @@ Created 5/7/1996 Heikki Tuuri
 #include "lock0priv.ic"
 #endif
 
+#include "lock0var.h"
 #include "ha_prototypes.h"
 #include "usr0sess.h"
 #include "trx0purge.h"
@@ -50,8 +51,11 @@ Created 5/7/1996 Heikki Tuuri
 #include "dict0boot.h"
 #include "os0sync.h"
 #include <set>
+#include <algorithm>
 
 #include "trace_tool.h"
+
+using std::find;
 
 #define SEE_NEXT_K_LOCKS  2
 
@@ -1842,7 +1846,7 @@ lock_rec_create(
 	lock->un_member.rec_lock.space = space;
 	lock->un_member.rec_lock.page_no = page_no;
 	lock->un_member.rec_lock.n_bits = n_bytes * 8;
-    lock->request = NULL;
+  lock->request = NULL;
 
 	/* Reset to zero the bitmap which resides immediately after the
 	lock struct */
@@ -1962,7 +1966,7 @@ lock_rec_enqueue_waiting(
 	currently associated with the transaction. */
 
 	trx_mutex_exit(trx);
-
+  
 	victim_trx_id = lock_deadlock_check_and_resolve(lock, trx);
 
 	trx_mutex_enter(trx);
@@ -2441,6 +2445,7 @@ lock_grant(
 	ut_ad(lock_mutex_own());
 
 	lock_reset_lock_and_trx_wait(lock);
+  lock->grant_time = TraceTool::get_time();
 
 	trx_mutex_enter(lock->trx);
 
@@ -2518,6 +2523,29 @@ lock_rec_cancel(
 	trx_mutex_exit(lock->trx);
 }
 
+static
+lock_t *
+find_previous(
+  lock_t *lock,
+  ulint rec_fold)
+{
+  lock_t *previous;
+  
+  HASH_ASSERT_OWN(lock_sys->rec_hash, rec_fold)
+  hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+        hash_calc_hash(rec_fold, lock_sys->rec_hash));
+  previous = (lock_t *) cell->node;
+  if (previous == lock)
+  {
+    return NULL;
+  }
+  while (previous->hash != lock)
+  {
+    previous = (lock_t *) previous->hash;
+  }
+  return previous;
+}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2556,22 +2584,109 @@ lock_rec_dequeue_from_page(
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
+  
+  timespec now = TraceTool::get_time();
+  ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
+  update_access(real_remaining);
 
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
   
-  const lock_t *conflict_lock;
+  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != NULL;
-       lock = lock_rec_get_next_on_page(lock)) {
-    
+     lock != NULL;
+     lock = lock_rec_get_next_on_page(lock))
+  {
     if (lock_get_wait(lock))
     {
-      if (!(conflict_lock = lock_rec_has_to_wait_in_queue(lock)))
+      if (!lock_rec_has_to_wait_in_queue(lock))
       {
         ut_ad(lock->trx != in_lock->trx);
         lock_grant(lock);
+      }
+    }
+  }
+  */
+  
+  
+  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+  if (first_lock_on_page == NULL)
+  {
+      return;
+  }
+  ulint rec_fold = lock_rec_fold(space, page_no);
+  vector<lock_t *> grantable_locks;
+  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+       heap_no < n_bits; ++heap_no)
+  {
+    if (!lock_rec_get_nth_bit(in_lock, heap_no))
+    {
+      continue;
+    }
+    
+    lock_t *first_wait_lock = NULL;
+    if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
+    {
+      lock = lock_rec_get_next(heap_no, first_lock_on_page);
+    }
+    else
+    {
+      lock = first_lock_on_page;
+    }
+    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+    {
+      if (lock_get_wait(lock))
+      {
+        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
+        {
+          grantable_locks.push_back(lock);
+        }
+        if (first_wait_lock == NULL)
+        {
+          first_wait_lock = lock;
+        }
+      }
+    }
+    
+    if (grantable_locks.size() > 0)
+    {
+      lock_t *lock_to_grant = find_min_var_lock(grantable_locks);
+      grantable_locks.clear();
+      
+      if (first_wait_lock != lock_to_grant)
+      {
+        // Move the target lock before the first wait lock.
+        HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
+                    rec_fold, lock_to_grant);
+        lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
+        if (first_lock_previous != NULL)
+        {
+          first_lock_previous->hash = lock_to_grant;
+        }
+        else
+        {
+          hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+                   hash_calc_hash(rec_fold, lock_sys->rec_hash));
+          cell->node = lock_to_grant;
+        }
+        lock_to_grant->hash = first_wait_lock;
+      }
+      
+      lock = lock_rec_get_first_on_page_addr(space, page_no);
+      if (!lock_rec_get_nth_bit(lock, heap_no))
+      {
+        lock = lock_rec_get_next(heap_no, lock);
+      }
+      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+      {
+        if (lock_get_wait(lock))
+        {
+          if (!lock_rec_has_to_wait_in_queue(lock))
+          {
+            lock_grant(lock);
+          }
+        }
       }
     }
   }

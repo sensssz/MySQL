@@ -46,6 +46,7 @@
 /Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/ibuf0ibuf.o
 /Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/lock0iter.o
 /Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/lock0lock.o
+/Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/lock0var.o
 /Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/lock0wait.o
 /Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/log0log.o
 /Users/sens/Developer/mysql-5.6.23/project/storage/innobase/MySQL.build/Debug/innobase.build/Objects-normal/x86_64/log0recv.o

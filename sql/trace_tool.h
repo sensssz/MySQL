@@ -39,7 +39,7 @@ private:
     static pthread_mutex_t last_query_mutex;
     static pthread_mutex_t record_lock_mutex;
     static pthread_mutex_t average_mutex;
-    static long commited_trans;
+    static ulint commited_trx;
     
     static __thread timespec function_start;
     static __thread timespec function_end;
@@ -56,12 +56,8 @@ private:
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
-    static long total_release_time;
-    static long have_choice_time;
-    static long needs_to_grant;
     static double average_latency;
     static double average_work_time;
-    static double max_work_time;
     static __thread int path_count;
     static __thread bool is_commit;
     static __thread bool commit_successful;

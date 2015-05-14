@@ -144,6 +144,26 @@ do {\
 	}\
 } while (0)
 
+/*******************************************************************//**
+Inserts a struct to a hash table. */
+
+#define HASH_FIND_PREVIOUS(TYPE, NAME, TABLE, FOLD, DATA, PREVIOUS)\
+do {\
+	hash_cell_t*	cell3333;\
+\
+	HASH_ASSERT_OWN(TABLE, FOLD)\
+\
+	cell3333 = hash_get_nth_cell(TABLE, hash_calc_hash(FOLD, TABLE));\
+\
+    PREVIOUS = (TYPE*) cell3333->node;\
+\
+    while (PREVIOUS->NAME != DATA) {\
+\
+        PREVIOUS = (TYPE*) PREVIOUS->NAME;\
+        ut_ad(PREVIOUS->NAME != NULL);\
+    }\
+} while (0)
+
 #ifdef UNIV_HASH_DEBUG
 # define HASH_ASSERT_VALID(DATA) ut_a((void*) (DATA) != (void*) -1)
 # define HASH_INVALIDATE(DATA, NAME) *(void**) (&DATA->NAME) = (void*) -1

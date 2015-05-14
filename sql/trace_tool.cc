@@ -38,14 +38,9 @@ timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
-long TraceTool::commited_trans = 0;
+ulint TraceTool::commited_trx = 0;
 double TraceTool::average_latency = 0;
 double TraceTool::average_work_time = 0;
-double TraceTool::max_work_time = 0;
-
-long TraceTool::total_release_time = 0;
-long TraceTool::have_choice_time = 0;
-long TraceTool::needs_to_grant = 0;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
@@ -145,7 +140,6 @@ TraceTool::TraceTool() : function_times()
 
 bool TraceTool::should_monitor()
 {
-  return true;
   return path_count == TARGET_PATH_COUNT;
 }
 
@@ -164,12 +158,12 @@ void *TraceTool::check_write_log(void *arg)
       TraceTool *old_instace = instance;
       instance = new TraceTool;
       transaction_id = 0;
+      average_latency = 0;
+      average_work_time = 0;
+      commited_trx = 0;
       
       old_instace->write_log();
       delete old_instace;
-      
-      total_release_time = 0;
-      have_choice_time = 0;
     }
   }
   return NULL;
@@ -234,6 +228,13 @@ void TraceTool::start_new_query()
   {
     new_transaction = false;
     pthread_rwlock_wrlock(&data_lock);
+    if (current_transaction_id > transaction_id)
+    {
+      current_transaction_id = 0;
+    }
+    ulint latency = function_times.back()[current_transaction_id];
+    ++commited_trx;
+    average_latency = (average_latency * (commited_trx - 1) + latency) / commited_trx;
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
     
@@ -255,10 +256,6 @@ void TraceTool::start_new_query()
 void TraceTool::end_query()
 {
 #ifdef LATENCY
-  if (current_transaction_id > transaction_id)
-  {
-    current_transaction_id = 0;
-  }
   timespec now = get_time();
   long latency = difftime(last_query, now);
   pthread_rwlock_rdlock(&data_lock);
@@ -276,7 +273,9 @@ void TraceTool::end_transaction()
   }
   else
   {
+    pthread_rwlock_rdlock(&data_lock);
     function_times.back()[current_transaction_id] = 0;
+    pthread_rwlock_unlock(&data_lock);
   }
 #endif
 }

@@ -77,6 +77,7 @@ struct lock_t {
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
     lock_request*   request;
+    timespec        grant_time;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {
 		lock_table_t	tab_lock;/*!< table lock */
