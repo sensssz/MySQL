@@ -223,15 +223,17 @@ void TraceTool::end_waiting(lock_request *request)
 
 void TraceTool::start_new_query()
 {
+  is_commit = false;
+  if (current_transaction_id > transaction_id)
+  {
+    current_transaction_id = 0;
+  }
 #ifdef LATENCY
   if (new_transaction)
   {
     new_transaction = false;
+    commit_successful = true;
     pthread_rwlock_wrlock(&data_lock);
-    if (current_transaction_id > transaction_id)
-    {
-      current_transaction_id = 0;
-    }
     ulint latency = function_times.back()[current_transaction_id];
     ++commited_trx;
     average_latency = (average_latency * (commited_trx - 1) + latency) / commited_trx;
@@ -256,6 +258,10 @@ void TraceTool::start_new_query()
 void TraceTool::end_query()
 {
 #ifdef LATENCY
+  if (current_transaction_id > transaction_id)
+  {
+    current_transaction_id = 0;
+  }
   timespec now = get_time();
   long latency = difftime(last_query, now);
   pthread_rwlock_rdlock(&data_lock);
