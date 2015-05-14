@@ -568,6 +568,7 @@ trx_resurrect_insert(
 	if (trx->state == TRX_STATE_ACTIVE
 	    || trx->state == TRX_STATE_PREPARED) {
 		trx->start_time = ut_time();
+    trx->trx_start_time = TraceTool::get_time();
 	}
 
 	if (undo->dict_operation) {
@@ -661,7 +662,8 @@ trx_resurrect_update(
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
 	    || trx->state == TRX_STATE_PREPARED) {
-		trx->start_time = ut_time();
+    trx->start_time = ut_time();
+    trx->trx_start_time = TraceTool::get_time();
 	}
 
 	if (undo->dict_operation) {
@@ -910,7 +912,8 @@ trx_start_low(
 
 	mutex_exit(&trx_sys->mutex);
 
-	trx->start_time = ut_time();
+  trx->start_time = ut_time();
+  trx->trx_start_time = TraceTool::get_time();
 
 	MONITOR_INC(MONITOR_TRX_ACTIVE);
 }
