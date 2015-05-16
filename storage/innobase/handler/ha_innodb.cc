@@ -3470,6 +3470,11 @@ innobase_commit_low(
 
         trx_commit_for_mysql(trx);
     }
+  else
+  {
+    TraceTool::get_instance()->get_log() << "trx not started. query is ";
+    TraceTool::get_instance()->print_query();
+  }
 }
 
 /*****************************************************************//**

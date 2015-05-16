@@ -2439,11 +2439,31 @@ lock_grant(
 /*=======*/
 	lock_t*	lock)	/*!< in/out: waiting lock request */
 {
-	ut_ad(lock_mutex_own());
+  ut_ad(lock_mutex_own());
+  
+  trx_mutex_enter(lock->trx);
+  
+  timespec now = TraceTool::get_time();
+  trx_t *trx = lock->trx;
+  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
+  trx->total_waiting_time += wait_time;
+  
+  if (rand() % 100 < 20 &&
+      trx->real_transaction_id != NULL &&
+      trx->transaction_id != 0 &&
+      trx->transaction_id == *(trx->real_transaction_id))
+  {
+    ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    ulint work_time = total_time_so_far - trx->total_waiting_time;
+    uint num_of_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+    TraceTool::get_instance()->lock_wait_info(trx->transaction_id,
+                                              trx->id,
+                                              work_time,
+                                              trx->total_waiting_time,
+                                              num_of_locks);
+  }
 
 	lock_reset_lock_and_trx_wait(lock);
-
-	trx_mutex_enter(lock->trx);
 
 	if (lock_get_mode(lock) == LOCK_AUTO_INC) {
 		dict_table_t*	table = lock->un_member.tab_lock.table;
@@ -2480,21 +2500,8 @@ lock_grant(
 			lock_wait_release_thread_if_suspended(thr);
 		}
 	}
-
+  
   trx_mutex_exit(lock->trx);
-  
-  timespec now = TraceTool::get_time();
-  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-  lock->trx->total_waiting_time += wait_time;
-  
-  if (rand() % 100 < 50)
-  {
-    ulint total_time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    ut_ad(total_time_so_far > lock->trx->total_waiting_time);
-    ulint work_time = total_time_so_far - lock->trx->total_waiting_time;
-    TraceTool::get_instance()->lock_wait_info(work_time,
-                                              lock->trx->total_waiting_time);
-  }
 }
 
 /*************************************************************//**

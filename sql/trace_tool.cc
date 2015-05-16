@@ -7,6 +7,7 @@
 #include <cstring>
 #include <sstream>
 #include <cstdlib>
+#include <cassert>
 
 #define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 0
@@ -34,14 +35,15 @@ pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
 ulint TraceTool::num_of_deadlocks = 0;
-
-__thread bool TraceTool::do_monitor = false;
+double TraceTool::average_latency = 0;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
+__thread bool TraceTool::is_rollback = false;
 __thread bool TraceTool::commit_successful = false;
 __thread bool TraceTool::new_transaction = true;
-
+__thread timespec TraceTool::trans_start;
+__thread char * TraceTool::query = NULL;
 
 #ifdef MONITOR
 static __thread timespec function_start;
@@ -122,7 +124,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 4;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -131,6 +133,7 @@ TraceTool::TraceTool() : function_times()
     function_time.push_back(0);
     function_times.push_back(function_time);
   }
+  transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
   lock_time_mutex = os_mutex_create();
   srand(now_micro());
@@ -149,9 +152,12 @@ void *TraceTool::check_write_log(void *arg)
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
+      instance->get_log() << "Writing log..." << endl;
       std::ifstream src("trace.log", std::ios::binary);
       std::ofstream dst("trace.bak", std::ios::binary);
       dst << src.rdbuf();
+      src.close();
+      dst.close();
       
       TraceTool *old_instace = instance;
       instance = new TraceTool;
@@ -216,23 +222,60 @@ void TraceTool::end_waiting(lock_request *request)
   }
 }
 
+void TraceTool::lock_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time, uint num_of_locks)
+{
+  lock_time_info info(trans_id, trx_id, work_time, wait_time, num_of_locks);
+  os_mutex_enter(lock_time_mutex);
+  lock_time_infos.push_back(info);
+  os_mutex_exit(lock_time_mutex);
+}
+
+void TraceTool::remove(ulint trx_id)
+{
+  int num_removed = 0;
+  os_mutex_enter(lock_time_mutex);
+  for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();
+       iterator != lock_time_infos.end();
+       )
+  {
+    if (iterator->trx_id == trx_id)
+    {
+      // automatically moves the iterator forward
+      iterator = lock_time_infos.erase(iterator);
+      ++num_removed;
+    }
+    else
+    {
+      ++iterator;
+    }
+  }
+  os_mutex_exit(lock_time_mutex);
+}
+
 void TraceTool::start_new_query()
 {
   is_commit = false;
+  if (current_transaction_id > transaction_id)
+  {
+    current_transaction_id = 0;
+  }
 #ifdef LATENCY
   if (new_transaction)
   {
+    trans_start = get_time();
     new_transaction = false;
+    is_rollback = false;
+    commit_successful = true;
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
-    
-    for (vector<vector<ulint> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+    for (vector<vector<ulint> >::iterator iterator = function_times.begin();
+         iterator != function_times.end();
+         ++iterator)
     {
       iterator->push_back(0);
     }
     transaction_start_times.push_back(0);
-    
     pthread_rwlock_unlock(&data_lock);
   }
   clock_gettime(CLOCK_REALTIME, &last_query);
@@ -242,18 +285,26 @@ void TraceTool::start_new_query()
 #endif
 }
 
+void TraceTool::set_query(const char *new_query, int length)
+{
+  query = (char *) malloc(sizeof(char) * (length + 1));
+  strncpy(query, new_query, length);
+  query[length] = '\0';
+}
+
+void TraceTool::print_query()
+{
+  log_file << query << "," << is_commit << "," << commit_successful << endl;
+}
+
 void TraceTool::end_query()
 {
+  free(query);
 #ifdef LATENCY
-  if (current_transaction_id > transaction_id)
+  if (is_commit)
   {
-    current_transaction_id = 0;
+    end_transaction();
   }
-  timespec now = get_time();
-  long latency = difftime(last_query, now);
-  pthread_rwlock_rdlock(&data_lock);
-  function_times.back()[current_transaction_id] += latency;
-  pthread_rwlock_unlock(&data_lock);
 #endif
 }
 
@@ -263,11 +314,38 @@ void TraceTool::end_transaction()
   if (commit_successful)
   {
     new_transaction = true;
+    timespec now = get_time();
+    long latency = difftime(trans_start, now);
+    pthread_rwlock_rdlock(&data_lock);
+    function_times.back()[current_transaction_id] = latency;
+    pthread_rwlock_unlock(&data_lock);
   }
   else
   {
+    pthread_rwlock_rdlock(&data_lock);
     // Reuse the last transaction
-    function_times.back()[current_transaction_id] = 0;
+    for (int index = 0, size = function_times.size(); index < size; ++index)
+    {
+      function_times[index][current_transaction_id] = 0;
+    }
+    transaction_start_times[current_transaction_id] = now_micro();
+    pthread_rwlock_unlock(&data_lock);
+    
+    os_mutex_enter(lock_time_mutex);
+    for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();
+         iterator != lock_time_infos.end();
+         )
+    {
+      if (iterator->transaction_id == current_transaction_id)
+      {
+        iterator = lock_time_infos.erase(iterator);
+      }
+      else
+      {
+        ++iterator;
+      }
+    }
+    os_mutex_exit(lock_time_mutex);
   }
 #endif
 }
@@ -292,10 +370,21 @@ void TraceTool::write_log()
 {
   ofstream work_wait("lock_wait");
   os_mutex_enter(lock_time_mutex);
-  for (auto info : lock_time_infos)
+  for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();
+       iterator != lock_time_infos.end();
+       ++iterator)
   {
-    work_wait << info.work_time_so_far << "," << info.wait_time_so_far << "," <<
-        function_times[0][info.trx_id]<< endl;
+    lock_time_info &info = *iterator;
+    if (info.trx_id != 0)
+    {
+      assert(function_times[0][info.transaction_id] > info.work_time_so_far);
+      assert(function_times[1][info.transaction_id] >= info.wait_time_so_far);
+      assert(function_times[2][info.transaction_id] >= info.num_of_locks_so_far);
+      work_wait << info.transaction_id << "," << info.work_time_so_far << "," <<
+                   info.wait_time_so_far << "," << info.num_of_locks_so_far << "," <<
+                   function_times[0][info.transaction_id] <<  "," << function_times[1][info.transaction_id] << "," <<
+                   function_times[2][info.transaction_id] << endl;
+    }
   }
   lock_time_infos.clear();
   os_mutex_exit(lock_time_mutex);
@@ -325,8 +414,6 @@ void TraceTool::write_log()
   function_times.clear();
   pthread_rwlock_unlock(&data_lock);
   log.close();
-  
-  log_file << "Number of deadlocks: " << num_of_deadlocks << endl;
   
   ofstream lock_waiting_log("lock");
   pthread_mutex_lock(&record_lock_mutex);

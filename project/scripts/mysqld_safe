@@ -722,7 +722,7 @@ then
   PID=`cat "$pid_file"`
   if kill -0 $PID > /dev/null 2> /dev/null
   then
-    if ps -ef | grep -v mysqld_safe | grep -- $MYSQLD | grep $PID > /dev/null
+    if ps -uaxww | grep -v mysqld_safe | grep -- $MYSQLD | grep $PID > /dev/null
     then    # The pid contains a mysqld process
       log_error "A mysqld process already exists"
       exit 1

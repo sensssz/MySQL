@@ -1785,12 +1785,6 @@ done:
   dec_thread_running();
   thd->packet.shrink(thd->variables.net_buffer_length);	// Reclaim some memory
   free_root(thd->mem_root,MYF(MY_KEEP_PREALLOC));
-  
-  TraceTool::get_instance()->end_query();
-  if (TraceTool::is_commit)
-  {
-    TraceTool::get_instance()->end_transaction();
-  }
 
   /* DTRACE instrumentation, end */
   if (MYSQL_QUERY_DONE_ENABLED() || MYSQL_COMMAND_DONE_ENABLED())
@@ -4297,11 +4291,8 @@ end_with_restore_list:
     bool commit = trans_commit(thd);
     if (commit)
     {
-      TraceTool::get_instance()->get_log() << "Commit failed" << endl;
-      TraceTool::commit_successful = false;
       goto error;
     }
-    TraceTool::commit_successful = true;
     thd->mdl_context.release_transactional_locks();
     /* Begin transaction with the same isolation level. */
     if (tx_chain)

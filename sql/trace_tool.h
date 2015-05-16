@@ -4,22 +4,25 @@
 #include "../storage/innobase/include/os0sync.h"
 #include "../storage/innobase/include/lock0types.h"
 #include <fstream>
-#include <deque>
+#include <list>
 #include <vector>
 #include <pthread.h>
 #include <time.h>
 #include <unordered_map>
 #include <cstdlib>
+#include <string>
 
 #define TRACE_S_E(function_call, index) (TRACE_START()|(function_call)|TRACE_END(index))
 
 typedef unsigned long int ulint;
+typedef unsigned int uint;
 
 using std::ofstream;
-using std::deque;
+using std::list;
 using std::vector;
 using std::endl;
 using std::unordered_map;
+using std::string;
 
 extern ulint transaction_id;
 void TRACE_FUNCTION_START();
@@ -29,13 +32,15 @@ bool TRACE_END(int index);
 
 struct lock_time_info
 {
+    ulint transaction_id;
+    ulint trx_id;
     ulint work_time_so_far;
     ulint wait_time_so_far;
-    ulint trx_id;
+    uint num_of_locks_so_far;
     
-    lock_time_info(ulint work_time, ulint wait_time, ulint tid):
-    work_time_so_far(work_time), wait_time_so_far(wait_time),
-    trx_id(tid)
+    lock_time_info(ulint trans_id, ulint tid, ulint work_time, ulint wait_time, uint locks):
+    transaction_id(trans_id), trx_id(tid), work_time_so_far(work_time),
+    wait_time_so_far(wait_time), num_of_locks_so_far(locks)
     {}
 };
 
@@ -47,7 +52,6 @@ private:
     static TraceTool *instance;
     static pthread_mutex_t instance_mutex;
     
-    static __thread ulint current_transaction_id;
     static __thread timespec last_query;
     
     static timespec start_time;
@@ -62,6 +66,7 @@ private:
     static __thread timespec call_start;
     static __thread timespec call_end;
     static __thread bool new_transaction;
+    static __thread timespec trans_start;
     
     ofstream log_file;
     static pthread_rwlock_t data_lock;
@@ -69,26 +74,21 @@ private:
     vector<ulint> transaction_start_times;
     unordered_map<lock_info, record_lock *> record_lock_map;
     
-    vector<lock_time_info> lock_time_infos;
+    list<lock_time_info> lock_time_infos;
     os_ib_mutex_t lock_time_mutex;
     
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
+    static __thread ulint current_transaction_id;
     static ulint num_of_deadlocks;
     static __thread int path_count;
     static __thread bool is_commit;
+    static __thread bool is_rollback;
     static __thread bool commit_successful;
-    static __thread bool do_monitor;
+    static __thread char *query;
+    static double average_latency;
     
-    static ulint get_current_transaction_id()
-    {
-        return current_transaction_id;
-    }
-    static void start_release()
-    {
-        do_monitor = true;
-    }
     static TraceTool *get_instance();
     static bool should_monitor();
     static ulint difftime(timespec start, timespec end);
@@ -102,15 +102,12 @@ public:
     {
         return log_file;
     }
-    void lock_wait_info(ulint work_time, ulint wait_time)
-    {
-        os_mutex_enter(lock_time_mutex);
-        lock_time_info info(work_time, wait_time,
-                            current_transaction_id);
-        lock_time_infos.push_back(info);
-        os_mutex_exit(lock_time_mutex);
-    }
+    void lock_wait_info(ulint trans_id, ulint trx_id, ulint work_time,
+                        ulint wait_time, uint num_of_locks);
+    void remove(ulint trx_id);
     void start_new_query();
+    void set_query(const char *query, int length);
+    void print_query();
     void end_query();
     void end_transaction();
     void write_log();
