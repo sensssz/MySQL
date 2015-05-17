@@ -1315,6 +1315,8 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
                       &thd->security_ctx->priv_user[0],
                       (char *) thd->security_ctx->host_or_ip);
     char *packet_end= thd->query() + thd->query_length();
+    
+//    TraceTool::get_instance()->set_query(thd->query(), thd->query_length());
 
     if (opt_log_raw)
       general_log_write(thd, command, thd->query(), thd->query_length());
@@ -1782,6 +1784,8 @@ done:
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
   thd->m_statement_psi= NULL;
 
+  TraceTool::get_instance()->end_query();
+  
   dec_thread_running();
   thd->packet.shrink(thd->variables.net_buffer_length);	// Reclaim some memory
   free_root(thd->mem_root,MYF(MY_KEEP_PREALLOC));
@@ -4289,6 +4293,11 @@ end_with_restore_list:
                       (thd->variables.completion_type == 2 &&
                        lex->tx_release != TVL_NO));
     bool commit = trans_commit(thd);
+    if (!TraceTool::is_commit)
+    {
+      TraceTool::is_commit = true;
+      TraceTool::commit_successful = false;
+    }
     if (commit)
     {
       goto error;
@@ -4297,6 +4306,8 @@ end_with_restore_list:
     /* Begin transaction with the same isolation level. */
     if (tx_chain)
     {
+      TraceTool::get_instance()->get_log() << "transaction " << TraceTool::current_transaction_id
+        << " has chain" << endl;
       if (trans_begin(thd))
       goto error;
     }
@@ -4322,7 +4333,13 @@ end_with_restore_list:
     bool tx_release= (lex->tx_release == TVL_YES ||
                       (thd->variables.completion_type == 2 &&
                        lex->tx_release != TVL_NO));
-    if (trans_rollback(thd))
+    bool rollback = trans_rollback(thd);
+    if (!TraceTool::is_commit)
+    {
+      TraceTool::is_commit = true;
+      TraceTool::commit_successful = false;
+    }
+    if (rollback)
       goto error;
     thd->mdl_context.release_transactional_locks();
     /* Begin transaction with the same isolation level. */

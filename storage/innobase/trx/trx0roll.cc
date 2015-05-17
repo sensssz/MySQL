@@ -119,7 +119,6 @@ trx_rollback_to_savepoint_low(
 	}
 
 	if (savept == NULL) {
-    TraceTool::is_rollback = true;
     TraceTool::commit_successful = false;
 		trx_rollback_finish(trx);
 		MONITOR_INC(MONITOR_TRX_ROLLBACK);

@@ -746,6 +746,7 @@ struct trx_t{
     ulint       *real_transaction_id;
     ulint       transaction_id;
     timespec    trx_start_time;
+    ulint       num_waits;
     
     bool        in_conflict;    /*!< Indicates whether or not there is a
                          rw-dependency from a concurrent transaction

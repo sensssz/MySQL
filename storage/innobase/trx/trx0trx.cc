@@ -866,6 +866,7 @@ trx_start_low(
   trx->trx_start_time = TraceTool::get_time();
   trx->transaction_id = TraceTool::current_transaction_id;
   trx->real_transaction_id = &TraceTool::current_transaction_id;
+  trx->num_waits = 0;
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -884,7 +885,9 @@ trx_start_low(
 
 	trx->state = TRX_STATE_ACTIVE;
   
+//  TraceTool::get_instance()->get_log() << "trx " << trx->id;
   trx->id = trx_sys_get_new_trx_id();
+//  TraceTool::get_instance()->get_log() << " starts as " << trx->id << "," << trx->transaction_id << endl;
 
 	ut_ad(!trx->in_rw_trx_list);
 	ut_ad(!trx->in_ro_trx_list);
@@ -1409,15 +1412,23 @@ trx_commit_low(
   
   uint num_of_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
 	trx_commit_in_memory(trx, lsn);
+  
+//  if (trx->real_transaction_id != NULL)
+//  {
+//    TraceTool::get_instance()->print_query();
+//    TraceTool::get_instance()->get_log() << "trx " << trx->id << " ends as "
+//      << *(trx->real_transaction_id) << "," << trx->transaction_id << endl;
+//  }
   if (trx->real_transaction_id != NULL &&
       trx->transaction_id == *(trx->real_transaction_id))
   {
     timespec now = TraceTool::get_time();
     ulint total = TraceTool::difftime(trx->trx_start_time, now);
     ulint total_work = total - trx->total_waiting_time;
-    TraceTool::get_instance()->add_record(0, total_work);
-    TraceTool::get_instance()->add_record(1, trx->total_waiting_time);
-    TraceTool::get_instance()->add_record(2, num_of_locks);
+    TraceTool::get_instance()->add_record_if_zero(0, total_work);
+    TraceTool::get_instance()->add_record_if_zero(1, trx->total_waiting_time);
+    TraceTool::get_instance()->add_record_if_zero(2, num_of_locks);
+    TraceTool::get_instance()->add_record_if_zero(3, trx->num_waits);
   }
   else
   {

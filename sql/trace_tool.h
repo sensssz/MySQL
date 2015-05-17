@@ -84,10 +84,12 @@ public:
     static ulint num_of_deadlocks;
     static __thread int path_count;
     static __thread bool is_commit;
-    static __thread bool is_rollback;
+    static __thread bool query_is_commit;
     static __thread bool commit_successful;
     static __thread char *query;
     static double average_latency;
+    static ulint num_of_trans;
+    static ulint num_of_rollback;
     
     static TraceTool *get_instance();
     static bool should_monitor();
@@ -112,6 +114,7 @@ public:
     void end_transaction();
     void write_log();
     void add_record(int function_index, long duration);
+    void add_record_if_zero(int function_index, long duration);
 };
 
 #endif

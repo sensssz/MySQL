@@ -2002,6 +2002,7 @@ lock_rec_enqueue_waiting(
 #endif /* UNIV_DEBUG */
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
+  ++trx->num_waits;
   
 #ifdef LOCK_MONITOR
   lock_info lock_to_wait;
