@@ -146,6 +146,9 @@ trx_create(void)
 	trx->api_auto_commit = false;
 
 	trx->read_write = true;
+  
+  trx->transaction_id = 0;
+  trx->real_transaction_id = NULL;
 
 	heap = mem_heap_create(sizeof(ib_vector_t) + sizeof(void*) * 8);
 	heap_alloc = ib_heap_allocator_create(heap);
@@ -566,7 +569,8 @@ trx_resurrect_insert(
 	/* trx_start_low() is not called with resurrect, so need to initialize
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
-	    || trx->state == TRX_STATE_PREPARED) {
+      || trx->state == TRX_STATE_PREPARED) {
+    trx->trx_start_time = TraceTool::get_time();
 		trx->start_time = ut_time();
 	}
 
@@ -660,7 +664,8 @@ trx_resurrect_update(
 	/* trx_start_low() is not called with resurrect, so need to initialize
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
-	    || trx->state == TRX_STATE_PREPARED) {
+      || trx->state == TRX_STATE_PREPARED) {
+    trx->trx_start_time = TraceTool::get_time();
 		trx->start_time = ut_time();
 	}
 
@@ -858,6 +863,9 @@ trx_start_low(
   trx->in_conflict = false;
   trx->out_conflict = false;
   trx->total_waiting_time = 0;
+  trx->trx_start_time = TraceTool::get_time();
+  trx->transaction_id = TraceTool::current_transaction_id;
+  trx->real_transaction_id = &TraceTool::current_transaction_id;
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -875,8 +883,8 @@ trx_start_low(
 	lock_print_info_all_transactions() will have a consistent view. */
 
 	trx->state = TRX_STATE_ACTIVE;
-
-	trx->id = trx_sys_get_new_trx_id();
+  
+  trx->id = trx_sys_get_new_trx_id();
 
 	ut_ad(!trx->in_rw_trx_list);
 	ut_ad(!trx->in_ro_trx_list);
@@ -1344,7 +1352,7 @@ trx_commit_low(
 			or NULL if trx made no modifications */
 {
 	lsn_t	lsn;
-
+  
 	assert_trx_nonlocking_or_in_list(trx);
 	ut_ad(!trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY));
 	ut_ad(!mtr || mtr->state == MTR_ACTIVE);
@@ -1398,8 +1406,26 @@ trx_commit_low(
 	} else {
 		lsn = 0;
 	}
-
+  
+  uint num_of_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
 	trx_commit_in_memory(trx, lsn);
+  
+  /*
+  if (trx->real_transaction_id != NULL &&
+      trx->transaction_id == *(trx->real_transaction_id))
+  {
+    timespec now = TraceTool::get_time();
+    ulint total = TraceTool::difftime(trx->trx_start_time, now);
+    ulint total_work = total - trx->total_waiting_time;
+    TraceTool::get_instance()->add_record_if_zero(0, total_work);
+    TraceTool::get_instance()->add_record_if_zero(1, trx->total_waiting_time);
+    TraceTool::get_instance()->add_record_if_zero(2, num_of_locks);
+  }
+  else
+  {
+    TraceTool::get_instance()->remove(trx->id);
+  }
+   */
 }
 
 /****************************************************************//**
@@ -1410,6 +1436,7 @@ trx_commit(
 /*=======*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
+  TraceTool::is_commit = true;
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 

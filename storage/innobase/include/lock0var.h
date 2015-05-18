@@ -29,7 +29,7 @@ Update the last access time for one of the buckets of remaining time. */
 UNIV_INTERN
 void
 update_access(
-  double remaining_time); /*!< real remaining time */
+  ulint remaining_time); /*!< real remaining time */
 
 /*************************************************************//**
 Clean up resources. */

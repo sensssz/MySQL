@@ -78,6 +78,7 @@ struct lock_t {
 					lock */
     lock_request*   request;
     timespec        grant_time;
+    timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {
 		lock_table_t	tab_lock;/*!< table lock */
