@@ -10,7 +10,10 @@
 #include "trx0trx.h"
 #include "trace_tool.h"
 
+#include <fstream>
 #include <float.h>
+
+using std::ifstream;
 
 #define NUM_SEPARATOR 40
 
@@ -20,7 +23,6 @@ os_mutex_enter(separator_mutex)
 #define sep_mutex_exit()\
 os_mutex_exit(separator_mutex)
 
-/* 40 separators, 40 buckets */
 static ulint separators[] = {
   0, 13066, 13634, 13915, 14179, 14477, 14859, 15388, 16063, 16889,
   17940, 19946, 25808, 32831, 52234, 994015, 1168801, 1284194,
@@ -32,6 +34,9 @@ static ulint separator_frequency[NUM_SEPARATOR];
 static timespec separator_last_access[NUM_SEPARATOR];
 static ulint total_frequency = NUM_SEPARATOR;
 static os_ib_mutex_t separator_mutex;
+static ulint *work_wait_so_far = NULL;
+static ulint *estimated_work_wait = NULL;
+static ulint length = -1;
 
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
@@ -46,6 +51,21 @@ indi_init()
     separator_frequency[index] = 1;
     separator_last_access[index] = now;
   }
+  
+  ifstream isotonic_file("isotonic_work_wait.csv");
+  isotonic_file >> length >> length;
+  work_wait_so_far = (ulint *)malloc(sizeof(ulint) * num_of_items);
+  estimated_work_wait = (ulint *)malloc(sizeof(ulint) * num_of_items);
+  int x = 0;
+  int y = 0;
+  int index = 0;
+  while (isotonic_file >> x >> y)
+  {
+    work_wait_so_far[index] = x;
+    estimated_work_wait[index] = y;
+    ++index;
+  }
+  isotonic_file.close();
 }
 
 /*************************************************************//**
@@ -85,17 +105,28 @@ remaining time. */
 static
 int
 linear_search(
+  ulint *array,
+  ulint length,
   double time)
 {
-  for (int index = 0; index < NUM_SEPARATOR - 1; ++index)
+  for (ulint index = 0; index < length - 1; ++index)
   {
-    if (separators[index] <= time &&
-        time < separators[index])
+    if (array[index] <= time &&
+        time < array[index])
     {
       return index;
     }
   }
-  return NUM_SEPARATOR - 1;
+  return length - 1;
+}
+
+static
+ulint
+estimate(
+  ulint x)
+{
+  int y_index = linear_search(work_wait_so_far, length - 1, x);
+  return estimated_work_wait[y_index];
 }
 
 /*************************************************************//**
@@ -117,8 +148,8 @@ get_mean(
   {
     lock_t *lock = locks[lock_index];
     ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    double estimated_remaining = abs(TraceTool::average_latency - time_so_far);
-    int index = linear_search(estimated_remaining);
+    double estimated_remaining = estimate(time_so_far);
+    int index = linear_search(separators, NUM_SEPARATOR, estimated_remaining);
     double probability = ((double) separator_frequency[index]) / total_frequency;
     ulint time_since_last_access = TraceTool::difftime(separator_last_access[index], now);
     mean += probability * time_since_last_access;
@@ -196,7 +227,7 @@ void
 update_access(
   double  remaining_time) /*!< real remaining time */
 {
-  int index = linear_search(remaining_time);
+  int index = linear_search(separators, NUM_SEPARATOR, remaining_time);
   sep_mutex_enter();
   ++total_frequency;
   ++separator_frequency[index];
@@ -233,5 +264,7 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
+  free(work_wait_so_far);
+  free(estimated_work_wait);
 }
 
