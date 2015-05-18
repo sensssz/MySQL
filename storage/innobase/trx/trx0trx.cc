@@ -1413,12 +1413,6 @@ trx_commit_low(
   uint num_of_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
 	trx_commit_in_memory(trx, lsn);
   
-//  if (trx->real_transaction_id != NULL)
-//  {
-//    TraceTool::get_instance()->print_query();
-//    TraceTool::get_instance()->get_log() << "trx " << trx->id << " ends as "
-//      << *(trx->real_transaction_id) << "," << trx->transaction_id << endl;
-//  }
   if (trx->real_transaction_id != NULL &&
       trx->transaction_id == *(trx->real_transaction_id))
   {

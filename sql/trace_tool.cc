@@ -125,7 +125,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 5;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 4;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -289,9 +289,9 @@ void TraceTool::start_new_query()
 
 void TraceTool::set_query(const char *new_query, int length)
 {
-  query = (char *) malloc(sizeof(char) * (length + 1));
-  strncpy(query, new_query, length);
-  query[length] = '\0';
+//  query = (char *) malloc(sizeof(char) * (length + 1));
+//  strncpy(query, new_query, length);
+//  query[length] = '\0';
 }
 
 void TraceTool::print_query()
@@ -380,8 +380,8 @@ void TraceTool::write_log()
       assert(function_times[0][info.transaction_id] > info.work_time_so_far);
       assert(function_times[1][info.transaction_id] >= info.wait_time_so_far);
       assert(function_times[2][info.transaction_id] >= info.num_of_locks_so_far);
-      work_wait << info.transaction_id << "," << info.work_time_so_far << "," <<
-                   info.wait_time_so_far << "," << info.num_of_locks_so_far << "," <<
+      work_wait << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
+                   info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_of_locks_so_far << "," <<
                    function_times[0][info.transaction_id] <<  "," << function_times[1][info.transaction_id] << "," <<
                    function_times[2][info.transaction_id] << endl;
     }
