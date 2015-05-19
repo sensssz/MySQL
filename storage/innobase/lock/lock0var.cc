@@ -110,10 +110,10 @@ linear_search(
   ulint length,
   double target)
 {
-  for (ulint index = 0; index < length - 1; ++index)
+  for (ulint index = 0; index < length - 2; ++index)
   {
     if (array[index] <= target &&
-        target < array[index])
+        target < array[index + 1])
     {
       return index;
     }
@@ -233,7 +233,8 @@ void
 update_access(
   ulint  remaining_time) /*!< real remaining time */
 {
-  int index = linear_search(separators, NUM_SEPARATOR, remaining_time);
+  int index = binary_search(separators, NUM_SEPARATOR, remaining_time);
+//  TraceTool::get_instance()->get_log() << remaining_time << "," << index << endl;
   sep_mutex_enter();
   ++total_frequency;
   ++separator_frequency[index];
@@ -243,7 +244,7 @@ update_access(
   if (total_frequency == 0)
   {
     --total_frequency;
-    ulint min_frequency = total_frequency; /* find the min non-zero frequency */
+    ulint min_frequency = total_frequency; // find the min non-zero frequency
     for (ulint index = 0; index < NUM_SEPARATOR; ++index)
     {
       if (separator_frequency[index] > 0 &&
@@ -273,7 +274,7 @@ write_separator_log()
   for (ulint index = 0; index < NUM_SEPARATOR; ++index)
   {
     vector<timespec> &separator = separator_last_access[index];
-    for (ulint access_index = 0, size = separator_last_access[index].size();
+    for (ulint access_index = 1, size = separator_last_access[index].size();
          access_index < size - 1; ++access_index)
     {
       log_file << TraceTool::difftime(separator[access_index], separator[access_index + 1]) << ',';

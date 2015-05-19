@@ -76,9 +76,8 @@ struct lock_t {
 					wait flag, ORed */
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
-    lock_request*   request;
     timespec        grant_time;
-    timespec        wait_start;
+    bool            causes_wait;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {
 		lock_table_t	tab_lock;/*!< table lock */

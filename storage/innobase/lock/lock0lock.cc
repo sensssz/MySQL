@@ -1843,8 +1843,7 @@ lock_rec_create(
   lock->un_member.rec_lock.space = space;
   lock->un_member.rec_lock.page_no = page_no;
   lock->un_member.rec_lock.n_bits = n_bytes * 8;
-  lock->wait_start = TraceTool::get_time();
-  lock->request = NULL;
+  lock->causes_wait = false;
 
   /* Reset to zero the bitmap which resides immediately after the
   lock struct */
@@ -2444,28 +2443,9 @@ lock_grant(
   
   trx_mutex_enter(lock->trx);
   
-  /*
   timespec now = TraceTool::get_time();
   lock->grant_time = now;
-  trx_t *trx = lock->trx;
-  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-  trx->total_waiting_time += wait_time;
-  
-  if (rand() % 100 < 20 &&
-      trx->real_transaction_id != NULL &&
-      trx->transaction_id != 0 &&
-      trx->transaction_id == *(trx->real_transaction_id))
-  {
-    ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-    ulint work_time = total_time_so_far - trx->total_waiting_time;
-    uint num_of_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    TraceTool::get_instance()->lock_wait_info(trx->transaction_id,
-                                              trx->id,
-                                              work_time,
-                                              trx->total_waiting_time,
-                                              num_of_locks);
-  }
-   */
+  lock->causes_wait = true;
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2605,9 +2585,12 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  timespec now = TraceTool::get_time();
-  ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
-  update_access(real_remaining);
+  if (in_lock->causes_wait)
+  {
+    timespec now = TraceTool::get_time();
+    ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
+    update_access(real_remaining);
+  }
 
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. Stop at the first

@@ -740,20 +740,7 @@ struct trx_t{
 	ro_trx_list the first time they try to acquire a lock ie. by default
 	we treat all read-only transactions as non-locking.  */
 	trx_state_t	state;
-    
-    ulint       total_waiting_time; /*!< Total time spent on waiting for
-                         locks*/
     timespec    trx_start_time;
-    
-    ulint       transaction_id;
-    ulint       *real_transaction_id;
-    
-    bool        in_conflict;    /*!< Indicates whether or not there is a
-                         rw-dependency from a concurrent transaction
-                         to this transaction. */
-    bool        out_conflict;   /*!< Indicates whether or not there is a
-                         rw-dependency from this transaction to a
-                         concurrent transaction. */
 
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by
