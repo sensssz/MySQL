@@ -1,5 +1,6 @@
 #include "my_global.h"
 #include "trace_tool.h"
+#include "../storage/innobase/include/lock0var.h"
 #include <algorithm>
 #include <pthread.h>
 #include <fstream>
@@ -137,11 +138,12 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
   lock_time_mutex = os_mutex_create();
-  srand(now_micro());
+//  srand(now_micro());
 }
 
 bool TraceTool::should_monitor()
 {
+  return true;
   return path_count == TARGET_PATH_COUNT;
 }
 
@@ -365,6 +367,7 @@ bool compare_record_lock(record_lock *lock1, record_lock *lock2)
 
 void TraceTool::write_log()
 {
+  write_separator_log();
   ofstream work_wait("lock_wait");
   os_mutex_enter(lock_time_mutex);
   for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();

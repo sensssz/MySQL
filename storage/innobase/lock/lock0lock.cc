@@ -1843,7 +1843,7 @@ lock_rec_create(
   lock->un_member.rec_lock.space = space;
   lock->un_member.rec_lock.page_no = page_no;
   lock->un_member.rec_lock.n_bits = n_bytes * 8;
-//  lock->wait_start = TraceTool::get_time();
+  lock->wait_start = TraceTool::get_time();
   lock->request = NULL;
 
   /* Reset to zero the bitmap which resides immediately after the
@@ -2605,14 +2605,15 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-//  timespec now = TraceTool::get_time();
-//  ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
-//  update_access(real_remaining);
+  timespec now = TraceTool::get_time();
+  ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
+  update_access(real_remaining);
 
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. Stop at the first
 	X lock that is waiting or has been granted. */
   
+  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
      lock != NULL;
      lock = lock_rec_get_next_on_page(lock))
@@ -2626,8 +2627,8 @@ lock_rec_dequeue_from_page(
       }
     }
   }
+   */
   
-  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2708,7 +2709,6 @@ lock_rec_dequeue_from_page(
       }
     }
   }
-   */
 }
 
 /*************************************************************//**

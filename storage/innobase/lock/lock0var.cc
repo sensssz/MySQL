@@ -15,7 +15,7 @@
 
 using std::ifstream;
 
-#define NUM_SEPARATOR 40
+#define NUM_SEPARATOR (sizeof(separators)/sizeof(ulint))
 
 #define sep_mutex_enter()\
 os_mutex_enter(separator_mutex)
@@ -24,14 +24,9 @@ os_mutex_enter(separator_mutex)
 os_mutex_exit(separator_mutex)
 
 static ulint separators[] = {
-  0, 13066, 13634, 13915, 14179, 14477, 14859, 15388, 16063, 16889,
-  17940, 19946, 25808, 32831, 52234, 994015, 1168801, 1284194,
-  1440112, 1782028, 2829740, 3903815, 4931228, 6060642, 7351262,
-  9164885, 12140346, 16511690, 22864670, 32563045, 47335620, 68937876,
-  99516117, 141522083, 198368469, 271102064, 351654643, 445456010,
-  562961037, 742457104};
+  0,1755587,1943434,2449239,2758650,2888911,2985396,3073124,3160577,3252033,3346050,3448433,3574641,3735816,3949250,4255297,4739108,5557947,6967619,8938744,10172686,11219858,12230263,13244812,14288953,15330387,16437550,17473406,18592063,19704774,20874312,22048014,23276633,24532975,25846360,27231725,28836249,30594249,32525371,34741045,37088851,39649112,42585296,45778039,49191555,53067901,57371997,61990954,67453439,73184767,79497367,86563407,93922223,102247784,110910946,120231286,130145594,141266957,152995809,165576066,178787379,193058892,207688359,223141325,239575855,255598255,272421354,288624960,304697301,320967527,337893270,354468252,371722539,388426571,405959764,423150990,440506072,459092494,477390789,496231658,515182190,534406375,554587174,574526409,596313226,618396291,643105900,667354208,695991918,727917379,762149776,799518889,842905793,891456968,950790268,1017730825,1102566597,1217054178,1408186812,3574505531,3898895302};
 static ulint separator_frequency[NUM_SEPARATOR];
-static timespec separator_last_access[NUM_SEPARATOR];
+static vector<vector<timespec> > separator_last_access;
 static ulint total_frequency = NUM_SEPARATOR;
 static os_ib_mutex_t separator_mutex;
 static ulint *work_wait_so_far = NULL;
@@ -46,15 +41,18 @@ indi_init()
 {
   separator_mutex = os_mutex_create();
   timespec now = TraceTool::get_time();
-  for (int index = 0; index < NUM_SEPARATOR; ++index)
+  separator_last_access.reserve(NUM_SEPARATOR);
+  for (ulint index = 0; index < NUM_SEPARATOR; ++index)
   {
     separator_frequency[index] = 1;
-    separator_last_access[index] = now;
+    vector<timespec> last_access;
+    last_access.reserve(50000);
+    last_access.push_back(now);
+    separator_last_access.push_back(last_access);
   }
   
   ifstream isotonic_file("isotonic_work_wait");
   isotonic_file >> length >> length;
-  TraceTool::get_instance()->get_log() << "Length is " << length << endl;
   work_wait_so_far = (ulint *)malloc(sizeof(ulint) * length);
   estimated_work_wait = (ulint *)malloc(sizeof(ulint) * length);
   ulint x = 0;
@@ -70,54 +68,52 @@ indi_init()
 }
 
 /*************************************************************//**
-Do a binary in the separators to find the bucket for the specific
+Do a binary search in the separators to find the bucket for the specific
 remaining time. */
-static
-int
+ulint
 binary_search(
-  double time)  /*!< estiamted remaining time */
+  ulint *array,
+  ulint length,
+  double target)  /*!< estiamted remaining time */
 {
   int left = 0;
-  int right = NUM_SEPARATOR;
+  int right = length - 1;
   
-  while (left < right)
+  while (left <= right)
   {
     int middle = (left + right) / 2;
-    if (time < separators[middle])
+    if (target < array[middle])
     {
       right = middle;
     }
-    else if (time >= separators[middle + 1])
+    else if (target >= array[middle + 1])
     {
-      left = middle;
+      left = middle + 1;
     }
     else
     {
+      // array[middle] <= target < array[middle + 1]
       return middle;
     }
   }
   
-  return NUM_SEPARATOR - 1;
+  return length - 1;
 }
 
 /*************************************************************//**
-Do a binary in the separators to find the bucket for the specific
+Do a linear search in the separators to find the bucket for the specific
 remaining time. */
 static
-int
+ulint
 linear_search(
   ulint *array,
   ulint length,
-  double time)
+  double target)
 {
-  if (time < array[0])
-  {
-    return -1;
-  }
   for (ulint index = 0; index < length - 1; ++index)
   {
-    if (array[index] <= time &&
-        time < array[index])
+    if (array[index] <= target &&
+        target < array[index])
     {
       return index;
     }
@@ -130,34 +126,13 @@ ulint
 estimate(
   ulint x)
 {
-  int y_index = linear_search(work_wait_so_far, length, x);
-  return estimated_work_wait[y_index];
-  /*
-  ulint x_left, y_left;
-  ulint x_right, y_right;
-  if (y_index == -1)
+//  return 0.958759617557516  * x + 115932574.391064;
+  ulint y_index = binary_search(work_wait_so_far, length, x);
+  if (y_index == length - 1)
   {
-    x_left = work_wait_so_far[0];
-    y_left = estimated_work_wait[0];
-    x_right = work_wait_so_far[1];
-    y_right = estimated_work_wait[1];
+    y_index = length - 2;
   }
-  else if ((ulint) y_index == length - 1)
-  {
-    x_left = work_wait_so_far[length - 2];
-    y_left = estimated_work_wait[length - 2];
-    x_right = work_wait_so_far[length - 1];
-    y_right = estimated_work_wait[length - 1];
-  }
-  else
-  {
-    x_left = work_wait_so_far[y_index];
-    y_left = estimated_work_wait[y_index];
-    x_right = work_wait_so_far[y_index + 1];
-    y_right = estimated_work_wait[y_index + 1];
-  }
-  return (y_right - y_left) * (x - x_left) / (x_right - x_left);
-   */
+  return estimated_work_wait[y_index + 1];
 }
 
 /*************************************************************//**
@@ -180,9 +155,9 @@ get_mean(
     lock_t *lock = locks[lock_index];
     ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     ulint estimated_remaining = estimate(time_so_far) - time_so_far;
-    int index = linear_search(separators, NUM_SEPARATOR, estimated_remaining);
+    int index = binary_search(separators, NUM_SEPARATOR, estimated_remaining);
     double probability = ((double) separator_frequency[index]) / total_frequency;
-    ulint time_since_last_access = TraceTool::difftime(separator_last_access[index], now);
+    ulint time_since_last_access = TraceTool::difftime(separator_last_access[index].back(), now);
     mean += probability * time_since_last_access;
     
     remaining_time.push_back(estimated_remaining);
@@ -262,14 +237,14 @@ update_access(
   sep_mutex_enter();
   ++total_frequency;
   ++separator_frequency[index];
-  separator_last_access[index] = TraceTool::get_time();
+  separator_last_access[index].push_back(TraceTool::get_time());
   
   /* fix overflow */
   if (total_frequency == 0)
   {
     --total_frequency;
     ulint min_frequency = total_frequency; /* find the min non-zero frequency */
-    for (int index = 0; index < NUM_SEPARATOR; ++index)
+    for (ulint index = 0; index < NUM_SEPARATOR; ++index)
     {
       if (separator_frequency[index] > 0 &&
           separator_frequency[index] < min_frequency)
@@ -279,7 +254,7 @@ update_access(
     }
     
     total_frequency = 0;
-    for (int index = 0; index < NUM_SEPARATOR; ++index)
+    for (ulint index = 0; index < NUM_SEPARATOR; ++index)
     {
       separator_frequency[index] /= min_frequency;
       total_frequency += separator_frequency[index];
@@ -287,6 +262,27 @@ update_access(
   }
   sep_mutex_exit();
   ut_ad(total_frequency > 0);
+}
+
+UNIV_INTERN
+void
+write_separator_log()
+{
+  timespec now = TraceTool::get_time();
+  ofstream log_file("last_access");
+  for (ulint index = 0; index < NUM_SEPARATOR; ++index)
+  {
+    vector<timespec> &separator = separator_last_access[index];
+    for (ulint access_index = 0, size = separator_last_access[index].size();
+         access_index < size - 1; ++access_index)
+    {
+      log_file << TraceTool::difftime(separator[access_index], separator[access_index + 1]) << ',';
+    }
+    log_file << endl;
+    separator.clear();
+    separator.push_back(now);
+  }
+  log_file.close();
 }
 
 /*************************************************************//**

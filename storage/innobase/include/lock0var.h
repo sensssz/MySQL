@@ -10,6 +10,7 @@
 #include "lock0types.h"
 
 #include <vector>
+#include <fstream>
 
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
@@ -30,6 +31,10 @@ UNIV_INTERN
 void
 update_access(
   ulint remaining_time); /*!< real remaining time */
+
+UNIV_INTERN
+void
+write_separator_log();
 
 /*************************************************************//**
 Clean up resources. */
