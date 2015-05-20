@@ -24,9 +24,9 @@ os_mutex_enter(separator_mutex)
 os_mutex_exit(separator_mutex)
 
 static ulint separators[] = {
-  0,1755587,1943434,2449239,2758650,2888911,2985396,3073124,3160577,3252033,3346050,3448433,3574641,3735816,3949250,4255297,4739108,5557947,6967619,8938744,10172686,11219858,12230263,13244812,14288953,15330387,16437550,17473406,18592063,19704774,20874312,22048014,23276633,24532975,25846360,27231725,28836249,30594249,32525371,34741045,37088851,39649112,42585296,45778039,49191555,53067901,57371997,61990954,67453439,73184767,79497367,86563407,93922223,102247784,110910946,120231286,130145594,141266957,152995809,165576066,178787379,193058892,207688359,223141325,239575855,255598255,272421354,288624960,304697301,320967527,337893270,354468252,371722539,388426571,405959764,423150990,440506072,459092494,477390789,496231658,515182190,534406375,554587174,574526409,596313226,618396291,643105900,667354208,695991918,727917379,762149776,799518889,842905793,891456968,950790268,1017730825,1102566597,1217054178,1408186812,3574505531,3898895302};
+  0,1632511,1690936,1755531,1833927,1943096,2129892,2448512,2656205,2758437,2829765,2888674,2940051,2985072,3030335,3073002,3117066,3160260,3203510,3251685,3298849,3345897,3393982,3447938,3508379,3573983,3650470,3735274,3830630,3947782,4081456,4252832,4466520,4735318,5083598,5550552,6164886,6957004,7936980,8926805,9579099,10164721,10693427,11210598,11704829,12221633,12733760,13235908,13732891,14274210,14796815,15317203,15852365,16428017,16939825,17464738,17990299,18581664,19151660,19694292,20269126,20858776,21442662,22034817,22654811,23263849,23863397,24515972,25151992,25834173,26505898,27215129,27984585,28810701,29662846,30564156,31517081,32496789,33558923,34715630,35821769,37041799,38270182,39621300,41076965,42533644,44066898,45721067,47424708,49128696,51037299,52997275,55116442,57289594,59440308,61910394,64550903,67347915,70002408,73066427,76054302,79367791,82926664,86407095,90006303,93803280,97830823,102071162,106227413,110729321,115397685,120070225,124930264,129921535,135186372,141001732,146882310,152696707,159067240,165313511,171834232,178490902,185729419,192738707,200262675,207354698,214831768,222766045,230519062,239121432,247080590,255086136,263361902,271990346,279979994,288234684,296281559,304309466,312410326,320616488,328670563,337417022,345697716,354016416,362680256,371268293,379628250,388009973,396837637,405482171,414107490,422646543,431198168,440005355,449315582,458633751,467672293,476846735,486346939,495737630,504781400,514618779,524318351,533941685,543706320,553937104,563816622,573837633,584575921,595625087,606877887,617580328,629737851,642412868,654296467,666620395,680286557,694894837,710947221,726810863,743250686,760916358,779375117,798040423,819109444,841266208,864735289,889614086,916886084,948789382,979399464,1014802240,1055201217,1099129270,1149125018,1211597141,1293086718,1398922341,1573210563,2312523323,3898895302};
 static ulint separator_frequency[NUM_SEPARATOR];
-static vector<vector<timespec> > separator_last_access;
+static timespec separator_last_access[NUM_SEPARATOR];
 static ulint total_frequency = NUM_SEPARATOR;
 static os_ib_mutex_t separator_mutex;
 static ulint *work_wait_so_far = NULL;
@@ -41,17 +41,14 @@ indi_init()
 {
   separator_mutex = os_mutex_create();
   timespec now = TraceTool::get_time();
-  separator_last_access.reserve(NUM_SEPARATOR);
   for (ulint index = 0; index < NUM_SEPARATOR; ++index)
   {
     separator_frequency[index] = 1;
-    vector<timespec> last_access;
-    last_access.reserve(50000);
-    last_access.push_back(now);
-    separator_last_access.push_back(last_access);
+    separator_last_access[index] = now;
   }
+  total_frequency = NUM_SEPARATOR;
   
-  ifstream isotonic_file("isotonic_work_wait");
+  ifstream isotonic_file("isotonic_original");
   isotonic_file >> length >> length;
   work_wait_so_far = (ulint *)malloc(sizeof(ulint) * length);
   estimated_work_wait = (ulint *)malloc(sizeof(ulint) * length);
@@ -157,7 +154,7 @@ get_mean(
     ulint estimated_remaining = estimate(time_so_far) - time_so_far;
     int index = binary_search(separators, NUM_SEPARATOR, estimated_remaining);
     double probability = ((double) separator_frequency[index]) / total_frequency;
-    ulint time_since_last_access = TraceTool::difftime(separator_last_access[index].back(), now);
+    ulint time_since_last_access = TraceTool::difftime(separator_last_access[index], now);
     mean += probability * time_since_last_access;
     
     remaining_time.push_back(estimated_remaining);
@@ -238,7 +235,7 @@ update_access(
   sep_mutex_enter();
   ++total_frequency;
   ++separator_frequency[index];
-  separator_last_access[index].push_back(TraceTool::get_time());
+  separator_last_access[index] = TraceTool::get_time();
   
   /* fix overflow */
   if (total_frequency == 0)
@@ -269,21 +266,21 @@ UNIV_INTERN
 void
 write_separator_log()
 {
-  timespec now = TraceTool::get_time();
-  ofstream log_file("last_access");
-  for (ulint index = 0; index < NUM_SEPARATOR; ++index)
-  {
-    vector<timespec> &separator = separator_last_access[index];
-    for (ulint access_index = 1, size = separator_last_access[index].size();
-         access_index < size - 1; ++access_index)
-    {
-      log_file << TraceTool::difftime(separator[access_index], separator[access_index + 1]) << ',';
-    }
-    log_file << endl;
-    separator.clear();
-    separator.push_back(now);
-  }
-  log_file.close();
+//  timespec now = TraceTool::get_time();
+//  ofstream log_file("last_access");
+//  for (ulint index = 0; index < NUM_SEPARATOR; ++index)
+//  {
+//    vector<timespec> &separator = separator_last_access[index];
+//    for (ulint access_index = 1, size = separator_last_access[index].size();
+//         access_index < size - 1; ++access_index)
+//    {
+//      log_file << TraceTool::difftime(separator[access_index], separator[access_index + 1]) << ',';
+//    }
+//    log_file << endl;
+//    separator.clear();
+//    separator.push_back(now);
+//  }
+//  log_file.close();
 }
 
 /*************************************************************//**
