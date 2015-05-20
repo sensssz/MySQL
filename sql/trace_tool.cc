@@ -13,6 +13,12 @@
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
 
+#define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
+#define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
+#define ORDER_STATUS_MARKER "SELECT O_ID, O_CARRIER_ID, O_ENTRY_D FROM OORDER WHERE"
+#define DELIVERY_MARKER "DELETE FROM NEW_ORDER WHERE"
+#define STOCK_LEVEL_MARKER "SELECT COUNT(DISTINCT (S_I_ID)) AS STOCK_COUNT FROM ORDER_LINE, STOCK WHERE"
+
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
 using std::endl;
@@ -45,6 +51,12 @@ __thread bool TraceTool::commit_successful = true;
 __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread char * TraceTool::query = NULL;
+
+static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
+static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
+static const size_t ORDER_STATUS_LENGTH = strlen(ORDER_STATUS_MARKER);
+static const size_t DELIVERY_LENGTH = strlen(DELIVERY_MARKER);
+static const size_t STOCK_LEVEL_LENGTH = strlen(STOCK_LEVEL_MARKER);
 
 #ifdef MONITOR
 static __thread timespec function_start;
@@ -278,7 +290,6 @@ void TraceTool::start_new_query()
     }
     transaction_start_times.push_back(0);
     pthread_rwlock_unlock(&data_lock);
-//    log_file << "Transaction " << current_transaction_id << " starts" << endl;
   }
   clock_gettime(CLOCK_REALTIME, &last_query);
   pthread_mutex_lock(&last_query_mutex);
@@ -289,6 +300,29 @@ void TraceTool::start_new_query()
 
 void TraceTool::set_query(const char *new_query, int length)
 {
+  if (type == NONE)
+  {
+    if (strncmp(new_query, NEW_ORDER_MARKER, NEW_ORDER_LENGTH) == 0)
+    {
+      type = NEW_ORDER;
+    }
+    else if (strncmp(new_query, PAYMENT_MARKER, PAYMENT_LENGTH) == 0)
+    {
+      type = PAYMENT;
+    }
+    else if (strncmp(new_query, ORDER_STATUS_MARKER, ORDER_STATUS_LENGTH) == 0)
+    {
+      type = ORDER_STATUS;
+    }
+    else if (strncmp(new_query, DELIVERY_MARKER, DELIVERY_LENGTH) == 0)
+    {
+      type = DELIVERY;
+    }
+    else if (strncmp(new_query, STOCK_LEVEL_MARKER, STOCK_LEVEL_LENGTH) == 0)
+    {
+      type = STOCK_LEVEL;
+    }
+  }
 //  query = (char *) malloc(sizeof(char) * (length + 1));
 //  strncpy(query, new_query, length);
 //  query[length] = '\0';
@@ -298,7 +332,7 @@ void TraceTool::print_query()
 {
   if (query != NULL)
   {
-    log_file << query << "," << is_commit << "," << commit_successful << endl;
+    log_file << query << endl;
   }
 }
 
@@ -316,8 +350,8 @@ void TraceTool::end_query()
 
 void TraceTool::end_transaction()
 {
-//  log_file << "Transaction " << current_transaction_id << " ends" << endl;
   new_transaction = true;
+  type = NONE;
 #ifdef LATENCY
   if (commit_successful)
   {

@@ -1316,6 +1316,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
                       (char *) thd->security_ctx->host_or_ip);
     char *packet_end= thd->query() + thd->query_length();
     
+    TraceTool::get_instance()->get_log() << thd->query() << endl;
 //    TraceTool::get_instance()->set_query(thd->query(), thd->query_length());
 
     if (opt_log_raw)

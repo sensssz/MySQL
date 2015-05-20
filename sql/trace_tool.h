@@ -30,6 +30,13 @@ void TRACE_FUNCTION_END();
 bool TRACE_START();
 bool TRACE_END(int index);
 
+enum transaction_type
+{
+    NEW_ORDER, PAYMENT, ORDER_STATUS, DELIVERY, STOCK_LEVEL, NONE
+};
+
+typedef enum transaction_type transaction_type;
+
 struct lock_time_info
 {
     ulint transaction_id;
@@ -67,6 +74,7 @@ private:
     static __thread timespec call_end;
     static __thread bool new_transaction;
     static __thread timespec trans_start;
+    static __thread transaction_type type;
     
     ofstream log_file;
     static pthread_rwlock_t data_lock;
