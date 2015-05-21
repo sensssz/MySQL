@@ -416,7 +416,7 @@ void TraceTool::write_latency()
   ofstream stock_level_log;
   
   stringstream sstream;
-  sstream << "logs/trace" << log_index;
+  sstream << "logs/latency" << log_index;
   overall_log.open(sstream.str().c_str());
   
   sstream.str("");
@@ -439,7 +439,7 @@ void TraceTool::write_latency()
   sstream << "logs/stock_level_" << log_index;
   stock_level_log.open(sstream.str().c_str());
   
-  ++log_index;
+//  ++log_index;
   
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
