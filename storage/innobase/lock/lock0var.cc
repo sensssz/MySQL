@@ -10,10 +10,12 @@
 #include "trx0trx.h"
 #include "trace_tool.h"
 
+#include <unordered_map>
 #include <algorithm>
 #include <fstream>
 #include <float.h>
 
+using std::unordered_map;
 using std::sort;
 using std::ifstream;
 
@@ -21,14 +23,37 @@ static ulint *work_wait_so_far = NULL;
 static ulint *estimated_work_wait = NULL;
 static ulint length = 0;
 
-struct parameters_value
+bool double_equals(double a, double b, double epsilon = 0.00001)
+{
+  return std::abs(a - b) < epsilon;
+}
+
+struct parameters
 {
   ulint k;
   double heu;
-  double value;
+  
+  bool operator==(const struct parameters &another) const
+  {
+    return k == another.k && double_equals(heu, another.heu);
+  }
 };
 
-typedef struct parameters_value parameters_value;
+typedef struct parameters parameters;
+
+namespace std
+{
+  template<>
+  struct hash<parameters>
+  {
+    ulint operator()(const struct parameters &parameter) const
+    {
+      size_t hash1 = hash<int>()(parameter.k);
+      size_t hash2 = hash<double>()(parameter.heu);
+      return hash1 ^ hash2;
+    }
+  };
+}
 
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
@@ -105,6 +130,35 @@ bool
 compare(lock_t *lock1, lock_t *lock2)
 {
   return lock1->process_time < lock2->process_time;
+}
+
+static
+void
+h(parameters &para, ulint size, double *betas, double *gammas, double *gamma_stars)
+{
+  
+}
+
+static
+void
+h_recursive(parameters &para, ulint size,
+            double *betas, double *gammas, double *gamma_stars,
+            unordered_map<parameters, double> &cache)
+{
+  if (para.k == size + 1)
+  {
+    return 0;
+  }
+  unordered_map<parameters, double>::iterator iterator = cache.find(para);
+  if (iterator != cache.end())
+  {
+    return *iterator;
+  }
+  
+  parameters new_para;
+  new_para.k = para.k + 1;
+  new_para.heu = para.heu;
+  double put_before = h_recursive(new_para, size, betas, gammas, gamma_stars, cache);
 }
 
 /*************************************************************//**
