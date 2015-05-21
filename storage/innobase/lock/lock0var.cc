@@ -21,6 +21,15 @@ static ulint *work_wait_so_far = NULL;
 static ulint *estimated_work_wait = NULL;
 static ulint length = 0;
 
+struct parameters_value
+{
+  ulint k;
+  double heu;
+  double value;
+};
+
+typedef struct parameters_value parameters_value;
+
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
 UNIV_INTERN
@@ -107,12 +116,16 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   ulint size = locks.size() - 1;
   double *as = new double[size];
   double *betas = new double[size];
+  double *beta_stars = new double[size];
   double *gammas = new double[size];
   double *gamma_stars = new double[size];
+  double gamma_star = 0;
+  double beta_star = 0;
   bool *quadratic_solution = new bool[size];
   lock_t **final_schedule = new lock_t *[size + 1];
   
   timespec now = TraceTool::get_time();
+  // Note that size here is actually length - 1
   for (ulint index = 0; index <= size; ++index)
   {
     lock_t *lock = locks[index];
@@ -141,6 +154,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
       gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
     }
   }
+  gamma_star = gamma_stars[size - 1];
   
   delete[] as;
   delete[] betas;
