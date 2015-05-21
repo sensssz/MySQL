@@ -2583,8 +2583,23 @@ lock_rec_dequeue_from_page(
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
-	MONITOR_DEC(MONITOR_NUM_RECLOCK);
+  MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock))
+  {
+    if (lock_get_wait(lock))
+    {
+      if (!lock_rec_has_to_wait_in_queue(lock))
+      {
+        ut_ad(lock->trx != in_lock->trx);
+        lock_grant(lock);
+      }
+    }
+  }
+  
+  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2672,6 +2687,7 @@ lock_rec_dequeue_from_page(
       }
     }
   }
+   */
 }
 
 /*************************************************************//**
