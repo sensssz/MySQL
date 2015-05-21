@@ -4284,7 +4284,6 @@ end_with_restore_list:
     break;
   case SQLCOM_COMMIT:
   {
-    TraceTool::is_commit = true;
     DBUG_ASSERT(thd->lock == NULL ||
                 thd->locked_tables_mode == LTM_LOCK_TABLES);
     bool tx_chain= (lex->tx_chain == TVL_YES ||
