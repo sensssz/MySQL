@@ -30,6 +30,13 @@ void TRACE_FUNCTION_END();
 bool TRACE_START();
 bool TRACE_END(int index);
 
+enum transaction_type
+{
+    NEW_ORDER, PAYMENT, ORDER_STATUS, DELIVERY, STOCK_LEVEL, NONE
+};
+
+typedef enum transaction_type transaction_type;
+
 struct lock_time_info
 {
     ulint transaction_id;
@@ -67,11 +74,13 @@ private:
     static __thread timespec call_end;
     static __thread bool new_transaction;
     static __thread timespec trans_start;
+    static __thread transaction_type type;
     
     ofstream log_file;
     static pthread_rwlock_t data_lock;
     vector<vector<ulint> > function_times;
     vector<ulint> transaction_start_times;
+    vector<transaction_type> transaction_types;
     unordered_map<lock_info, record_lock *> record_lock_map;
     
     list<lock_time_info> lock_time_infos;
@@ -112,6 +121,9 @@ public:
     void print_query();
     void end_query();
     void end_transaction();
+    void write_work_wait();
+    void write_latency();
+    void write_lock_wait();
     void write_log();
     void add_record(int function_index, long duration);
     void add_record_if_zero(int function_index, long duration);

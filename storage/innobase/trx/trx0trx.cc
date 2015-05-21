@@ -1400,7 +1400,6 @@ trx_commit_low(
 		lsn = 0;
 	}
   
-  uint num_of_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
 	trx_commit_in_memory(trx, lsn);
 }
 
