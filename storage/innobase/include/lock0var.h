@@ -25,6 +25,12 @@ ulint
 estimate(ulint time_so_far); /*!< total time so far */
 
 /*************************************************************//**
+Find the lock that gives minimum CTV. */
+UNIV_INTERN
+void
+CTV_schedule(vector<lock_t *> &locks); /*!< candidate locks */
+
+/*************************************************************//**
 Clean up resources. */
 UNIV_INTERN
 void

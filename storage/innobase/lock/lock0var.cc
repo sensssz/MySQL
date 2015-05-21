@@ -10,9 +10,11 @@
 #include "trx0trx.h"
 #include "trace_tool.h"
 
+#include <algorithm>
 #include <fstream>
 #include <float.h>
 
+using std::sort;
 using std::ifstream;
 
 static ulint *work_wait_so_far = NULL;
@@ -87,6 +89,65 @@ estimate(
     y_index = length - 2;
   }
   return estimated_work_wait[y_index + 1];
+}
+
+static
+bool
+compare(lock_t *lock1, lock_t *lock2)
+{
+  return lock1->process_time < lock2->process_time;
+}
+
+/*************************************************************//**
+Find the lock that gives minimum CTV. */
+UNIV_INTERN
+void
+CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
+{
+  ulint size = locks.size() - 1;
+  double *as = new double[size];
+  double *betas = new double[size];
+  double *gammas = new double[size];
+  double *gamma_stars = new double[size];
+  bool *quadratic_solution = new bool[size];
+  lock_t **final_schedule = new lock_t *[size + 1];
+  
+  timespec now = TraceTool::get_time();
+  for (ulint index = 0; index <= size; ++index)
+  {
+    lock_t *lock = locks[index];
+    ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    lock->process_time = estimate(time_so_far);
+  }
+  sort(locks.begin(), locks.end(), compare);
+  final_schedule[0] = locks.back();
+  for (ulint index = 0; index < size; ++index)
+  {
+    ulint sum = 0;
+    ulint process_time = locks[index]->process_time;
+    for (ulint i = 0; i < index - 1; ++i)
+    {
+      sum += locks[i]->process_time / 2.0;
+    }
+    as[index] = process_time + sum / 2.0;
+    betas[index] = (size - index) * process_time + 2 * as[index];
+    gammas[index] = (index + 1) * process_time - 2 * as[index];
+    if (index == 0)
+    {
+      gamma_stars[index] = gammas[index];
+    }
+    else
+    {
+      gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
+    }
+  }
+  
+  delete[] as;
+  delete[] betas;
+  delete[] gammas;
+  delete[] gamma_stars;
+  delete[] quadratic_solution;
+  delete[] final_schedule;
 }
 
 /*************************************************************//**
