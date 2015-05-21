@@ -75,27 +75,6 @@ binary_search(
 }
 
 /*************************************************************//**
-Do a linear search in the separators to find the bucket for the specific
-remaining time. */
-static
-ulint
-linear_search(
-  ulint *array,
-  ulint length,
-  double target)
-{
-  for (ulint index = 0; index < length - 2; ++index)
-  {
-    if (array[index] <= target &&
-        target < array[index + 1])
-    {
-      return index;
-    }
-  }
-  return length - 1;
-}
-
-/*************************************************************//**
 Estimate remaining time given total time so far. */
 UNIV_INTERN
 ulint

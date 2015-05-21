@@ -301,7 +301,7 @@ void TraceTool::start_new_query()
 #endif
 }
 
-void TraceTool::set_query(const char *new_query, int length)
+void TraceTool::set_query(const char *new_query)
 {
   // Look at the first query of a transaction
   if (new_transaction)

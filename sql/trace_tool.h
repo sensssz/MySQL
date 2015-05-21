@@ -117,7 +117,7 @@ public:
                         ulint wait_time, uint num_of_locks);
     void remove(ulint trx_id);
     void start_new_query();
-    void set_query(const char *query, int length);
+    void set_query(const char *query);
     void print_query();
     void end_query();
     void end_transaction();
