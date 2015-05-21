@@ -1843,7 +1843,7 @@ lock_rec_create(
   lock->un_member.rec_lock.space = space;
   lock->un_member.rec_lock.page_no = page_no;
   lock->un_member.rec_lock.n_bits = n_bytes * 8;
-  lock->causes_wait = false;
+  lock->wait_start = TraceTool::get_time();
 
   /* Reset to zero the bitmap which resides immediately after the
   lock struct */
@@ -2444,8 +2444,7 @@ lock_grant(
   trx_mutex_enter(lock->trx);
   
   timespec now = TraceTool::get_time();
-  lock->grant_time = now;
-  lock->causes_wait = true;
+  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2584,13 +2583,6 @@ lock_rec_dequeue_from_page(
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
-  
-  if (in_lock->causes_wait)
-  {
-    timespec now = TraceTool::get_time();
-    ulint real_remaining = TraceTool::difftime(in_lock->grant_time, now);
-    update_access(real_remaining);
-  }
 
 	/* Check if waiting locks in the queue can now be granted: grant
 	locks if there are no conflicting locks ahead. Stop at the first

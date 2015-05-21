@@ -64,9 +64,6 @@ struct lock_rec_t {
 struct lock_t {
 	trx_t*		trx;		/*!< transaction owning the
 					lock */
-    int starvation_count;   /*!< How many times a lock
-                    request after it is granted before
-                    this one is granted */
 	UT_LIST_NODE_T(lock_t)
 			trx_locks;	/*!< list of the locks of the
 					transaction */
@@ -76,8 +73,7 @@ struct lock_t {
 					wait flag, ORed */
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
-    timespec        grant_time;
-    bool            causes_wait;
+    timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {
 		lock_table_t	tab_lock;/*!< table lock */
