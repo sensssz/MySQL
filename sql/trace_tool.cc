@@ -15,9 +15,9 @@
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
-#define ORDER_STATUS_MARKER "SELECT O_ID, O_CARRIER_ID, O_ENTRY_D FROM OORDER WHERE"
-#define DELIVERY_MARKER "DELETE FROM NEW_ORDER WHERE"
-#define STOCK_LEVEL_MARKER "SELECT COUNT(DISTINCT (S_I_ID)) AS STOCK_COUNT FROM ORDER_LINE, STOCK WHERE"
+#define ORDER_STATUS_MARKER "SELECT C_FIRST, C_MIDDLE"
+#define DELIVERY_MARKER "SELECT NO_O_ID FROM NEW_ORDER WHERE NO_D_ID ="
+#define STOCK_LEVEL_MARKER "SELECT D_NEXT_O_ID FROM DISTRICT WHERE D_W_ID ="
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
@@ -50,6 +50,7 @@ __thread bool TraceTool::is_commit = false;
 __thread bool TraceTool::commit_successful = true;
 __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
+__thread transaction_type TraceTool::type = NONE;
 __thread char * TraceTool::query = NULL;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
@@ -133,7 +134,7 @@ TraceTool *TraceTool::get_instance()
 
 TraceTool::TraceTool() : function_times()
 {
-  log_file.open("trace.log");
+  log_file.open("logs/trace.log");
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
@@ -148,6 +149,8 @@ TraceTool::TraceTool() : function_times()
   }
   transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
+  transaction_types.reserve(50000);
+  transaction_types.push_back(NONE);
   lock_time_mutex = os_mutex_create();
   srand(now_micro());
 }
@@ -165,8 +168,8 @@ void *TraceTool::check_write_log(void *arg)
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
-      std::ifstream src("trace.log", std::ios::binary);
-      std::ofstream dst("trace.bak", std::ios::binary);
+      std::ifstream src("logs/trace.log", std::ios::binary);
+      std::ofstream dst("logs/trace.bak", std::ios::binary);
       dst << src.rdbuf();
       src.close();
       dst.close();
@@ -277,7 +280,6 @@ void TraceTool::start_new_query()
   if (new_transaction)
   {
     trans_start = get_time();
-    new_transaction = false;
     commit_successful = true;
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
@@ -289,6 +291,7 @@ void TraceTool::start_new_query()
       iterator->push_back(0);
     }
     transaction_start_times.push_back(0);
+    transaction_types.push_back(NONE);
     pthread_rwlock_unlock(&data_lock);
   }
   clock_gettime(CLOCK_REALTIME, &last_query);
@@ -300,7 +303,8 @@ void TraceTool::start_new_query()
 
 void TraceTool::set_query(const char *new_query, int length)
 {
-  if (type == NONE)
+  // Look at the first query of a transaction
+  if (new_transaction)
   {
     if (strncmp(new_query, NEW_ORDER_MARKER, NEW_ORDER_LENGTH) == 0)
     {
@@ -322,6 +326,9 @@ void TraceTool::set_query(const char *new_query, int length)
     {
       type = STOCK_LEVEL;
     }
+    
+    transaction_types[current_transaction_id] = type;
+    new_transaction = false;
   }
 //  query = (char *) malloc(sizeof(char) * (length + 1));
 //  strncpy(query, new_query, length);
@@ -399,9 +406,14 @@ bool compare_record_lock(record_lock *lock1, record_lock *lock2)
   return lock1->waiting_times.size() > lock2->waiting_times.size();
 }
 
-void TraceTool::write_log()
+void TraceTool::write_work_wait()
 {
-  ofstream work_wait("lock_wait");
+  ofstream new_order_work_wait("logs/new_order_work_wait");
+  ofstream payment_work_wait("logs/payment_work_wait");
+  ofstream order_status_work_wait("logs/order_status_work_wait");
+  ofstream delivery_work_wait("logs/delivery_work_wait");
+  ofstream stock_level_work_wait("logs/stock_level_work_wait");
+  stringstream line;
   os_mutex_enter(lock_time_mutex);
   for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();
        iterator != lock_time_infos.end();
@@ -414,27 +426,106 @@ void TraceTool::write_log()
       assert(function_times[0][info.transaction_id] > info.work_time_so_far);
       assert(function_times[1][info.transaction_id] >= info.wait_time_so_far);
       assert(function_times[2][info.transaction_id] >= info.num_of_locks_so_far);
-      work_wait << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
-                   info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_of_locks_so_far << "," <<
-                   function_times[0][info.transaction_id] <<  "," << function_times[1][info.transaction_id] << "," <<
-                   function_times[2][info.transaction_id] << endl;
+      line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
+      info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_of_locks_so_far << "," <<
+      function_times[0][info.transaction_id] <<  "," << function_times[1][info.transaction_id] << "," <<
+      function_times[2][info.transaction_id];
+      const char *work_wait_info = line.str().c_str();
+      switch (transaction_types[info.transaction_id])
+      {
+        case NEW_ORDER:
+          new_order_work_wait << work_wait_info << endl;
+          break;
+        case PAYMENT:
+          payment_work_wait << work_wait_info << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_work_wait << work_wait_info << endl;
+          break;
+        case DELIVERY:
+          delivery_work_wait << work_wait_info << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_work_wait << work_wait_info << endl;
+          break;
+        default:
+          break;
+      }
+      line.str("");
     }
   }
   lock_time_infos.clear();
   os_mutex_exit(lock_time_mutex);
-  work_wait.close();
+  new_order_work_wait.close();
+  payment_work_wait.close();
+  order_status_work_wait.close();
+  delivery_work_wait.close();
+  stock_level_work_wait.close();
+}
+
+void TraceTool::write_latency()
+{
+  ofstream overall_log;
+  ofstream new_order_log;
+  ofstream payment_log;
+  ofstream order_status_log;
+  ofstream delivery_log;
+  ofstream stock_level_log;
   
-  ofstream log;
   stringstream sstream;
-  sstream << "trace" << log_index++;
-  log.open(sstream.str().c_str());
+  sstream << "logs/trace" << log_index;
+  overall_log.open(sstream.str().c_str());
+  
+  sstream.str("");
+  sstream << "logs/new_order_" << log_index;
+  new_order_log.open(sstream.str().c_str());
+  
+  sstream.str("");
+  sstream << "logs/payment_" << log_index;
+  payment_log.open(sstream.str().c_str());
+  
+  sstream.str("");
+  sstream << "logs/order_status_" << log_index;
+  order_status_log.open(sstream.str().c_str());
+  
+  sstream.str("");
+  sstream << "logs/delivery_" << log_index;
+  delivery_log.open(sstream.str().c_str());
+  
+  sstream.str("");
+  sstream << "logs/stock_level_" << log_index;
+  stock_level_log.open(sstream.str().c_str());
+  
+  ++log_index;
+  
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
   for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
   {
-    if (transaction_start_times[index] > 0)
+    ulint start_time = transaction_start_times[index];
+    if (start_time > 0)
     {
-      log << transaction_start_times[index] << endl;
+      overall_log << start_time << endl;
+      switch (transaction_types[index])
+      {
+        case NEW_ORDER:
+          new_order_log << start_time << endl;
+          break;
+        case PAYMENT:
+          payment_log << start_time << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_log << start_time << endl;
+          break;
+        case DELIVERY:
+          delivery_log << start_time << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_log << start_time << endl;
+          break;
+        default:
+          break;
+      }
     }
   }
   
@@ -445,7 +536,28 @@ void TraceTool::write_log()
     {
       if (function_times.back()[index] > 0)
       {
-        log << function_index << ',' << (*iterator)[index] << endl;
+        ulint latency = (*iterator)[index];
+        overall_log << function_index << ',' << latency << endl;
+        switch (transaction_types[index])
+        {
+          case NEW_ORDER:
+            new_order_log << latency << endl;
+            break;
+          case PAYMENT:
+            payment_log << latency << endl;
+            break;
+          case ORDER_STATUS:
+            order_status_log << latency << endl;
+            break;
+          case DELIVERY:
+            delivery_log << latency << endl;
+            break;
+          case STOCK_LEVEL:
+            stock_level_log << latency << endl;
+            break;
+          default:
+            break;
+        }
       }
     }
     function_index++;
@@ -453,9 +565,17 @@ void TraceTool::write_log()
   }
   function_times.clear();
   pthread_rwlock_unlock(&data_lock);
-  log.close();
-  
-  ofstream lock_waiting_log("lock");
+  overall_log.close();
+  new_order_log.close();
+  payment_log.close();
+  order_status_log.close();
+  delivery_log.close();
+  stock_level_log.close();
+}
+
+void TraceTool::write_lock_wait()
+{
+  ofstream lock_waiting_log("logs/lock");
   pthread_mutex_lock(&record_lock_mutex);
   lock_waiting_log << "Number of locks: " << record_lock_map.size() << endl;
   for (auto lock_map : record_lock_map)
@@ -472,4 +592,11 @@ void TraceTool::write_log()
   pthread_mutex_unlock(&record_lock_mutex);
   record_lock_map.clear();
   lock_waiting_log.close();
+}
+
+void TraceTool::write_log()
+{
+  write_work_wait();
+  write_latency();
+  write_lock_wait();
 }

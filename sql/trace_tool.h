@@ -80,6 +80,7 @@ private:
     static pthread_rwlock_t data_lock;
     vector<vector<ulint> > function_times;
     vector<ulint> transaction_start_times;
+    vector<transaction_type> transaction_types;
     unordered_map<lock_info, record_lock *> record_lock_map;
     
     list<lock_time_info> lock_time_infos;
@@ -120,6 +121,9 @@ public:
     void print_query();
     void end_query();
     void end_transaction();
+    void write_work_wait();
+    void write_latency();
+    void write_lock_wait();
     void write_log();
     void add_record(int function_index, long duration);
     void add_record_if_zero(int function_index, long duration);
