@@ -367,7 +367,6 @@ bool compare_record_lock(record_lock *lock1, record_lock *lock2)
 
 void TraceTool::write_log()
 {
-  write_separator_log();
   ofstream work_wait("lock_wait");
   os_mutex_enter(lock_time_mutex);
   for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();

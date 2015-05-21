@@ -2445,6 +2445,7 @@ lock_grant(
   
   timespec now = TraceTool::get_time();
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
+  lock->trx->total_wait_time += wait_time;
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2583,26 +2584,6 @@ lock_rec_dequeue_from_page(
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
-
-	/* Check if waiting locks in the queue can now be granted: grant
-	locks if there are no conflicting locks ahead. Stop at the first
-	X lock that is waiting or has been granted. */
-  
-  /*
-  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-     lock != NULL;
-     lock = lock_rec_get_next_on_page(lock))
-  {
-    if (lock_get_wait(lock))
-    {
-      if (!lock_rec_has_to_wait_in_queue(lock))
-      {
-        ut_ad(lock->trx != in_lock->trx);
-        lock_grant(lock);
-      }
-    }
-  }
-   */
   
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
@@ -2610,10 +2591,13 @@ lock_rec_dequeue_from_page(
       return;
   }
   ulint rec_fold = lock_rec_fold(space, page_no);
-  vector<lock_t *> grantable_locks;
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
+    ulint max_heuristic = 0;
+    timespec now = TraceTool::get_time();
+    lock_t *lock_to_grant = NULL;
+    
     if (!lock_rec_get_nth_bit(in_lock, heap_no))
     {
       continue;
@@ -2634,7 +2618,14 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
         {
-          grantable_locks.push_back(lock);
+          ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+          ulint remaing_time = estimate(time_so_far);
+          ulint heuristic = remaing_time + 2 * time_so_far;
+          if (heuristic > max_heuristic)
+          {
+            max_heuristic = heuristic;
+            lock_to_grant = lock;
+          }
         }
         if (first_wait_lock == NULL)
         {
@@ -2643,11 +2634,8 @@ lock_rec_dequeue_from_page(
       }
     }
     
-    if (grantable_locks.size() > 0)
+    if (lock_to_grant != NULL)
     {
-      lock_t *lock_to_grant = find_min_var_lock(grantable_locks);
-      grantable_locks.clear();
-      
       if (first_wait_lock != lock_to_grant)
       {
         // Move the target lock before the first wait lock.

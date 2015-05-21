@@ -19,22 +19,10 @@ void
 indi_init();
 
 /*************************************************************//**
-Find the lock request that minimizes variance. */
+Estimate remaining time given total time so far. */
 UNIV_INTERN
-lock_t *
-find_min_var_lock(
-  const vector<lock_t *> &locks); /*!<  list of locks on the same record */
-
-/*************************************************************//**
-Update the last access time for one of the buckets of remaining time. */
-UNIV_INTERN
-void
-update_access(
-  ulint remaining_time); /*!< real remaining time */
-
-UNIV_INTERN
-void
-write_separator_log();
+ulint
+estimate(ulint time_so_far); /*!< total time so far */
 
 /*************************************************************//**
 Clean up resources. */
