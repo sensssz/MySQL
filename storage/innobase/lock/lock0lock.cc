@@ -2591,6 +2591,7 @@ lock_rec_dequeue_from_page(
       return;
   }
   ulint rec_fold = lock_rec_fold(space, page_no);
+  vector<lock_t *> grantable_locks;
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
@@ -2618,14 +2619,7 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
         {
-          ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          ulint remaing_time = estimate(time_so_far);
-          ulint heuristic = remaing_time + 2 * time_so_far;
-          if (heuristic > max_heuristic)
-          {
-            max_heuristic = heuristic;
-            lock_to_grant = lock;
-          }
+          grantable_locks.push_back(lock);
         }
         if (first_wait_lock == NULL)
         {
@@ -2634,8 +2628,20 @@ lock_rec_dequeue_from_page(
       }
     }
     
-    if (lock_to_grant != NULL)
+    if (grantable_locks.size() > 0)
     {
+      for (int index = 0, num_locks = grantable_locks.size(); index < num_locks; ++index)
+      {
+        ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+        ulint remaing_time = estimate(time_so_far);
+        ulint heuristic = remaing_time + num_locks * time_so_far;
+        if (heuristic > max_heuristic)
+        {
+          max_heuristic = heuristic;
+          lock_to_grant = lock;
+        }
+      }
+      grantable_locks.clear();
       if (first_wait_lock != lock_to_grant)
       {
         // Move the target lock before the first wait lock.
