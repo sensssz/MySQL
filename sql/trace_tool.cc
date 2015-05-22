@@ -416,7 +416,7 @@ void TraceTool::write_latency()
   ofstream stock_level_log;
   
   stringstream sstream;
-  sstream << "logs/trace" << log_index;
+  sstream << "logs/tpcc_" << log_index;
   overall_log.open(sstream.str().c_str());
   
   sstream.str("");
@@ -484,19 +484,19 @@ void TraceTool::write_latency()
         switch (transaction_types[index])
         {
           case NEW_ORDER:
-            new_order_log << latency << endl;
+            new_order_log << function_index << ',' << latency << endl;
             break;
           case PAYMENT:
-            payment_log << latency << endl;
+            payment_log << function_index << ',' << latency << endl;
             break;
           case ORDER_STATUS:
-            order_status_log << latency << endl;
+            order_status_log << function_index << ',' << latency << endl;
             break;
           case DELIVERY:
-            delivery_log << latency << endl;
+            delivery_log << function_index << ',' << latency << endl;
             break;
           case STOCK_LEVEL:
-            stock_level_log << latency << endl;
+            stock_level_log << function_index << ',' << latency << endl;
             break;
           default:
             break;

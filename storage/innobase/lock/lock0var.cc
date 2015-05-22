@@ -15,6 +15,8 @@
 #include <fstream>
 #include <float.h>
 
+#define RELATIVE_ERROR 0.05
+
 using std::unordered_map;
 using std::sort;
 using std::ifstream;
@@ -38,9 +40,7 @@ struct parameters
     return k == another.k && double_equals(heu, another.heu);
   }
 };
-
 typedef struct parameters parameters;
-
 namespace std
 {
   template<>
@@ -48,12 +48,54 @@ namespace std
   {
     ulint operator()(const struct parameters &parameter) const
     {
-      size_t hash1 = hash<int>()(parameter.k);
+      size_t hash1 = hash<long>()(parameter.k);
       size_t hash2 = hash<double>()(parameter.heu);
       return hash1 ^ hash2;
     }
   };
 }
+
+struct record
+{
+  ulint space_id;
+  ulint page_no;
+  ulint heap_no;
+  
+  bool operator==(const struct record &another) const
+  {
+    return space_id == another.space_id &&
+           page_no == another.page_no &&
+           heap_no == another.heap_no;
+  }
+};
+typedef struct record record;
+namespace std
+{
+  template<>
+  struct hash<record>
+  {
+    ulint operator()(const record &record) const
+    {
+      size_t hash1 = hash<long>()(record.space_id);
+      size_t hash2 = hash<long>()(record.page_no);
+      size_t hash3 = hash<long>()(record.heap_no);
+      return hash1 ^ hash2 ^ hash3;
+    }
+  }
+}
+
+static unordered_map<record, vector<lock_t *> *> lock_candidates;
+
+static void g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *solution);
+static double g_recursive(parameters &para, ulint size,
+                          double *betas, double *gammas, double *beta_stars,
+                          unordered_map<parameters, double> &cache,
+                          bool *solution);
+static void h_starter(ulint size, double *betas, double *gammas, double *gamma_stars, bool *solution);
+static double h_recursive(parameters &para, ulint size,
+                          double *betas, double *gammas, double *gamma_stars,
+                          unordered_map<parameters, double> &cache,
+                          bool *solution);
 
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
@@ -125,6 +167,58 @@ estimate(
   return estimated_work_wait[y_index + 1];
 }
 
+/*************************************************************//**
+Estimate remaining time given total time so far. */
+UNIV_INTERN
+void
+set_lock_candidate(
+  vector<lock_t *>  &locks,     /*!< candidates */
+  ulint             space_id,   /*!< space id of the record */
+  ulint             page_no,    /*!< page no of the record */
+  ulint             heap_no)    /*!< heap no of the record */
+{
+  record record;
+  record.space_id = space_id;
+  record.page_no = page_no;
+  record.heap_no = heap_no;
+  CTV_schedule(locks);
+  vector<lock_t *> *lock_vector = lock_candidates[record];
+  lock_vector->insert(lock_vector->end(), locks);
+}
+
+/*************************************************************//**
+Return the next lock from the CTV schedule.
+NULL if runs out of locks. */
+UNIV_INTERN
+lock_t *
+next_lock(
+  ulint             space_id,   /*!< space id of the record */
+  ulint             page_no,    /*!< page no of the record */
+  ulint             heap_no)    /*!< heap no of the record */
+{
+  record record;
+  record.space_id = space_id;
+  record.page_no = page_no;
+  record.heap_no = heap_no;
+  unordered_map<record, vector<lock_t *> *>::iterator ite = lock_candidates.find(record);
+  if (ite == lock_candidates.end())
+  {
+    lock_candidates[record] = new vector<lock_t *>;
+  }
+  vector<lock_t *> *lock_vector = lock_candidates[record];
+  if (lock_vector == NULL)
+  {
+    lock_candidates[record] = new vector<lock_t *>;
+    return NULL;
+  }
+  else
+  {
+    lock_t *lock = lock_vector->back();
+    lock_vector->pop_back();
+    return lock;
+  }
+}
+
 static
 bool
 compare(lock_t *lock1, lock_t *lock2)
@@ -132,20 +226,49 @@ compare(lock_t *lock1, lock_t *lock2)
   return lock1->process_time < lock2->process_time;
 }
 
+
+static
+void
+round(
+  double *array,
+  int length,
+  int start,
+  int end)
+{
+  double sum = 0;
+  for (int index = start; index < end; ++index)
+  {
+    sum += array[index];
+  }
+  double mean = sum / (length - 2);
+  double round_factor = RELATIVE_ERROR * mean / 2;
+  for (int index = start; index < end; ++index)
+  {
+    array[index] = (int) (array[index] / round_factor);
+  }
+}
+
 static
 void
 g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *solution)
 {
   parameters para;
-  para.k = 3;
+  para.k = size - 2;
   para.heu = 0;
   
+  round(betas, size, 2, size);
+  beta_stars[size - 2] = betas[size - 1];
+  for (int index = size - 3; index > 0; --index)
+  {
+    beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
+  }
+  
   unordered_map<parameters, double> cache;
-  h_recursive(para, size, betas, gammas, beta_stars, cache, solution);
+  g_recursive(para, size, betas, gammas, beta_stars, cache, solution);
 }
 
 static
-void
+double
 g_recursive(parameters &para, ulint size,
             double *betas, double *gammas, double *beta_stars,
             unordered_map<parameters, double> &cache,
@@ -162,19 +285,19 @@ g_recursive(parameters &para, ulint size,
   if (iterator != cache.end())
   {
     // Already calculated the value for this pair of parameters
-    return *iterator;
+    return iterator->second;
   }
   
   parameters new_para_before;
   new_para_before.k = k - 1;
   new_para_before.heu = beta;
-  double recursive_before = h_recursive(new_para, size, betas, gammas, gamma_stars, cache);
-  double put_before = recursive_befor + gammas[k] * beta;
+  double recursive_before = g_recursive(new_para_before, size, betas, gammas, beta_stars, cache, solution);
+  double put_before = recursive_before + gammas[k] * beta;
   
   parameters new_para_after;
-  new_para_after.k = k;
-  new_para_after.heu += gammas[k];
-  double recursive_after = h_recursive(new_para, size, betas, gammas, gamma_stars, cache);
+  new_para_after.k = k - 1;
+  new_para_after.heu = beta + betas[k];
+  double recursive_after = g_recursive(new_para_after, size, betas, gammas, beta_stars, cache, solution);
   double put_after = recursive_after + gammas[k] * (beta_stars[k] - beta);
   
   cache[new_para_before] = recursive_before;
@@ -182,11 +305,19 @@ g_recursive(parameters &para, ulint size,
   
   if (put_before > put_after)
   {
-    solution[k] = 0;
+    if (beta == 0)
+    {
+      solution[k] = 0;
+    }
+    return put_before;
   }
   else
   {
-    solution[k] = 1;
+    if (beta == 0)
+    {
+      solution[k] = 1;
+    }
+    return put_after;
   }
 }
 
@@ -195,15 +326,22 @@ void
 h_starter(ulint size, double *betas, double *gammas, double *gamma_stars, bool *solution)
 {
   parameters para;
-  para.k = 3;
+  para.k = 2;
   para.heu = 0;
+  
+  round(gammas, size, 1, size - 1);
+  gamma_stars[1] = gammas[1];
+  for (int index = 2; index < size - 1; ++index)
+  {
+    gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
+  }
   
   unordered_map<parameters, double> cache;
   h_recursive(para, size, betas, gammas, gamma_stars, cache, solution);
 }
 
 static
-void
+double
 h_recursive(parameters &para, ulint size,
             double *betas, double *gammas, double *gamma_stars,
             unordered_map<parameters, double> &cache,
@@ -212,7 +350,7 @@ h_recursive(parameters &para, ulint size,
   ulint k = para.k;
   double gamma = para.heu;
   // h(n + 1) = 0
-  if (k == size + 1)
+  if (k == size)
   {
     return 0;
   }
@@ -220,19 +358,19 @@ h_recursive(parameters &para, ulint size,
   if (iterator != cache.end())
   {
     // Already calculated the value for this pair of parameters
-    return *iterator;
+    return iterator->second;
   }
   
   parameters new_para_before;
   new_para_before.k = k + 1;
   new_para_before.heu = gamma;
-  double recursive_before = h_recursive(new_para, size, betas, gammas, gamma_stars, cache);
-  double put_before = recursive_befor + betas[k] * gamma;
+  double recursive_before = h_recursive(new_para_before, size, betas, gammas, gamma_stars, cache, solution);
+  double put_before = recursive_before + betas[k] * gamma;
   
   parameters new_para_after;
-  new_para_after.k = k;
-  new_para_after.heu += gammas[k];
-  double recursive_after = h_recursive(new_para, size, betas, gammas, gamma_stars, cache);
+  new_para_after.k = k + 1;
+  new_para_after.heu = gamma + gammas[k];
+  double recursive_after = h_recursive(new_para_after, size, betas, gammas, gamma_stars, cache, solution);
   double put_after = recursive_after + betas[k] * (gamma_stars[k - 1] - gamma);
   
   cache[new_para_before] = recursive_before;
@@ -240,11 +378,19 @@ h_recursive(parameters &para, ulint size,
   
   if (put_before > put_after)
   {
-    solution[k] = 0;
+    if (gamma == 0)
+    {
+      solution[k] = 0;
+    }
+    return put_before;
   }
   else
   {
-    solution[k] = 1;
+    if (gamma == 0)
+    {
+      solution[k] = 1;
+    }
+    return put_after;
   }
 }
 
@@ -254,15 +400,18 @@ UNIV_INTERN
 void
 CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
 {
+  if (locks.size() < 2)
+  {
+    return;
+  }
+  
   ulint size = locks.size() - 1;
   double *as = new double[size];
   double *betas = new double[size];
   double *beta_stars = new double[size];
   double *gammas = new double[size];
   double *gamma_stars = new double[size];
-  double gamma_star = 0;
-  double beta_star = 0;
-  bool *quadratic_solution = new bool[size];
+  bool *quadratic_solution = new bool[size + 1];
   lock_t **final_schedule = new lock_t *[size + 1];
   
   timespec now = TraceTool::get_time();
@@ -279,42 +428,42 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   {
     ulint sum = 0;
     ulint process_time = locks[index]->process_time;
-    for (ulint i = 0; i < index - 1; ++i)
+    for (ulint i = 0; i < index; ++i)
     {
-      sum += locks[i]->process_time / 2.0;
+      sum += locks[i]->process_time;
     }
     as[index] = process_time + sum / 2.0;
-    betas[index] = (size - index) * process_time + 2 * as[index];
-    gammas[index] = (index + 1) * process_time - 2 * as[index];
+    // We need to use index + 1 for calculating beta and gamma
+    betas[index] = (size - index - 1) * process_time + 2 * as[index];
+    gammas[index] = (index + 1 + 1) * process_time - 2 * as[index];
   }
   
   beta_stars[size - 2] = betas[size - 1];
-  gamma_stars[1] = gamma_stars[1];
+  gamma_stars[1] = gammas[1];
   // Calculate beta stars and gamma stars
-  for (int index = 1; index < size - 1; ++index)
+  for (int index = size - 3; index > 0; --index)
   {
-    if (index > 1)
-    {
-      gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
-    }
-    else if (index < size - 2)
-    {
-      beta_stars[size - 2 - index] = beta_stars[size - 2 - index + 1] + beta[size - 2 - index + 1];
-    }
+    beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
+  }
+  for (int index = 2; index < size - 1; ++index)
+  {
+    gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
   }
   // The last one is always at the first place
   quadratic_solution[size - 1] = 0;
+  quadratic_solution[0] = 0;
+  quadratic_solution[1] = 0;
   
-  beta_stars = beta_stars[1];
-  gamma_star = gamma_stars[size - 2];
-  
-  if (beta_star < gamma_star)
+  if (size + 1 > 3)
   {
-    g_starter(size, betas, gamms, beta_stars, quadratic_solution);
-  }
-  else
-  {
-    h_starter(size, betas, gamms, gamma_stars, quadratic_solution);
+    if (beta_stars[1] < gamma_stars[size - 2])
+    {
+      g_starter(size, betas, gammas, beta_stars, quadratic_solution);
+    }
+    else
+    {
+      h_starter(size, betas, gammas, gamma_stars, quadratic_solution);
+    }
   }
   
   int schedule_index = 1;
@@ -339,7 +488,8 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   
   for (int index = 0; index <= size; ++index)
   {
-    locks[index] = final_schedule[index];
+    // Store the locks in reverse order
+    locks[size - index] = final_schedule[index];
   }
   
   delete[] as;
@@ -359,5 +509,11 @@ indi_cleanup()
 {
   free(work_wait_so_far);
   free(estimated_work_wait);
+  
+  for (unordered_map<record, vector<lock_t *> *>::iterator iterator = lock_candidates.begin();
+       iterator != lock_candidates.end(); ++iterator)
+  {
+    delete iterator->second;
+  }
 }
 

@@ -2591,17 +2591,16 @@ lock_rec_dequeue_from_page(
       return;
   }
   ulint rec_fold = lock_rec_fold(space, page_no);
+  vector<lock_t *> grantable_locks;
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
-    ulint max_heuristic = 0;
-    timespec now = TraceTool::get_time();
-    lock_t *lock_to_grant = NULL;
-    
     if (!lock_rec_get_nth_bit(in_lock, heap_no))
     {
       continue;
     }
+    
+    lock_t *lock_to_grant = next_lock(space, page_no, heap_no);
     
     lock_t *first_wait_lock = NULL;
     if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
@@ -2616,23 +2615,29 @@ lock_rec_dequeue_from_page(
     {
       if (lock_get_wait(lock))
       {
-        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
-        {
-          ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          ulint remaing_time = estimate(time_so_far);
-          ulint heuristic = remaing_time + 2 * time_so_far;
-          if (heuristic > max_heuristic)
-          {
-            max_heuristic = heuristic;
-            lock_to_grant = lock;
-          }
-        }
         if (first_wait_lock == NULL)
         {
           first_wait_lock = lock;
+          if (lock_to_grant != NULL)
+          {
+            // If lock_to_grant is not NULL, then we just need to
+            // find the first wait lock and we can stop here
+            break;
+          }
+        }
+        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
+        {
+          grantable_locks.push_back(lock);
         }
       }
     }
+    
+    if (lock_to_grant == NULL)
+    {
+      set_lock_candidate(grantable_locks, space, page_no, heap_no);
+      lock_to_grant = next_lock(space, page_no, heap_no);
+    }
+    grantable_locks.clear();
     
     if (lock_to_grant != NULL)
     {
@@ -2655,6 +2660,8 @@ lock_rec_dequeue_from_page(
         lock_to_grant->hash = first_wait_lock;
       }
       
+      // What if I grant only one lock each time?
+      /*
       lock = lock_rec_get_first_on_page_addr(space, page_no);
       if (!lock_rec_get_nth_bit(lock, heap_no))
       {
@@ -2670,6 +2677,7 @@ lock_rec_dequeue_from_page(
           }
         }
       }
+       */
     }
   }
 }
