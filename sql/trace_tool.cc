@@ -66,9 +66,6 @@ static __thread timespec call_start;
 static __thread timespec call_end;
 #endif
 
-
-static int log_index = 0;
-
 void TRACE_FUNCTION_START()
 {
 #ifdef MONITOR
@@ -301,7 +298,7 @@ void TraceTool::start_new_query()
 #endif
 }
 
-void TraceTool::set_query(const char *new_query, int length)
+void TraceTool::set_query(const char *new_query)
 {
   // Look at the first query of a transaction
   if (new_transaction)
@@ -473,30 +470,28 @@ void TraceTool::write_latency()
   ofstream stock_level_log;
   
   stringstream sstream;
-  sstream << "logs/trace" << log_index;
+  sstream << "logs/tpcc";
   overall_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/new_order_" << log_index;
+  sstream << "logs/new_order";
   new_order_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/payment_" << log_index;
+  sstream << "logs/payment";
   payment_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/order_status_" << log_index;
+  sstream << "logs/order_status";
   order_status_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/delivery_" << log_index;
+  sstream << "logs/delivery";
   delivery_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/stock_level_" << log_index;
+  sstream << "logs/stock_level";
   stock_level_log.open(sstream.str().c_str());
-  
-  ++log_index;
   
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
@@ -541,19 +536,19 @@ void TraceTool::write_latency()
         switch (transaction_types[index])
         {
           case NEW_ORDER:
-            new_order_log << latency << endl;
+            new_order_log << function_index << ',' <<  latency << endl;
             break;
           case PAYMENT:
-            payment_log << latency << endl;
+            payment_log << function_index << ',' <<  latency << endl;
             break;
           case ORDER_STATUS:
-            order_status_log << latency << endl;
+            order_status_log << function_index << ',' <<  latency << endl;
             break;
           case DELIVERY:
-            delivery_log << latency << endl;
+            delivery_log << function_index << ',' <<  latency << endl;
             break;
           case STOCK_LEVEL:
-            stock_level_log << latency << endl;
+            stock_level_log << function_index << ',' <<  latency << endl;
             break;
           default:
             break;
