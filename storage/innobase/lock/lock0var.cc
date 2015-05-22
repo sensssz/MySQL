@@ -21,9 +21,25 @@ using std::unordered_map;
 using std::sort;
 using std::ifstream;
 
-static ulint *work_wait_so_far = NULL;
-static ulint *estimated_work_wait = NULL;
-static ulint length = 0;
+static ulint *tpcc_work_wait = NULL;
+static ulint *tpcc_estimated = NULL;
+static ulint *new_order_work_wait = NULL;
+static ulint *new_order_estimated = NULL;
+static ulint *payment_work_wait = NULL;
+static ulint *payment_estimated = NULL;
+static ulint *order_status_work_wait = NULL;
+static ulint *order_status_estimated = NULL;
+static ulint *delivery_work_wait = NULL;
+static ulint *delivery_estimated = NULL;
+static ulint *stock_level_work_wait = NULL;
+static ulint *stock_level_estimated = NULL;
+
+static ulint tpcc_length = 0;
+static ulint new_order_length = 0;
+static ulint payment_length = 0;
+static ulint order_status_length = 0;
+static ulint delivery_length = 0;
+static ulint stock_level_length = 0;
 
 bool double_equals(double a, double b, double epsilon = 0.00001)
 {
@@ -81,7 +97,7 @@ namespace std
       size_t hash3 = hash<long>()(record.heap_no);
       return hash1 ^ hash2 ^ hash3;
     }
-  }
+  };
 }
 
 static unordered_map<record, vector<lock_t *> *> lock_candidates;
@@ -97,26 +113,48 @@ static double h_recursive(parameters &para, ulint size,
                           unordered_map<parameters, double> &cache,
                           bool *solution);
 
+static
+void
+read_isotonic(
+  const char *name,
+  ulint *&so_far,
+  ulint *&estimated,
+  ulint &length)
+{
+  ifstream isotonic_file(name);
+  isotonic_file >> length >> length;
+  TraceTool::get_instance()->get_log() << length << endl;
+  so_far = (ulint *)malloc(sizeof(ulint) * length);
+  estimated = (ulint *)malloc(sizeof(ulint) * length);
+  double x = 0;
+  double y = 0;
+  for (ulint index = 0; index < length; ++index)
+  {
+    isotonic_file >> x >> y;
+    so_far[index] = x;
+    estimated[index] = y;
+  }
+  isotonic_file.close();
+}
+
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
 UNIV_INTERN
 void
 indi_init()
 {
-  ifstream isotonic_file("isotonic_original");
-  isotonic_file >> length >> length;
-  work_wait_so_far = (ulint *)malloc(sizeof(ulint) * length);
-  estimated_work_wait = (ulint *)malloc(sizeof(ulint) * length);
-  ulint x = 0;
-  ulint y = 0;
-  for (ulint index = 0; index < length; ++index)
-  {
-    isotonic_file >> x >> y;
-    work_wait_so_far[index] = x;
-    estimated_work_wait[index] = y;
-  }
-  isotonic_file.close();
-  
+  read_isotonic("isotonic_original", tpcc_work_wait,
+                tpcc_estimated, tpcc_length);
+  read_isotonic("isotonic_new_order", new_order_work_wait,
+                new_order_estimated, new_order_length);
+  read_isotonic("isotonic_payment", payment_work_wait,
+                payment_estimated, payment_length);
+  read_isotonic("isotonic_order_status", order_status_work_wait,
+                order_status_estimated, order_status_length);
+  read_isotonic("isotonic_delivery", delivery_work_wait,
+                delivery_estimated, delivery_length);
+  read_isotonic("isotonic_stock_level", stock_level_work_wait,
+                stock_level_estimated, stock_level_length);
 }
 
 /*************************************************************//**
@@ -157,14 +195,53 @@ Estimate remaining time given total time so far. */
 UNIV_INTERN
 ulint
 estimate(
-  ulint time_so_far)
+  ulint time_so_far,
+  transaction_type type)
 {
-  ulint y_index = binary_search(work_wait_so_far, length, time_so_far);
+  ulint *so_far = NULL;
+  ulint *estimate = NULL;
+  ulint length = 0;
+  
+  switch (type) {
+    case NONE:
+      so_far = tpcc_work_wait;
+      estimate = tpcc_estimated;
+      length = tpcc_length;
+    case NEW_ORDER:
+      so_far = new_order_work_wait;
+      estimate = new_order_estimated;
+      length = new_order_length;
+      break;
+    case PAYMENT:
+      so_far = payment_work_wait;
+      estimate = payment_estimated;
+      length = payment_length;
+      break;
+    case ORDER_STATUS:
+      so_far = order_status_work_wait;
+      estimate = order_status_estimated;
+      length = order_status_length;
+      break;
+    case DELIVERY:
+      so_far = delivery_work_wait;
+      estimate = delivery_estimated;
+      length = delivery_length;
+      break;
+    case STOCK_LEVEL:
+      so_far = stock_level_work_wait;
+      estimate = stock_level_estimated;
+      length = stock_level_length;
+      break;
+    default:
+      break;
+  }
+  
+  ulint y_index = binary_search(so_far, length, time_so_far);
   if (y_index == length - 1)
   {
     y_index = length - 2;
   }
-  return estimated_work_wait[y_index + 1];
+  return estimate[y_index + 1];
 }
 
 /*************************************************************//**
@@ -183,7 +260,7 @@ set_lock_candidate(
   record.heap_no = heap_no;
   CTV_schedule(locks);
   vector<lock_t *> *lock_vector = lock_candidates[record];
-  lock_vector->insert(lock_vector->end(), locks);
+  lock_vector->insert(lock_vector->end(), locks.begin(), locks.end());
 }
 
 /*************************************************************//**
@@ -196,26 +273,25 @@ next_lock(
   ulint             page_no,    /*!< page no of the record */
   ulint             heap_no)    /*!< heap no of the record */
 {
-  record record;
-  record.space_id = space_id;
-  record.page_no = page_no;
-  record.heap_no = heap_no;
-  unordered_map<record, vector<lock_t *> *>::iterator ite = lock_candidates.find(record);
+  record rec;
+  rec.space_id = space_id;
+  rec.page_no = page_no;
+  rec.heap_no = heap_no;
+  unordered_map<record, vector<lock_t *> *>::iterator ite = lock_candidates.find(rec);
   if (ite == lock_candidates.end())
   {
-    lock_candidates[record] = new vector<lock_t *>;
-  }
-  vector<lock_t *> *lock_vector = lock_candidates[record];
-  if (lock_vector == NULL)
-  {
-    lock_candidates[record] = new vector<lock_t *>;
+    lock_candidates[rec] = new vector<lock_t *>;
     return NULL;
+  }
+  else if (ite->second->size() > 0)
+  {
+    lock_t *lock = ite->second->back();
+    ite->second->pop_back();
+    return lock;
   }
   else
   {
-    lock_t *lock = lock_vector->back();
-    lock_vector->pop_back();
-    return lock;
+    return NULL;
   }
 }
 
@@ -331,7 +407,7 @@ h_starter(ulint size, double *betas, double *gammas, double *gamma_stars, bool *
   
   round(gammas, size, 1, size - 1);
   gamma_stars[1] = gammas[1];
-  for (int index = 2; index < size - 1; ++index)
+  for (ulint index = 2; index < size - 1; ++index)
   {
     gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
   }
@@ -405,6 +481,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     return;
   }
   
+  ofstream &log_file = TraceTool::get_instance()->get_log();
   ulint size = locks.size() - 1;
   double *as = new double[size];
   double *betas = new double[size];
@@ -420,9 +497,11 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   {
     lock_t *lock = locks[index];
     ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(time_so_far);
+    lock->process_time = estimate(time_so_far, lock->trx->type);
   }
+  log_file << "estimated process time" << endl;
   sort(locks.begin(), locks.end(), compare);
+  log_file << "locks sorted" << endl;
   // Calculate betas and gammas
   for (ulint index = 0; index < size; ++index)
   {
@@ -437,18 +516,20 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     betas[index] = (size - index - 1) * process_time + 2 * as[index];
     gammas[index] = (index + 1 + 1) * process_time - 2 * as[index];
   }
+  log_file << "beta and gamma calcualted" << endl;
   
   beta_stars[size - 2] = betas[size - 1];
   gamma_stars[1] = gammas[1];
   // Calculate beta stars and gamma stars
-  for (int index = size - 3; index > 0; --index)
+  for (ulint index = size - 3; index > 0; --index)
   {
     beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
   }
-  for (int index = 2; index < size - 1; ++index)
+  for (ulint index = 2; index < size - 1; ++index)
   {
     gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
   }
+  log_file << "beta_star and gamma_star calculated" << endl;
   // The last one is always at the first place
   quadratic_solution[size - 1] = 0;
   quadratic_solution[0] = 0;
@@ -458,10 +539,12 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   {
     if (beta_stars[1] < gamma_stars[size - 2])
     {
+      log_file << "using beta" << endl;
       g_starter(size, betas, gammas, beta_stars, quadratic_solution);
     }
     else
     {
+      log_file << "using gamma" << endl;
       h_starter(size, betas, gammas, gamma_stars, quadratic_solution);
     }
   }
@@ -477,7 +560,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     }
   }
   final_schedule[schedule_index++] = locks[0];
-  for (int solution_index = 1; solution_index < size; ++solution_index)
+  for (ulint solution_index = 1; solution_index < size; ++solution_index)
   {
     // Should be moved after the shortest job
     if (quadratic_solution[solution_index] == 1)
@@ -486,7 +569,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     }
   }
   
-  for (int index = 0; index <= size; ++index)
+  for (ulint index = 0; index <= size; ++index)
   {
     // Store the locks in reverse order
     locks[size - index] = final_schedule[index];
@@ -507,13 +590,27 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
-  free(work_wait_so_far);
-  free(estimated_work_wait);
+  TraceTool::get_instance()->get_log() << "Clean up CTV" << endl;
+  free(tpcc_work_wait);
+  free(tpcc_estimated);
+  free(new_order_work_wait);
+  free(new_order_estimated);
+  free(payment_work_wait);
+  free(payment_estimated);
+  free(order_status_work_wait);
+  free(order_status_estimated);
+  free(delivery_work_wait);
+  free(delivery_estimated);
+  free(stock_level_work_wait);
+  free(stock_level_estimated);
+  TraceTool::get_instance()->get_log() << "Arrays cleaned up" << endl;
   
   for (unordered_map<record, vector<lock_t *> *>::iterator iterator = lock_candidates.begin();
        iterator != lock_candidates.end(); ++iterator)
   {
     delete iterator->second;
+    iterator->second = NULL;
   }
+  TraceTool::get_instance()->get_log() << "Vectors cleaned up." << endl;
 }
 

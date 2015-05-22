@@ -66,9 +66,6 @@ static __thread timespec call_start;
 static __thread timespec call_end;
 #endif
 
-
-static int log_index = 0;
-
 void TRACE_FUNCTION_START()
 {
 #ifdef MONITOR
@@ -416,30 +413,28 @@ void TraceTool::write_latency()
   ofstream stock_level_log;
   
   stringstream sstream;
-  sstream << "logs/tpcc_" << log_index;
+  sstream << "logs/tpcc";
   overall_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/new_order_" << log_index;
+  sstream << "logs/new_order";
   new_order_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/payment_" << log_index;
+  sstream << "logs/payment";
   payment_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/order_status_" << log_index;
+  sstream << "logs/order_status";
   order_status_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/delivery_" << log_index;
+  sstream << "logs/delivery";
   delivery_log.open(sstream.str().c_str());
   
   sstream.str("");
-  sstream << "logs/stock_level_" << log_index;
+  sstream << "logs/stock_level";
   stock_level_log.open(sstream.str().c_str());
-  
-  ++log_index;
   
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);

@@ -42,6 +42,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "ut0vec.h"
 #include "fts0fts.h"
 
+#include "trace_tool.h"
+
 /** Dummy session used currently in MySQL interface */
 extern sess_t*	trx_dummy_sess;
 
@@ -742,6 +744,7 @@ struct trx_t{
 	trx_state_t	state;
     timespec    trx_start_time;
     ulint       total_wait_time;
+    transaction_type    type;
 
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by

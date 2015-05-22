@@ -1844,6 +1844,7 @@ lock_rec_create(
   lock->un_member.rec_lock.page_no = page_no;
   lock->un_member.rec_lock.n_bits = n_bytes * 8;
   lock->wait_start = TraceTool::get_time();
+  lock->trx->type = TraceTool::type;
 
   /* Reset to zero the bitmap which resides immediately after the
   lock struct */
@@ -2585,6 +2586,18 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock))
+  {
+    if (lock_get_wait(lock) &&
+        !lock_rec_has_to_wait_in_queue(lock))
+    {
+      lock_grant(lock);
+    }
+  }
+  
+  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2661,25 +2674,24 @@ lock_rec_dequeue_from_page(
       }
       
       // What if I grant only one lock each time?
-      /*
-      lock = lock_rec_get_first_on_page_addr(space, page_no);
-      if (!lock_rec_get_nth_bit(lock, heap_no))
-      {
-        lock = lock_rec_get_next(heap_no, lock);
-      }
-      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-      {
-        if (lock_get_wait(lock))
-        {
-          if (!lock_rec_has_to_wait_in_queue(lock))
-          {
-            lock_grant(lock);
-          }
-        }
-      }
-       */
+//      lock = lock_rec_get_first_on_page_addr(space, page_no);
+//      if (!lock_rec_get_nth_bit(lock, heap_no))
+//      {
+//        lock = lock_rec_get_next(heap_no, lock);
+//      }
+//      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+//      {
+//        if (lock_get_wait(lock))
+//        {
+//          if (!lock_rec_has_to_wait_in_queue(lock))
+//          {
+//            lock_grant(lock);
+//          }
+//        }
+//      }
     }
   }
+   */
 }
 
 /*************************************************************//**

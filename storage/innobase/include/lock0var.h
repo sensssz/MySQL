@@ -48,9 +48,9 @@ NULL if runs out of locks. */
 UNIV_INTERN
 lock_t *
 next_lock(
-  ulint             space_id,   /*!< space id of the record */
-  ulint             page_no,    /*!< page no of the record */
-  ulint             heap_no);   /*!< heap no of the record */
+  ulint space_id,   /*!< space id of the record */
+  ulint page_no,    /*!< page no of the record */
+  ulint heap_no);   /*!< heap no of the record */
 
 /*************************************************************//**
 Clean up resources. */

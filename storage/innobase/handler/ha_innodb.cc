@@ -3432,7 +3432,7 @@ innobase_end(
         mysql_mutex_destroy(&commit_cond_m);
         mysql_cond_destroy(&commit_cond);
     }
-
+  
     DBUG_RETURN(err);
 }
 
