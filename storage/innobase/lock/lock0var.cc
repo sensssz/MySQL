@@ -89,10 +89,28 @@ binary_search(
 {
   int left = 0;
   int right = length - 1;
+  int middle = -1;
+  
+  if (target <= array[0])
+  {
+    return 0;
+  }
+  else if (target >= array[length - 1])
+  {
+    return length - 1;
+  }
   
   while (left <= right)
   {
-    int middle = (left + right) / 2;
+    int new_middle = (left + right) / 2;
+    if (new_middle == middle)
+    {
+      break;
+    }
+    else
+    {
+      middle = new_middle;
+    }
     if (target < array[middle])
     {
       right = middle;

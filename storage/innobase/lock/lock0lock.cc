@@ -2662,12 +2662,12 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
         {
-          double time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          ulint remaing_time = estimate(time_so_far, lock->trx->type);
-          double heuristic =  time_so_far / remaing_time;
+          ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+          ulint remaining_time = estimate(time_so_far, lock->trx->type);
+          double heuristic = remaining_time;
           if (heuristic > max_heuristic)
           {
-            max_heuristic = heuristic;
+            max_heuristic = time_so_far;
             lock_to_grant = lock;
           }
         }
