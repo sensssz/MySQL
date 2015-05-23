@@ -74,7 +74,6 @@ private:
     static __thread timespec call_end;
     static __thread bool new_transaction;
     static __thread timespec trans_start;
-    static __thread transaction_type type;
     
     ofstream log_file;
     static pthread_rwlock_t data_lock;
@@ -96,6 +95,7 @@ public:
     static __thread bool query_is_commit;
     static __thread bool commit_successful;
     static __thread char *query;
+    static __thread transaction_type type;
     static double average_latency;
     static ulint num_of_trans;
     static ulint num_of_rollback;

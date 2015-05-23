@@ -8,6 +8,7 @@
 
 #include "univ.i"
 #include "lock0types.h"
+#include "trace_tool.h"
 
 #include <vector>
 #include <fstream>
@@ -22,7 +23,9 @@ indi_init();
 Estimate remaining time given total time so far. */
 UNIV_INTERN
 ulint
-estimate(ulint time_so_far); /*!< total time so far */
+estimate(
+  ulint             time_so_far,
+  transaction_type  type); /*!< total time so far */
 
 /*************************************************************//**
 Clean up resources. */
