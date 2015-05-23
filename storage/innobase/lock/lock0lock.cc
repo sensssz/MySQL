@@ -2547,6 +2547,33 @@ find_previous(
   return previous;
 }
 
+static
+void
+hash_delete(
+  lock_t *lock,
+  ulint rec_fold)
+{
+  lock_t *node;
+  
+  HASH_ASSERT_OWN(lock_sys->rec_hash, rec_fold)
+  hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+        hash_calc_hash(rec_fold, lock_sys->rec_hash));
+  node = (lock_t *) cell->node;
+  if (node == lock)
+  {
+    cell->node = lock->hash;
+  }
+  else
+  {
+    while (node->hash != lock)
+    {
+      node = (lock_t *) node->hash;
+      ut_a(node);
+    }
+    node->hash = lock->hash;
+  }
+}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2586,6 +2613,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2596,8 +2624,8 @@ lock_rec_dequeue_from_page(
       lock_grant(lock);
     }
   }
+   */
   
-  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2657,8 +2685,7 @@ lock_rec_dequeue_from_page(
       if (first_wait_lock != lock_to_grant)
       {
         // Move the target lock before the first wait lock.
-        HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
-                    rec_fold, lock_to_grant);
+        hash_delete(lock_to_grant, rec_fold);
         lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
         if (first_lock_previous != NULL)
         {
@@ -2672,26 +2699,26 @@ lock_rec_dequeue_from_page(
         }
         lock_to_grant->hash = first_wait_lock;
       }
+      lock_grant(lock_to_grant);
       
-      // What if I grant only one lock each time?
-//      lock = lock_rec_get_first_on_page_addr(space, page_no);
-//      if (!lock_rec_get_nth_bit(lock, heap_no))
-//      {
-//        lock = lock_rec_get_next(heap_no, lock);
-//      }
-//      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-//      {
-//        if (lock_get_wait(lock))
-//        {
-//          if (!lock_rec_has_to_wait_in_queue(lock))
-//          {
-//            lock_grant(lock);
-//          }
-//        }
-//      }
+      lock = lock_rec_get_first_on_page_addr(space, page_no);
+      if (!lock_rec_get_nth_bit(lock, heap_no))
+      {
+        lock = lock_rec_get_next(heap_no, lock);
+      }
+      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+      {
+        if (lock_get_wait(lock))
+        {
+          if (!lock_rec_has_to_wait_in_queue(lock))
+          {
+            remove_candidate(lock, space, page_no, heap_no);
+            lock_grant(lock);
+          }
+        }
+      }
     }
   }
-   */
 }
 
 /*************************************************************//**

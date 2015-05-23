@@ -36,6 +36,16 @@ set_lock_candidate(
   ulint             heap_no);   /*!< heap no of the record */
 
 /*************************************************************//**
+Remove a lock candidate from the list. */
+UNIV_INTERN
+void
+remove_candidate(
+  lock_t *lock,     /*!< candidates */
+  ulint space_id,   /*!< space id of the record */
+  ulint page_no,    /*!< page no of the record */
+  ulint heap_no);   /*!< heap no of the record */
+
+/*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
 void

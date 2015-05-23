@@ -131,7 +131,7 @@ TraceTool *TraceTool::get_instance()
 
 TraceTool::TraceTool() : function_times()
 {
-  log_file.open("logs/trace.log");
+  log_file.open("logs/trace.log", std::ofstream::out | std::ofstream::app);
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
