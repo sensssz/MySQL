@@ -75,6 +75,7 @@ private:
     static __thread bool new_transaction;
     static __thread timespec trans_start;
     
+    
     ofstream log_file;
     static pthread_rwlock_t data_lock;
     vector<vector<ulint> > function_times;
@@ -83,7 +84,7 @@ private:
     unordered_map<lock_info, record_lock *> record_lock_map;
     
     list<lock_time_info> lock_time_infos;
-    os_ib_mutex_t lock_time_mutex;
+    static pthread_mutex_t lock_time_mutex;
     
     TraceTool();
     TraceTool(TraceTool const&){};

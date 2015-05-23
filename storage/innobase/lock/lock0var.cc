@@ -16,7 +16,8 @@
 #include <float.h>
 #include <list>
 
-#define RELATIVE_ERROR 0.05
+// 0.05, 0.1, 0.2, 0.5, 1, 2, 5
+#define RELATIVE_ERROR 0.1
 
 using std::list;
 using std::unordered_map;
@@ -103,8 +104,6 @@ namespace std
   };
 }
 
-static unordered_map<record, list<lock_t *> *> lock_candidates;
-
 static void g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *solution);
 static double g_recursive(parameters &para, ulint size,
                           double *betas, double *gammas, double *beta_stars,
@@ -126,7 +125,7 @@ read_isotonic(
 {
   ifstream isotonic_file(name);
   isotonic_file >> length >> length;
-  TraceTool::get_instance()->get_log() << length << endl;
+//  TraceTool::get_instance()->get_log() << length << endl;
   so_far = (ulint *)malloc(sizeof(ulint) * length);
   estimated = (ulint *)malloc(sizeof(ulint) * length);
   double x = 0;
@@ -171,10 +170,28 @@ binary_search(
 {
   int left = 0;
   int right = length - 1;
+  int middle = -1;
+  
+  if (target <= array[0])
+  {
+    return 0;
+  }
+  else if (target >= array[length - 1])
+  {
+    return length - 1;
+  }
   
   while (left <= right)
   {
-    int middle = (left + right) / 2;
+    int new_middle = (left + right) / 2;
+    if (new_middle == middle)
+    {
+      break;
+    }
+    else
+    {
+      middle = new_middle;
+    }
     if (target < array[middle])
     {
       right = middle;
@@ -245,82 +262,7 @@ estimate(
     y_index = length - 2;
   }
   ulint result = estimate[y_index + 1];
-  TraceTool::get_instance()->get_log() << "estiamted value: " << result << endl;
   return result;
-}
-
-/*************************************************************//**
-Estimate remaining time given total time so far. */
-UNIV_INTERN
-void
-set_lock_candidate(
-  vector<lock_t *>  &locks,     /*!< candidates */
-  ulint             space_id,   /*!< space id of the record */
-  ulint             page_no,    /*!< page no of the record */
-  ulint             heap_no)    /*!< heap no of the record */
-{
-  record rec;
-  rec.space_id = space_id;
-  rec.page_no = page_no;
-  rec.heap_no = heap_no;
-  
-  CTV_schedule(locks);
-  
-  list<lock_t *> *lock_list = lock_candidates[rec];
-  lock_list->insert(lock_list->begin(), locks.begin(), locks.end());
-}
-
-/*************************************************************//**
-Remove a lock candidate from the list. */
-UNIV_INTERN
-void
-remove_candidate(
-  lock_t *lock,     /*!< candidates */
-  ulint space_id,   /*!< space id of the record */
-  ulint page_no,    /*!< page no of the record */
-  ulint heap_no)    /*!< heap no of the record */
-{
-  record record;
-  record.space_id = space_id;
-  record.page_no = page_no;
-  record.heap_no = heap_no;
-  
-  list<lock_t *> *locks = lock_candidates[record];
-  assert(locks != NULL);
-  locks->remove(lock);
-}
-
-/*************************************************************//**
-Return the next lock from the CTV schedule.
-NULL if runs out of locks. */
-UNIV_INTERN
-lock_t *
-next_lock(
-  ulint space_id,   /*!< space id of the record */
-  ulint page_no,    /*!< page no of the record */
-  ulint heap_no)    /*!< heap no of the record */
-{
-  TraceTool::get_instance()->get_log() << "next_lock" << endl;
-  record rec;
-  rec.space_id = space_id;
-  rec.page_no = page_no;
-  rec.heap_no = heap_no;
-  unordered_map<record, list<lock_t *> *>::iterator ite = lock_candidates.find(rec);
-  if (ite == lock_candidates.end())
-  {
-    lock_candidates[rec] = new list<lock_t *>;
-    return NULL;
-  }
-  else if (ite->second->size() > 0)
-  {
-    lock_t *lock = ite->second->back();
-    ite->second->pop_back();
-    return lock;
-  }
-  else
-  {
-    return NULL;
-  }
 }
 
 static
@@ -348,7 +290,7 @@ round(
   double round_factor = RELATIVE_ERROR * mean / 2;
   for (int index = start; index < end; ++index)
   {
-    array[index] = (long) (array[index] / round_factor);
+    array[index] = (int) (array[index] / round_factor);
   }
 }
 
@@ -359,10 +301,10 @@ g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *s
   parameters para;
   para.k = size - 2;
   para.heu = 0;
-  
+
   round(betas, size, 2, size);
   beta_stars[size - 2] = betas[size - 1];
-  for (int index = size - 3; index > 0; --index)
+  for (ulint index = size - 3; index > 0; --index)
   {
     beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
   }
@@ -501,16 +443,19 @@ h_recursive(parameters &para, ulint size,
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
-void
+lock_t *
 CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
 {
-  TraceTool::get_instance()->get_log() << "CTV_schedule" << endl;
-  if (locks.size() < 2)
+  if (locks.size() == 0)
   {
-    return;
+    return NULL;
+  }
+  else if (locks.size() == 1)
+  {
+    return locks[0];
   }
   
-  ofstream &log_file = TraceTool::get_instance()->get_log();
+//  ofstream &log_file = TraceTool::get_instance()->get_log();
   ulint size = locks.size() - 1;
   double *as = new double[size];
   double *betas = new double[size];
@@ -528,9 +473,9 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(time_so_far, lock->trx->type);
   }
-  log_file << "estimated process time" << endl;
+//  log_file << "estimated process time" << endl;
   sort(locks.begin(), locks.end(), compare);
-  log_file << "locks sorted" << endl;
+//  log_file << "locks sorted" << endl;
   
   // The last one is always at the first place
   quadratic_solution[size - 1] = 0;
@@ -553,7 +498,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
       betas[index] = (size - index - 1) * process_time + 2 * as[index];
       gammas[index] = (index + 1 + 1) * process_time - 2 * as[index];
     }
-    log_file << "beta and gamma calcualted" << endl;
+//    log_file << "beta and gamma calcualted" << endl;
     
     beta_stars[size - 2] = betas[size - 1];
     gamma_stars[1] = gammas[1];
@@ -566,16 +511,16 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     {
       gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
     }
-    log_file << "beta_star and gamma_star calculated" << endl;
+//    log_file << "beta_star and gamma_star calculated" << endl;
     
     if (beta_stars[1] < gamma_stars[size - 2])
     {
-      log_file << "using beta" << endl;
+//      log_file << "using beta" << endl;
       g_starter(size, betas, gammas, beta_stars, quadratic_solution);
     }
     else
     {
-      log_file << "using gamma" << endl;
+//      log_file << "using gamma" << endl;
       h_starter(size, betas, gammas, gamma_stars, quadratic_solution);
     }
   }
@@ -600,11 +545,12 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     }
   }
   
-  for (ulint index = 0; index <= size; ++index)
-  {
-    // Store the locks in reverse order
-    locks[size - index] = final_schedule[index];
-  }
+//  for (ulint index = 0; index <= size; ++index)
+//  {
+//    log_file << final_schedule[index]->process_time << ",";
+//    final_schedule[index]->ranking = index;
+//  }
+//  log_file << endl;
   
   delete[] as;
   delete[] betas;
@@ -613,6 +559,8 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   delete[] gamma_stars;
   delete[] quadratic_solution;
   delete[] final_schedule;
+  
+  return locks[0];
 }
 
 /*************************************************************//**
@@ -633,12 +581,5 @@ indi_cleanup()
   free(delivery_estimated);
   free(stock_level_work_wait);
   free(stock_level_estimated);
-  
-  for (unordered_map<record, list<lock_t *> *>::iterator iterator = lock_candidates.begin();
-       iterator != lock_candidates.end(); ++iterator)
-  {
-    delete iterator->second;
-    iterator->second = NULL;
-  }
 }
 

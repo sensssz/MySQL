@@ -45,6 +45,8 @@ double TraceTool::average_latency = 0;
 ulint TraceTool::num_of_trans = 0;
 ulint TraceTool::num_of_rollback = 0;
 
+pthread_mutex_t TraceTool::lock_time_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
 __thread bool TraceTool::commit_successful = true;
@@ -148,7 +150,6 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(50000);
   transaction_types.push_back(NONE);
-  lock_time_mutex = os_mutex_create();
   srand(now_micro());
 }
 
@@ -237,15 +238,15 @@ void TraceTool::end_waiting(lock_request *request)
 void TraceTool::lock_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time, uint num_of_locks)
 {
   lock_time_info info(trans_id, trx_id, work_time, wait_time, num_of_locks);
-  os_mutex_enter(lock_time_mutex);
+  pthread_mutex_lock(&lock_time_mutex);
   lock_time_infos.push_back(info);
-  os_mutex_exit(lock_time_mutex);
+  pthread_mutex_unlock(&lock_time_mutex);
 }
 
 void TraceTool::remove(ulint trx_id)
 {
   int num_removed = 0;
-  os_mutex_enter(lock_time_mutex);
+  pthread_mutex_lock(&lock_time_mutex);
   for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();
        iterator != lock_time_infos.end();
        )
@@ -261,7 +262,7 @@ void TraceTool::remove(ulint trx_id)
       ++iterator;
     }
   }
-  os_mutex_exit(lock_time_mutex);
+  pthread_mutex_unlock(&lock_time_mutex);
 }
 
 void TraceTool::start_new_query()

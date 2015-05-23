@@ -1845,6 +1845,7 @@ lock_rec_create(
   lock->un_member.rec_lock.n_bits = n_bytes * 8;
   lock->wait_start = TraceTool::get_time();
   lock->trx->type = TraceTool::type;
+  lock->ranking = -1;
 
   /* Reset to zero the bitmap which resides immediately after the
   lock struct */
@@ -2447,6 +2448,8 @@ lock_grant(
   timespec now = TraceTool::get_time();
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   lock->trx->total_wait_time += wait_time;
+  
+  lock->ranking = -1;
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2574,6 +2577,64 @@ hash_delete(
   }
 }
 
+static
+lock_t *
+lock_next_to_grant(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no,
+  lock_t *&first_wait_lock)
+{
+  lock_t *lock_to_grant = NULL;
+  int smallest_index = INT_MAX;
+  vector<lock_t *> grantable_locks;
+  lock_t *lock;
+  
+  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space_id, page_no);
+  if (first_lock_on_page == NULL)
+  {
+    return NULL;
+  }
+  
+  if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
+  {
+    lock = lock_rec_get_next(heap_no, first_lock_on_page);
+  }
+  else
+  {
+    lock = first_lock_on_page;
+  }
+  for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+  {
+    if (lock_get_wait(lock))
+    {
+      if (lock->ranking != -1 &&
+          lock->ranking < smallest_index)
+      {
+        smallest_index = lock->ranking;
+        lock_to_grant = lock;
+      }
+      if (first_wait_lock == NULL)
+      {
+        first_wait_lock = lock;
+      }
+      if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
+      {
+        grantable_locks.push_back(lock);
+      }
+    }
+  }
+  
+  if (lock_to_grant != NULL)
+  {
+    return lock_to_grant;
+  }
+  else
+  {
+     return CTV_schedule(grantable_locks);
+  }
+}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2613,7 +2674,6 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2624,15 +2684,15 @@ lock_rec_dequeue_from_page(
       lock_grant(lock);
     }
   }
-   */
   
+  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
       return;
   }
   ulint rec_fold = lock_rec_fold(space, page_no);
-  vector<lock_t *> grantable_locks;
+  
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
@@ -2641,44 +2701,8 @@ lock_rec_dequeue_from_page(
       continue;
     }
     
-    lock_t *lock_to_grant = next_lock(space, page_no, heap_no);
-    
     lock_t *first_wait_lock = NULL;
-    if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
-    {
-      lock = lock_rec_get_next(heap_no, first_lock_on_page);
-    }
-    else
-    {
-      lock = first_lock_on_page;
-    }
-    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-    {
-      if (lock_get_wait(lock))
-      {
-        if (first_wait_lock == NULL)
-        {
-          first_wait_lock = lock;
-          if (lock_to_grant != NULL)
-          {
-            // If lock_to_grant is not NULL, then we just need to
-            // find the first wait lock and we can stop here
-            break;
-          }
-        }
-        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
-        {
-          grantable_locks.push_back(lock);
-        }
-      }
-    }
-    
-    if (lock_to_grant == NULL)
-    {
-      set_lock_candidate(grantable_locks, space, page_no, heap_no);
-      lock_to_grant = next_lock(space, page_no, heap_no);
-    }
-    grantable_locks.clear();
+    lock_t *lock_to_grant = lock_next_to_grant(space, page_no, heap_no, first_lock_on_page);
     
     if (lock_to_grant != NULL)
     {
@@ -2712,13 +2736,13 @@ lock_rec_dequeue_from_page(
         {
           if (!lock_rec_has_to_wait_in_queue(lock))
           {
-            remove_candidate(lock, space, page_no, heap_no);
             lock_grant(lock);
           }
         }
       }
     }
   }
+   */
 }
 
 /*************************************************************//**
