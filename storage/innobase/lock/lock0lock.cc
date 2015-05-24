@@ -2613,7 +2613,6 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2627,8 +2626,8 @@ lock_rec_dequeue_from_page(
       }
     }
   }
-   */
   
+  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2638,7 +2637,7 @@ lock_rec_dequeue_from_page(
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
-    ulint max_heuristic = 0;
+    ulint max_heuristic = ULONG_MAX;
     timespec now = TraceTool::get_time();
     lock_t *lock_to_grant = NULL;
     
@@ -2665,7 +2664,7 @@ lock_rec_dequeue_from_page(
           ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
           ulint remaining_time = estimate(time_so_far, lock->trx->type);
           double heuristic = remaining_time;
-          if (heuristic > max_heuristic)
+          if (heuristic < max_heuristic)
           {
             max_heuristic = time_so_far;
             lock_to_grant = lock;
@@ -2715,6 +2714,7 @@ lock_rec_dequeue_from_page(
       }
     }
   }
+   */
 }
 
 /*************************************************************//**
