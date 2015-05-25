@@ -1,0 +1,163 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand*\HyPL@Entry[1]{}
+\citation{??}
+\citation{??}
+\HyPL@Entry{0<</S/D>>}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}}
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{chaudhuri:can}
+\citation{chaudhuri:estimating}
+\citation{luo:toward}
+\citation{luo:increasing}
+\citation{luo:multi}
+\citation{chaudhuri:can}
+\citation{chaudhuri:estimating}
+\citation{luo:toward}
+\citation{luo:increasing}
+\citation{luo:multi}
+\citation{ahmad:interaction}
+\citation{duggan:performance}
+\citation{gupta:pqr}
+\citation{ganapathi:predicting}
+\citation{ahmad:interaction}
+\citation{ganapathi:predicting}
+\citation{gupta:pqr}
+\citation{duggan:performance}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 99th percentile, standard deviation and average latency in MySQL\relax }}{2}{figure.caption.3}}
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:mysql-var}{{1}{2}{99th percentile, standard deviation and average latency in MySQL\relax }{figure.caption.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces 99th percentile and standard deviation are several folds larger than the average latency in MySQL\relax }}{2}{figure.caption.4}}
+\newlabel{fig:mysql-ratio}{{2}{2}{99th percentile and standard deviation are several folds larger than the average latency in MySQL\relax }{figure.caption.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}}
+\citation{chaudhuri:rethinking}
+\citation{florescu:rethinking}
+\citation{babcock:optimizer}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Identifying the Main Sources\\ of Variance}{3}{section.3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Variance Break Down}{3}{subsection.3.1}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces A static call graph and its corresponding \textit  {variance tree}\relax }}{4}{figure.caption.5}}
+\newlabel{fig:var_break_down}{{3}{4}{A static call graph and its corresponding \textit {variance tree}\relax }{figure.caption.5}{}}
+\newlabel{eq:var-break-down}{{1}{4}{Variance Break Down}{equation.3.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Factor Selection}{4}{subsection.3.2}}
+\newlabel{eq:speci}{{2}{4}{Factor Selection}{equation.3.2}{}}
+\@writefile{loa}{\contentsline {algocf}{\numberline {1}{\ignorespaces Factor Selection\relax }}{5}{algocf.1}}
+\newlabel{alg:factor-selection}{{1}{5}{Factor Selection}{algocf.1}{}}
+\newlabel{eq:resp}{{3}{5}{Factor Selection}{equation.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}VProfiler: A Variance Source Discovery Framework}{5}{subsection.3.3}}
+\@writefile{loa}{\contentsline {algocf}{\numberline {2}{\ignorespaces Work-flow of VProfiler\relax }}{5}{algocf.2}}
+\newlabel{alg:iterative-selection}{{2}{5}{VProfiler: A Variance Source Discovery Framework}{algocf.2}{}}
+\citation{brendan:dtrace}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}DTrace v.s. VProfiler}{6}{subsection.3.4}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Main Sources of Latency Variance in MySQL}{6}{section.4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Experiment Setup}{6}{subsection.4.1}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Main Sources of Variance}{7}{subsection.4.2}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Sources of Variance on HDD\relax }}{7}{table.caption.8}}
+\newlabel{tab:source-hdd}{{1}{7}{Sources of Variance on HDD\relax }{table.caption.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Sources of Variance on SSD\relax }}{7}{table.caption.9}}
+\newlabel{tab:source-ssd}{{2}{7}{Sources of Variance on SSD\relax }{table.caption.9}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.1}\texttt  {Var(buf\_pool\_mutex\_enter)}}{7}{subsubsection.4.2.1}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.2}\texttt  {Var(os\_event\_wait)}}{7}{subsubsection.4.2.2}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.3}\texttt  {Var(img\_btr\_cur\_search\_to\_nth\_level)}}{7}{subsubsection.4.2.3}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Achieving Predictability in\\MySQL}{7}{section.5}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Lock Type Compatibility\relax }}{8}{table.caption.10}}
+\newlabel{tab:compatibility}{{3}{8}{Lock Type Compatibility\relax }{table.caption.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Reducing Contention}{8}{subsection.5.1}}
+\@writefile{loa}{\contentsline {algocf}{\numberline {3}{\ignorespaces \texttt  {buf\_page\_make\_young}\relax }}{8}{algocf.3}}
+\newlabel{alg:buf-page-make-young}{{3}{8}{Spin Lock With Timeout}{algocf.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Spin Lock With Timeout}{8}{subsection.5.2}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Experiment Setup}{8}{subsection.5.3}}
+\@writefile{loa}{\contentsline {algocf}{\numberline {4}{\ignorespaces \texttt  {buf\_page\_make\_young} with spin lock\relax }}{9}{algocf.4}}
+\newlabel{alg:buf-page-make-young-spin}{{4}{9}{Spin Lock With Timeout}{algocf.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Combing Every Possible Method}{9}{subsection.5.4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Evaluation of Fixes for \texttt  {buf\_pool\_mutex\_enter}}{9}{subsection.5.5}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Using Faster Storage}{9}{subsection.5.6}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.7}Variance-away Tuning}{9}{subsection.5.7}}
+\newlabel{fig:all-mean}{{4a}{10}{Average Latency\relax }{figure.caption.13}{}}
+\newlabel{sub@fig:all-mean}{{a}{10}{Average Latency\relax }{figure.caption.13}{}}
+\newlabel{fig:all-throughput}{{4b}{10}{Throughput\relax }{figure.caption.13}{}}
+\newlabel{sub@fig:all-throughput}{{b}{10}{Throughput\relax }{figure.caption.13}{}}
+\newlabel{fig:all-std-mean}{{4c}{10}{Standard Deviation / Mean\relax }{figure.caption.13}{}}
+\newlabel{sub@fig:all-std-mean}{{c}{10}{Standard Deviation / Mean\relax }{figure.caption.13}{}}
+\newlabel{fig:all-99-mean}{{4d}{10}{99th Percentile / Mean\relax }{figure.caption.13}{}}
+\newlabel{sub@fig:all-99-mean}{{d}{10}{99th Percentile / Mean\relax }{figure.caption.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Effect of All Methods Combined\relax }}{10}{figure.caption.13}}
+\newlabel{fig:all-combined}{{4}{10}{Effect of All Methods Combined\relax }{figure.caption.13}{}}
+\newlabel{fig:fix-mean}{{5a}{10}{Average Latency\relax }{figure.caption.14}{}}
+\newlabel{sub@fig:fix-mean}{{a}{10}{Average Latency\relax }{figure.caption.14}{}}
+\newlabel{fig:fix-throughput}{{5b}{10}{Throughput\relax }{figure.caption.14}{}}
+\newlabel{sub@fig:fix-throughput}{{b}{10}{Throughput\relax }{figure.caption.14}{}}
+\newlabel{fig:fix-std-mean}{{5c}{10}{Standard Deviation\relax }{figure.caption.14}{}}
+\newlabel{sub@fig:fix-std-mean}{{c}{10}{Standard Deviation\relax }{figure.caption.14}{}}
+\newlabel{fig:fix-99-mean}{{5d}{10}{99th Percentile\relax }{figure.caption.14}{}}
+\newlabel{sub@fig:fix-99-mean}{{d}{10}{99th Percentile\relax }{figure.caption.14}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Effect of Fixes for \texttt  {buf\_pool\_mutex\_enter}\relax }}{10}{figure.caption.14}}
+\newlabel{fig:fixes}{{5}{10}{Effect of Fixes for \texttt {buf\_pool\_mutex\_enter}\relax }{figure.caption.14}{}}
+\newlabel{fig:storage-mean}{{6a}{10}{Average Latency\relax }{figure.caption.15}{}}
+\newlabel{sub@fig:storage-mean}{{a}{10}{Average Latency\relax }{figure.caption.15}{}}
+\newlabel{fig:storage-throughput}{{6b}{10}{Throughput\relax }{figure.caption.15}{}}
+\newlabel{sub@fig:storage-throughput}{{b}{10}{Throughput\relax }{figure.caption.15}{}}
+\newlabel{fig:storage-std-mean}{{6c}{10}{Standard Deviation/Mean\relax }{figure.caption.15}{}}
+\newlabel{sub@fig:storage-std-mean}{{c}{10}{Standard Deviation/Mean\relax }{figure.caption.15}{}}
+\newlabel{fig:storage-99-mean}{{6d}{10}{99th Percentile/Mean\relax }{figure.caption.15}{}}
+\newlabel{sub@fig:storage-99-mean}{{d}{10}{99th Percentile/Mean\relax }{figure.caption.15}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Effect of Faster Storage Device\relax }}{10}{figure.caption.15}}
+\newlabel{fig:storage}{{6}{10}{Effect of Faster Storage Device\relax }{figure.caption.15}{}}
+\bibstyle{plain}
+\bibdata{predictability}
+\bibcite{ahmad:interaction}{1}
+\bibcite{babcock:optimizer}{2}
+\bibcite{chaudhuri:can}{3}
+\bibcite{chaudhuri:estimating}{4}
+\bibcite{chaudhuri:rethinking}{5}
+\bibcite{duggan:performance}{6}
+\bibcite{florescu:rethinking}{7}
+\bibcite{ganapathi:predicting}{8}
+\bibcite{brendan:dtrace}{9}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Profiler overhead: VProfiler vs. DTrace\relax }}{11}{figure.caption.18}}
+\newlabel{fig:overhead}{{9}{11}{Profiler overhead: VProfiler vs. DTrace\relax }{figure.caption.18}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8}Evaluation of VProfiler}{11}{subsection.5.8}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.8.1}VProfiler vs. DTrace}{11}{subsubsection.5.8.1}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.8.2}VProfiler vs. Naïve Profiler}{11}{subsubsection.5.8.2}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Number of experiments needed for the profiler to find out the main sources of variance\relax }}{11}{figure.caption.19}}
+\newlabel{fig:experiments}{{10}{11}{Number of experiments needed for the profiler to find out the main sources of variance\relax }{figure.caption.19}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{11}{section.6}}
+\newlabel{sec:conclusion}{{6}{11}{Conclusion}{section.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}References}{11}{section.7}}
+\bibcite{gupta:pqr}{10}
+\bibcite{luo:toward}{11}
+\bibcite{luo:increasing}{12}
+\bibcite{luo:multi}{13}
+\newlabel{fig:buf-size-mean}{{7a}{12}{Average Latency\relax }{figure.caption.16}{}}
+\newlabel{sub@fig:buf-size-mean}{{a}{12}{Average Latency\relax }{figure.caption.16}{}}
+\newlabel{fig:buf-size-throughput}{{7b}{12}{Throughput\relax }{figure.caption.16}{}}
+\newlabel{sub@fig:buf-size-throughput}{{b}{12}{Throughput\relax }{figure.caption.16}{}}
+\newlabel{fig:buf-size-std-mean}{{7c}{12}{Standard Deviation\relax }{figure.caption.16}{}}
+\newlabel{sub@fig:buf-size-std-mean}{{c}{12}{Standard Deviation\relax }{figure.caption.16}{}}
+\newlabel{fig:buf-size-99-mean}{{7d}{12}{99th Percentile\relax }{figure.caption.16}{}}
+\newlabel{sub@fig:buf-size-99-mean}{{d}{12}{99th Percentile\relax }{figure.caption.16}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Effect of Buffer Pool Size\relax }}{12}{figure.caption.16}}
+\newlabel{fig:buffer_pool_size}{{7}{12}{Effect of Buffer Pool Size\relax }{figure.caption.16}{}}
+\newlabel{fig:commit-mean}{{8a}{12}{Average Latency\relax }{figure.caption.17}{}}
+\newlabel{sub@fig:commit-mean}{{a}{12}{Average Latency\relax }{figure.caption.17}{}}
+\newlabel{fig:commit-throughput}{{8b}{12}{Throughput\relax }{figure.caption.17}{}}
+\newlabel{sub@fig:commit-throughput}{{b}{12}{Throughput\relax }{figure.caption.17}{}}
+\newlabel{fig:commit-std-mean}{{8c}{12}{Standard Deviation\relax }{figure.caption.17}{}}
+\newlabel{sub@fig:commit-std-mean}{{c}{12}{Standard Deviation\relax }{figure.caption.17}{}}
+\newlabel{fig:commit-99-mean}{{8d}{12}{99th Percentile\relax }{figure.caption.17}{}}
+\newlabel{sub@fig:commit-99-mean}{{d}{12}{99th Percentile\relax }{figure.caption.17}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Effect of Log Flush Policy\relax }}{12}{figure.caption.17}}
+\newlabel{fig:log_flush}{{8}{12}{Effect of Log Flush Policy\relax }{figure.caption.17}{}}

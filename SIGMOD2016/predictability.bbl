@@ -1,0 +1,87 @@
+\begin{thebibliography}{10}
+
+\bibitem{ahmad:interaction}
+Mumtaz Ahmad, Songyun Duan, Ashraf Aboulnaga, and Shivnath Babu.
+\newblock Interaction-aware prediction of business intelligence workload
+  completion times.
+\newblock In {\em Data Engineering (ICDE), 2010 IEEE 26th International
+  Conference on}, pages 413--416. IEEE, 2010.
+
+\bibitem{babcock:optimizer}
+Brian Babcock and Surajit Chaudhuri.
+\newblock Towards a robust query optimizer: a principled and practical
+  approach.
+\newblock In {\em Proceedings of the 2005 ACM SIGMOD international conference
+  on Management of data}, pages 119--130. ACM, 2005.
+
+\bibitem{chaudhuri:can}
+Surajit Chaudhuri, Raghav Kaushik, and Ravishankar Ramamurthy.
+\newblock When can we trust progress estimators for sql queries?
+\newblock In {\em Proceedings of the 2005 ACM SIGMOD international conference
+  on Management of data}, pages 575--586. ACM, 2005.
+
+\bibitem{chaudhuri:estimating}
+Surajit Chaudhuri, Vivek Narasayya, and Ravishankar Ramamurthy.
+\newblock Estimating progress of execution for sql queries.
+\newblock In {\em Proceedings of the 2004 ACM SIGMOD international conference
+  on Management of data}, pages 803--814. ACM, 2004.
+
+\bibitem{chaudhuri:rethinking}
+Surajit Chaudhuri and Gerhard Weikum.
+\newblock Rethinking database system architecture: Towards a self-tuning
+  risc-style database system.
+\newblock In {\em VLDB}, pages 1--10. Citeseer, 2000.
+
+\bibitem{duggan:performance}
+Jennie Duggan, Ugur Cetintemel, Olga Papaemmanouil, and Eli Upfal.
+\newblock Performance prediction for concurrent database workloads.
+\newblock In {\em Proceedings of the 2011 ACM SIGMOD International Conference
+  on Management of data}, pages 337--348. ACM, 2011.
+
+\bibitem{florescu:rethinking}
+Daniela Florescu and Donald Kossmann.
+\newblock Rethinking cost and performance of database systems.
+\newblock {\em ACM Sigmod Record}, 38(1):43--48, 2009.
+
+\bibitem{ganapathi:predicting}
+Archana Ganapathi, Harumi Kuno, Umeshwar Dayal, Janet~L Wiener, Armando Fox,
+  Michael~I Jordan, and David Patterson.
+\newblock Predicting multiple metrics for queries: Better decisions enabled by
+  machine learning.
+\newblock In {\em Data Engineering, 2009. ICDE'09. IEEE 25th International
+  Conference on}, pages 592--603. IEEE, 2009.
+
+\bibitem{brendan:dtrace}
+Brendan Gregg.
+\newblock {DTrace pid Provider return}.
+\newblock
+  \url{http://dtrace.org/blogs/brendan/2011/02/14/dtrace-pid-provider-return/},
+  2011.
+\newblock [Online; accessed 23-Feburary-2015].
+
+\bibitem{gupta:pqr}
+Chetan Gupta, Abhay Mehta, and Umeshwar Dayal.
+\newblock Pqr: Predicting query execution times for autonomous workload
+  management.
+\newblock In {\em Autonomic Computing, 2008. ICAC'08. International Conference
+  on}, pages 13--22. IEEE, 2008.
+
+\bibitem{luo:toward}
+Gang Luo, Jeffrey~F Naughton, Curt~J Ellmann, and Michael~W Watzke.
+\newblock Toward a progress indicator for database queries.
+\newblock In {\em Proceedings of the 2004 ACM SIGMOD international conference
+  on Management of data}, pages 791--802. ACM, 2004.
+
+\bibitem{luo:increasing}
+Gang Luo, Jeffrey~F Naughton, Curt~J Ellmann, and Michael~W Watzke.
+\newblock Increasing the accuracy and coverage of sql progress indicators.
+\newblock In {\em Data Engineering, 2005. ICDE 2005. Proceedings. 21st
+  International Conference on}, pages 853--864. IEEE, 2005.
+
+\bibitem{luo:multi}
+Gang Luo, Jeffrey~F Naughton, and S~Yu Philip.
+\newblock Multi-query sql progress indicators.
+\newblock In {\em Advances in Database Technology-EDBT 2006}, pages 921--941.
+  Springer, 2006.
+
+\end{thebibliography}

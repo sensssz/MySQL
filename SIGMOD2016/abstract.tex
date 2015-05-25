@@ -1,0 +1,27 @@
+%!TEX root = predictability.tex
+
+\begin{abstract}
+Transaction processing is an important part of modern database management
+systems(DBMSs), so a lot of work has been done to improve the performance of
+it. However, few people pay attention to the predictability of performance,
+which is fundamental to many application of database systems such as
+in-cloud database services that provide performance guarantee. The service
+providers will not be able to provide such kind of guarantees unless their
+services are based on database systems with predictable performance.
+
+In this paper, we show that variance of transaction latency is a very
+severe problem in traditional database systems like MySQL. We propose a
+profiling framework called VProfiler that uses the source code of a database
+system to identify the main sources of variance in transaction latency. This
+framework works by breaking down the variance of latency into variances and
+covariances of the execution time of the functions in the source code, which is
+the best source of information about the actual cause of variance. Using MySQL
+as an example, we show its main sources of variance found using our profiling
+framework, and propose two methods to reduce the variance of latency after
+close investigation of these sources. Experiment results show that these
+two methods, when combined, achieve a 42.3\% reduction in 99th percentile.
+Besides these methods, we also demonstrate how using faster storage devices and
+tuning the configuration of MySQL can further improve its performance
+predictability.
+\end{abstract}
+

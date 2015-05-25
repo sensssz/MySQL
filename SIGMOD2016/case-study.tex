@@ -1,0 +1,143 @@
+%!TEX root = predictability.tex
+
+\section{Main Sources of Latency Variance in MySQL}
+
+\subsection{Experiment Setup}
+We used the framework proposed in the previous section on MySQL to find out its
+main sources of latency variance. We ran MySQL with the default configuration
+on two Amazon EC2 m3.large instances running Ubuntu 14.04 LTS, each with 2
+Intel Xeon E5-1670v2 2.5GHz virtual CPUs and 7.5GiB memory. One of them had a
+20GB magnetic disk while the other ones ran on a 20GB SSD. We also had another
+Amazon EC2 m3.medium instance to send queries to these two instances. This
+instance had 1 Intel Xeon E5-1670v2 2.5GHz virtual CPU, 3.75GiB memory and a
+10GB SSD. We used OLTPBenchmark to run the original TPC-C benchmark on this
+instance and sent transactions to MySQL. We used MySQL version 5.6.21 in our
+experiments. In the experiments, we set the value of k to 3 and the threshold
+to be 5\% of the variance of latency.
+
+\subsection{Main Sources of Variance}
+The main sources of variance we found using the framework we proposed in
+section 3 are shown in table \ref{tab:source-hdd} and \ref{tab:source-ssd}.
+Note that the ones marked with an asterisk(*) are specific instances of the
+corresponding factors. Although we set k to 3, we actually found only two
+sources of variance for both. This is because the contribution of some of
+the \textit{factors} with high responsibility values are too small, ie.
+below the threshold(5\% of the overall variance), and therefore are not
+selected.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|} \hline
+Source&Contribution\\ \hline
+\texttt{Var(buf\_pool\_mutex\_enter)}*&32.92\%\\ \hline
+\texttt{Var(img\_btr\_cur\_search\_to\_nth\_level)}&8.3\%\\
+\hline\end{tabular}
+\caption{Sources of Variance on HDD}
+\label{tab:source-hdd}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|} \hline
+Source&Contribution(\%)\\ \hline
+\texttt{Var(buf\_pool\_mutex\_enter)*}&16.89\%\\ \hline
+\texttt{Var(lock\_wait\_suspend\_thread)*}&16.91\%\\
+\hline\end{tabular}
+\caption{Sources of Variance on SSD}
+\label{tab:source-ssd}
+\end{table}
+
+\subsubsection{\texttt{Var(buf\_pool\_mutex\_enter)}}
+Note that this main source of variance is an \textit{instance} of a
+\textit{factor}, instead of the \textit{factor} itself. As its name
+suggests, this function is used to acquire the lock on the buffer pool.
+The buffer pool structure contains many related variables, and several
+lists containing the buffer pages. There are many possible operations on
+the buffer pool, so this function is used in a lot of different places for
+various purposes. Because of its generality, looking at this function by
+itself does not give us much useful information about the cause of its
+variance. We look towards its \textit{instances} instead, and found one 
+with a very high contribution. This function is called within the another 
+function \texttt{buf\_page\_make\_young}, which is used to move a page
+in the buffer pool to the head of the list of buffer pages. InnoDB uses a
+variant of the Least Recently Used(LRU) algorithm as its buffer page
+replacement algorithm. The buffer pages in the buffer pool are organized in a
+list called \texttt{LRU} list in InnoDB. As we can easily tell from its name,
+the pages in this list are kept in the LRU order - descending order of the
+latest access time of each page. Therefore, when a buffer page is accessed, it
+becomes the most recently used page, and should be moved to the head of the
+\texttt{LRU} list(InnoDB uses a variant of the LRU algorithm, so this would not
+happen every time a page is accessed). Since MySQL has a thread for each user,
+a lock on this list must be acquired before any operation can be executed. This
+is where the function \texttt{buf\_pool\_mutex\_enter} comes in. Therefore, the
+variance here is actually the variance of the time function \texttt{buf\_page\_make\_young} spends on waiting for the other functions to release the lock.
+
+\subsubsection{\texttt{Var(os\_event\_wait)}}
+Like the previous one, this source of variance is also a specific instance
+instead of a general factor. \texttt{os\_event} is a high level abstraction of
+condition variables on different platforms, which are used in multi-threaded
+programs for threads to wait for some particular conditions. Therefore, this
+function can also be used for a lot of different purposes. This specific
+instance is used in a function called \texttt{lock\_wait\_suspend\_thread},
+which is related to the locking mechanism of InnoDB. InnoDB implements the
+Multi-Granularity Locking(MGL) mechanism. Innodb have different types of locks,
+including shared locks(S), exclusive locks(X), intention shared locks(IS) and
+intention exclusive locks(IX). Shared locks are used when transactions need to
+read a row while exclusive locks permit transactions to update or delete a row.
+Some transactions, depending on what they do, may need to acquire a lock on an
+entire table instead of a single record. To allow locks of different
+granularity to exist simultaneously, InnoDB introduces intention locks into the
+system. Before a transaction acquires a shared lock on a row in a table, it
+must first acquire an intention shared lock or a stronger lock on that table.
+Similarly, before it acquires an exclusive lock on a row in a table, it must
+first acquire the intention exclusive lock on that table. The compatibility of
+these different types of locks are shown in table \ref{tab:compatibility}('+'
+means compatible, and '-' means conflict). Only when the type of lock a
+transaction tries to acquire is compatible with the existing lock will the
+required lock be granted. These locks also work for indexes.
+
+However, locks are expensive and conflicts do not always occur when
+transactions are executed. To reduce the overhead of locking, InnoDB introduces
+implicit locks into the system. Each record has a field called \texttt{trx\_id}.
+Before a transaction performs any operation on a record, InnoDB checks
+if the transaction associated with the \texttt{trx\_id} is active. If not, the
+\texttt{trx\_id} of the current transaction is written to the record, and the
+intended operation can be carried out immediately without acquiring the lock.
+If the transaction is still, the implicit lock is converted into an explicit
+lock(which means acquiring an explicit lock of the appropriate type on the
+record). If the intended lock type of the current transaction conflicts with
+the explicit lock, the current transaction has to wait for the existing lock to
+be released. Innodb uses the function \texttt{os\_event\_wait} to suspend the
+thread.
+
+\subsubsection{\texttt{Var(img\_btr\_cur\_search\_to\_nth\_level)}}
+\texttt{img\_btr\_cur\_search\_to\_nth\_levelhis} is actually not a real
+function, but rather the \textit{imaginary function} of a function called
+\texttt{btr\_cur\_search\_to\_nth\_level}. An \textit{imaginary function} is,
+as we mentioned before, a virtual function we create to represent the the work
+of a function done by the execution of simple statements without invoking other
+functions. The calculation of its time is fairly easy - subtract the sum of the
+execution time of all \textit{child functions} from that of the \textit{parent
+function}. The parent function, which is \texttt{btr\_cur\_search\_to\_nth\_level}, is a general function for searching in a given index tree and placing 
+a tree cursor on a given level, leaving a shared lock or exclusive lock on the
+cursor page. This is a rather high level function, and there's one important
+loop in this function for searching the index tree until it reaches a certain
+level. A level here corresponds to the height of a node in the tree, and leaf
+nodes have level 0. Therefore, the reason behind the variance of this
+\textit{imaginary function} could be attributed to the variance in the desired
+level.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|c|} \hline
+&S&X&IS&IX\\ \hline
+S & + & - & + & -\\ \hline
+X & - & - & - & -\\ \hline
+IS & + & - & + & +\\ \hline
+IX & - & - & + & +\\
+\hline\end{tabular}
+\caption{Lock Type Compatibility}
+\label{tab:compatibility}
+\end{table}
+
+

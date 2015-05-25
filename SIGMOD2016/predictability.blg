@@ -1,0 +1,46 @@
+This is BibTeX, Version 0.99d (TeX Live 2014)
+Capacity: max_strings=35307, hash_size=35307, hash_prime=30011
+The top-level auxiliary file: predictability.aux
+The style file: plain.bst
+Database file #1: predictability.bib
+You've used 13 entries,
+            2118 wiz_defined-function locations,
+            571 strings with 6536 characters,
+and the built_in function-call counts, 6092 in all, are:
+= -- 647
+> -- 248
+< -- 11
++ -- 97
+- -- 84
+* -- 379
+:= -- 900
+add.period$ -- 51
+call.type$ -- 13
+change.case$ -- 81
+chr.to.int$ -- 0
+cite$ -- 13
+duplicate$ -- 266
+empty$ -- 491
+format.name$ -- 84
+if$ -- 1391
+int.to.chr$ -- 0
+int.to.str$ -- 13
+missing$ -- 12
+newline$ -- 69
+num.names$ -- 26
+pop$ -- 116
+preamble$ -- 1
+purify$ -- 68
+quote$ -- 0
+skip$ -- 204
+stack$ -- 0
+substring$ -- 415
+swap$ -- 116
+text.length$ -- 11
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 52
+warning$ -- 0
+while$ -- 61
+width$ -- 15
+write$ -- 157

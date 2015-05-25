@@ -1,0 +1,666 @@
+%!TEX root = robust_sigmod2015.tex
+
+\section{Our Algorithm}
+\label{sec:algorithm}
+
+In the previous section, we provided the RO formulation of the physical design for databases.  
+Over the past decade, there have been many advances in the theory of RO 
+for solving problems with similar formulations as (\ref{eq:robust}), for many different classes of cost functions and uncertainty sets (see 
+\cite{robust-survey} for a recent survey).
+\ignore{The theory of RO has taken 
+Over the past few years, several breakthroughs  in the theory of  robust optimization have taken place
+with a number of efficient algorithms proposed for non-linear
+and even non-convex problems \cite{robust-simulation, robust-path-dependant, kriging, robust-nonlinear}. 
+In Section \ref{sec:related}, we discuss the merits of these different approaches  in more detail. 
+Here, however, the most relevant to our problem in this paper is the pioneering work of Bertsimas et al. \cite{robust-simulation},  hereon referred to as the BNT algorithm.
+\barzan{say why BNT is most relevant to our discussion}
+As mentioned in Section \ref{sec:?}, finding a robust database design is a non-convex problem with a black-box cost function. 
+That is, we do not have a closed form mathematical expression for predicting  database performance but simply execute the queries in the database and measure their latency or invoke the query optimizer to obtain a query cost estimate. 
+\barzan{While the theory of convex optimization has taken significant strides over the past decade, most of these techniques fail if the
+ underlying cost
+function is not explicitly given or is non-convex.}}
+ Here, the most relevant to our problem is the seminal work of Bertsimas et al. \cite{robust-simulation}, hereon referred  to as the BNT algorithm. 
+Unlike most RO algorithms, BNT does not require the cost function to have a closed-form. 
+% and the costs can be measured through experiments or simulations.
+This makes BNT an ideal match for our database context: our cost function is often the query latency, which does not have an explicit 
+closed-form, i.e., latency can only be \emph{measured} by 
+executing the query itself or \emph{approximated} using the query optimizer's cost estimates. 
+BNT's second strength is that it  does not require convexity: 
+BNT guarantees a global robust solution when the cost function is convex and convergence to a local robust solution even when it is not convex.
+Given the complex nature of modern databases, 
+establishing convexity for query latencies can be difficult (e.g., in some situations, 
+additional load can  reduce latency by improving the cache hit rate \cite{mozafari_sigmod2013}).\footnote{When the cost function is non-convex, the output of existing nominal designers is also only \emph{locally} optimal. Thus, even 
+in these cases,  finding a local robust optimum is still  a worthwhile endeavor.}
+%  studies have reported on the non-linearity and unpredictability of query latencies \cite{X,Y,Z}}. 
+
+In the rest of this section, we first provide  background on the BNT framework in Section \ref{sec:bnt}. 
+Then, in Section \ref{sec:challenges}, 
+we identify the unique challenges that arise in applying BNT to database problems.
+Finally, in Section \ref{sec:cliff}, we propose our BNT-based \system\ algorithm, which overcomes these challenges.
+
+\subsection{The BNT Algorithm}
+\label{sec:bnt}
+
+In this section, we 
+%provide a brief overview of the BNT algorithm. Here, our goal is not to give the formal details of BNT, 
+%but rather to 
+offer a geometric interpretation of the BNT algorithm for an easier understanding of  the main ideas behind  the
+ algorithm.
+%(Interested readers are referred to the Operations Research literature \cite{bnt} for a more formal discussion of the algorithm.)  
+(Interested readers can find a more formal discussion of the algorithm in the Operations Research literature \cite{robust-simulation}.)
+
+%\barzan{in the following if we say `decision' then how can we say that there's uncertainty in the decision! And if we say
+%`workload' how can we say we find a workload?'}
+We use Figure \ref{fig:descent} to illustrate how the BNT algorithm works.
+Here, imagine a simplified world in which each decision is  a $2$-dimensional point in  Euclidean space.
+ Since the environment is noisy or unpredictable, the user demands
+ a decision $x^*$ that comes with some \emph{reliability} guarantees.
+For example, instead of asking for a decision  $x^*$ that simply minimizes $f(x)$,
+the user requires an $x^*$ whose worst-case cost is minimized for arbitrary noise vectors $\Delta x$ within a radius of
+ $\Gamma$, namely:
+
+\begin{equation} 
+x^* = \underset{x}{ArgMin}  \underset{||\Delta x||_2\leq \Gamma}{Max}~~~ f(x + \Delta x)
+\label{eq:robust:bnt}
+\end{equation}
+ 
+Here,  
+$||\Delta x||_2$ is the length (L$_2$-norm) of the noise vectors.
+%\footnote{$||v||_2$ denotes the L$_2$-norm or length of vector $v$.}
+This means that the user expresses her reliability requirement as an uncertainty region,
+here a circle of radius $\Gamma$, 
+and demands that our $f(x^* + \Delta x)$
+still be minimized no matter where the noisy environment moves our initial decision within this region.
+This uncertainty region (i.e., the $\Gamma$-neighborhood)
+is shown as a shaded disc in Figure \ref{fig:descent}.
+
+To meet the user's reliability requirement, the 
+ BNT algorithm takes a starting point, say $\hat x$, and performs a number of iterations as follows.
+In each iteration, BNT first identifies all the points within the $\Gamma$-neighborhood of $\hat x$
+that have the highest cost, called the \emph{worst-neighbors} of $\hat x$. 
+In Figure \ref{fig:descent}, there are four worst-neighbors, shown as $u_1, \cdots, u_4$. 
+Let $\Delta x_1, \cdots, \Delta x_4$ be the vectors that connect $\hat x$ to each of these worst-neighbors, namely
+ $u_i=\hat x + \Delta x_i$ for $i$=$1,2,3,4$.
+ 
+ \begin{figure}[t]
+\vspace{-0.2cm}
+\centering
+\subfigure[]{\includegraphics[height=3cm]{figs/disk-move}\label{fig:descent}}
+\subfigure[]{\includegraphics[height=3cm]{figs/disk-stop}\label{fig:nodescent}}
+\hspace*{0.5cm}
+\vspace{-0.2cm}
+\caption{(a) A descent direction $d^*$ is one that moves away from \emph{all} the worst-neighbors ($\theta_{max}$ $\geq$ $90$\textdegree);
+(b) here, due to the location of the worst-neighbors, no descent direction exists.}
+\vspace{-0.2cm}
+\label{fig:all:descent}
+\end{figure}
+
+Once the worst-neighbors of $\hat x$ are identified, the BNT algorithm finds a direction that moves away from all of them.
+This direction is called the \emph{descent direction}. In our geometric interpretation, a descent direction $\vec{\mathbf{d}}^*$ is one that maximizes the angle $\theta$  in Figure \ref{fig:descent} by halving the reflex angle between the vectors connecting $\hat x$ to $u_1$ and $u_4$. 
+The BNT algorithm then takes a small step along this descent direction to reach a new decision point, say $\hat x'$,
+which will be at a greater distance from all of the worst-neighbors of $\hat x$.
+The algorithm repeats this process by looking for the new worst-neighbors in the $\Gamma$-neighborhood of $\hat x'$. 
+(Bertsimas et al. prove that taking an appropriately-sized step along the descent direction 
+reduces the worst-case cost at each iteration \cite{robust-simulation}.)
+The algorithm ends (i.e., a robust solution is found) when no descent direction can be found. 
+Figure \ref{fig:nodescent} illustrates this situation, as any direction of movement
+ within the $\Gamma$-neighborhood  
+will bring the solution closer to at least one of the 
+worst-neighbors. 
+(Bertsimas et al. prove that this situation can only happen when we reach a local robust minimum, which will also be a global robust minimum when the cost function is convex.)
+
+
+\begin{figure}[!t]
+\centering
+\vspace{-0.2cm}
+\includegraphics[height=4cm]{figs/3d}\label{fig:disk3d}
+%\subfigure[]{\includegraphics[height=4cm]{figs/impossible-descent}\label{fig:impossible:gradient}}
+\vspace{-0.2cm}
+\caption{Geometric interpretation of the  iterations in BNT.}
+\vspace{-0.3cm}
+\label{fig:bnt}
+\end{figure}
+
+To demonstrate this convergence visually,
+we 
+again use a geometric interpretation of the algorithm, as depicted in Figure \ref{fig:disk3d}.
+In this figure, 
+the decision space  consists of two-dimensional real vectors  $(x_1, x_2)\in \mathbb{R}^2$
+and the $f(x_1, x_2)$ surface corresponds to the cost of different
+points in this decision space.
+Here, the $\Gamma$-neighborhood in each iteration of BNT is shown as a transparent disc of radius $\Gamma$.
+Geometrically, to
+move away from the worst-neighbors at each step is equivalent to sliding down this disc
+along the steepest direction
+such that the disc 
+always remains within the cost surface and  parallel to the $(x_1,x_2)$ plane.
+The algorithm ends when this disc's boundary touches 
+the cost surface and cannot be sliced down any further without breaking through the cost 
+surface---this is the case with the bottom-most disc in Figure \ref{fig:disk3d}; when this condition is met,
+ the center of this disc represents a locally robust solution of the problem (marked as $x^*$) and its worst-neighbors 
+lie on the boundary of its disc (marked as $\times$).
+The goal of the BNT algorithm
+is quickly finding such discs and converging  to the locally robust optimum.
+
+The pseudo of  BNT is presented in Algorithm \ref{algo:bnt}.
+Here, 
+$x_k$ is the current decision at the $k$'th iteration.
+As explained above, 
+each iteration consists of two main steps: finding the worst-neighbors (neighborhood exploration, Line $5$) 
+and moving away from those neighbors if possible (local robust move, Lines $7$--$16$). 
+In Section \ref{sec:challenges}, we discuss some of the challenges posed by these steps when applied to 
+physical design problems in databases. 
+
+
+\paragraph{\textbf{Theoretical Guarantees}}
+When $f(x)$ is continuously differentiable with a bounded set of minimum points, 
+Bertsimas et al. \cite{robust-simulation} show that 
+their 
+algorithm converges to the local optimum of the robust optimization problem (\ref{eq:robust:bnt}), as long as 
+the steps sizes $t_k$ (Line \ref{ln:bnt:stepsize} in Algorithm \ref{algo:bnt}) are chosen such that $t_k>0$, $\lim_{k\rightarrow \infty} t_k= 0$, and $\sum_{k=1}^\infty t_k  = \infty$.
+For convex cost surfaces, this solution is also the global optimum.
+(With non-convex surfaces, BNT needs to be repeated from different starting points
+to find multiple local optima and choose one that is more globally  optimal.\footnote{When 
+$f(x)$ is non-convex, the output of  existing designers is also a local optimum. 
+Thus, even in this case, finding local robust optima is still preferable (to a local nominal optimum).}) 
+
+
+\begin{algorithm}[t]
+    \DontPrintSemicolon
+    \LinesNumberedHidden
+    \SetKwInOut{Input}{~Inputs}
+    \SetKwInOut{Output}{Output}
+    \SetKwFunction{FindDescentDirection}{FindDescentDirection}
+    \SetKwData{rsp}{rsp}
+    \SetKwBlock{Proc}{}{end}
+    \SetKw{Subroutine}{subroutine}
+
+    \Input{%$\hat{x}$: initial design,\\
+ 		$\Gamma$: the radius of the uncertainty region,\\
+		$f(x)$: the cost of design $x$}
+    \Output{$x^*$: a robust design, i.e., $x^*=\underset{x}{ArgMin} ~~ \underset{||\Delta x||_2 \leq \Gamma}{Max} ~~ {f(x+\Delta x)}$}
+    \BlankLine
+	\ShowLn $x_1$ $\leftarrow$ pick an arbitrary vector {~~\textbf{//~the initial decision}}\;
+	\ShowLn $k\leftarrow1$ {~~\textbf{//~$k$ is the number of iterations so far}}\;
+	\ShowLn \While{true}{
+		\BlankLine
+		{\underline{\textbf{//~Neighborhood Exploration:}}}\;
+		\ShowLn  \label{ln:bnt:finddescent}   $U$  $\leftarrow$ % $\{x | f(x) = \underset{|x-x_k|<\Gamma}{Max} ~~ {f(x)}\}$
+			Find the set of worst-neighbors of $x_k$ within its $\Gamma$-neighborhood\; \label{ln:bnt:worst}
+		    \BlankLine
+		{\underline{\textbf{//~Robust Local Move:}}}\;
+%		\ShowLn \eIf{\emph{FindDescentDirection($\mathcal{U}_k$) == null} {\textbf{~//no new directions}}\;}
+		\ShowLn  $\vec{\mathbf{d}}^* \leftarrow$ FindDescentDirection($x_k$, $U$)\;
+					{\textbf{//~See Fig \ref{fig:descent} for} FindDescentDirection\textbf{'s geometric intuition and Appendix \ref{app:sec:descent} for its formal definition}}\;
+		\ShowLn \eIf{\emph{~~there is no such direction $\vec{\mathbf{d}}^*$ pointing away from all $u\in U$}\hspace*{-1cm}\;}
+		    	{
+					\ShowLn 	$x^*\leftarrow x_k$  {~~\textbf{//~found a local robust solution}}\;
+					\ShowLn   \Return $x^*$\;
+		     	}
+	     		{
+				\ShowLn  \label{ln:bnt:stepsize}	 $t_k \leftarrow$ choose an appropriate step size \;
+					\ShowLn \label{ln:bnt:move} $x_{k+1} \leftarrow x_k$+$t_k$ $\cdot$ $\vec{\mathbf{d}}^*$  {~\textbf{//~move along the descent direction}}\hspace*{-0.5cm}\;		
+					\ShowLn $k\leftarrow k+1$  {~~\textbf{//~go to next iteration}}\;
+	     		}
+	} % While
+    
+    \BlankLine
+%    \caption{Generic robust optimization via gradient descend \cite{robust-simulation}.}
+  	\caption{Generic robust optimization via gradient descent.}
+    \label{algo:bnt}
+\vspace{-0.2cm}
+\end{algorithm}
+
+\subsection{Challenges of Applying BNT to Database Problems}
+\label{sec:challenges}
+
+
+As mentioned earlier, since BNT does not require a closed-form cost function (or even convexity), it presents itself 
+as the most appropriate technique in the RO literature for solving our physical design problems,
+especially since we want to avoid modifying the  internals of the existing  designers (due to their proprietary nature, see Section \ref{sec:arch}).
+However, BNT still hinges on certain key assumptions  that prevent it from being  directly
+ applicable to our design problem. Next, we discuss each of these requirements and the unique challenges 
+ that
+ they pose in a database context.
+
+\ph{Proper distance metric}  
+ BNT requires  a \emph{proper} distance metric  over the decision space, i.e., 
+one that is symmetric and satisfies the triangle property. E.g., the L2-norm $||x||_2$ is a proper distance over the $m$-dimensional Euclidean space, since $||x_1-x_2||_2+||x_2-x_3||_2\geq ||x_1-x_3||_2 = ||x_3-x_1||_2 $ for any  $x_1,x_2,x_3\in \mathbb{R}^m$. 
+
+\vspace{0.1cm}
+\textbf{Challenge C1.}
+ To define an analogous notion of  uncertainty  in a database context, we need to have a distance 
+metric $\delta(W_1, W_2)$ for any two sets of SQL queries, say $W_1$ and $W_2$, in order to  
+express
+the  uncertainty set of an existing workload $W_0$  as 
+$\{W ~|~ \delta(W_0,W) \leq \Gamma\}$. Note that $\delta$ must be symmetric, triangular, 
+and also capable of capturing the user's notion of a \emph{workload change}.
+To the best of our knowledge, 
+such a distance metric does not currently exist
+ for  database workloads.\cancut{\footnote{While workload drift
+is well-observed in the database community \cite{workload-shift4, workload-shift3, workload-shift2}, quantifying it has received surprisingly little  attention.}}
+
+
+\ph{Finding the worst-neighbors} BNT relies on our ability to find the worst-neighbors $U$ (Algorithm \ref{algo:bnt}, Line \ref{ln:bnt:worst})  in each iteration, which equates to finding  \emph{all} global maxima 
+of the following optimization problem:
+\begin{equation}
+\underset{||\Delta x||_2\leq \Gamma}{ArgMax}~~~ f(x_k + \Delta x)
+\label{eq:worst}
+\end{equation}
+In other words,  
+the worst-neighbors are defined as:
+\begin{equation*}
+U = \{ x_k + \Delta x ~~|~~ f(x_k+\Delta x) = g(x_k), ~~ ||\Delta x||_2\leq \Gamma \}
+\end{equation*}
+where $g(x)$ represents our worst-case cost function, defined as:
+\begin{equation*}
+g(x) = \underset{||\Delta x||_2\leq \Gamma}{Max}~~~ f(x + \Delta x)
+\end{equation*}
+When $g(x)$ is differentiable, finding its global maxima is straightforward, as one can simply take its derivative
+and 
+solve the following equation:
+\begin{equation}
+g'(x)=0
+\label{eq:derivative}
+\end{equation}
+
+All previous applications of the BNT framework have either involved a closed form cost function $f(x)$
+with a differentiable worst-case cost function $g(x)$, 
+ where the worst-neighbors  can be found by solving (\ref{eq:derivative}) 
+ (e.g., 
+ in industrial engineering~\cite{robust-survey} or chip design~\cite{soc}), or
+  a black-box cost function guaranteed to be continuously differentiable
+   (e.g., in designing nano-photonic 
+ telescopes~\cite{robust-simulation}). 
+
+
+\vspace{0.1cm}
+\textbf{Challenge C2.}
+ Unfortunately, 
+ most cost functions of interest in databases are 
+ not closed-form, differentiable, or even continuous.
+For instance, when $f$ is the query latency, it does not have a closed-form; it is  measured either via actual execution or by consulting the query optimizer's cost estimates. Also, even a small modification in the design or 
+the query can cause a drastically different latency, e.g., when a query references a column that is omitted from a materialized view. 
+
+%\tofix{Despite decades of research on regression models for predicting query latencies, accurately predicting the database performance is 
+% still an open problem \cite{X,Y,Z}.}
+ 
+ 
+ \ph{Finding a descent direction}
+ BNT relies on our ability to efficiently find the (steepest) descent direction via a second-order cone program (SOCP) (see Appendix \ref{app:sec:descent}),
+which  requires a continuous domain.\footnote{SOCPs can be solved efficiently via  interior point methods~\cite{convex-book}.}
+
+
+\vspace{0.1cm}
+\textbf{Challenge C3.}
+We cannot use the same SOCP formulation  because the  space of physical designs is not continuous. 
+A physical design, say a set of projections, can be easily encoded as a binary vector. For instance, each 
+projection can be represented as a vector in $\{0,1\}^m$ where  the $i$'th coordinate represents the presence or absence of the 
+$i$'th column in the database. Different column-orders and a set of such structures can also be  encoded using more dimensions.
+However, this and other possible encodings of a database design are inherently discrete. For instance, one
+cannot construct a conventional projection with only $0.3$ of a column--a column is either included in the projection or not.%\footnote{This is not to be confused with sampled or partially materialized views (sampling-based designs will be discussed in Section \ref{sec:?}).}
+
+
+
+\ph{Moving along a descent direction} 
+ BNT assumes that the decision space (i.e., the domain of $x$) is continuous and hence,
+ moving along a descent direction is trivial (Algorithm \ref{algo:bnt}, Line \ref{ln:bnt:move}). 
+In other words, if $x_k$ is a valid decision, then  
+$x_k+t_k \cdot \vec{\mathbf{d}}^*$ 
+is also a valid decision for any given $\mathbf{d^*}$ and $t_k>0$.  
+
+
+\vspace{0.1cm}
+\textbf{Challenge C4.}
+Even when a descent direction is found in the database design space, moving 
+along that direction does not have any database equivalence. In other words, even when our 
+vectors 
+$x_k$ and $\vec{\mathbf{d}}^*$ correspond to legitimate physical designs, 
+$x_k+t_k \cdot \vec{\mathbf{d}}^*$ may no longer be meaningful  since it may not correspond to any legitimate design, e.g., 
+it may involve fractional coordinates for some of the columns depending on the value of $t_k$.
+Thus, we need to establish a different notion of \emph{moving along a descent direction} for 
+database designs.
+
+
+
+In summary, in order to use BNT's principled framework, 
+  we need to  develop 
+analogous techniques in our database context for expressing distance and finding the worst-neighbors,  
+ and also find
+ equivalent  notions 
+for a descent direction and moving along that direction. Next, 
+we explain 
+ how our \system\ algorithm overcomes
+ challenges C1--C4 and uses BNT's framework to 
+find robust physical database designs. 
+ 
+ 
+\subsection{Our Algorithm: CliffGuard}
+\label{sec:cliff} 
+
+In this section, we propose our novel algorithm, called \system,  which builds upon  BNT's 
+principled 
+ framework by tailoring it to the problem of physical database design. 
+ 
+ 
+Before presenting our algorithm, we need to clarify a few notional differences. Unlike BNT, where the cost function $f(x)$ takes a 
+single parameter $x$, the cost in \system\ is denoted as a two-parameter function $f(W, D)$ where $W$ is a given workload
+ and $D$ is a given physical design. In other words, each point $x$ in our space is a pair of elements $(W,D)$. However,
+ unlike BNT where vector $x$ can be updated in its entirety, in \system\ (or any database designer) 
+ we only update the design element $D$;
+ this is because the database designer can propose a new physical design to the user, but    cannot
+ impose a new  workload on her as a means to  improve robustness.
+ 
+Algorithm \ref{algo:cliff} presents the pseudo code for \system.
+Like Algorithm \ref{algo:bnt}, Algorithm \ref{algo:cliff} iteratively  explores a neighborhood  to find the worst-neighbors, 
+then moves farther away from these neighbors in each iteration using an appropriate direction and step size.
+However, to apply these ideas in a database context (i.e., addressing challenges C1--C4 from Section \ref{sec:challenges}), Algorithm \ref{algo:cliff} differs from Algorithm \ref{algo:bnt}
+in the following important ways. 
+
+\paragraph{\textbf{Initialization (Algorithm \ref{algo:cliff}, Lines \ref{ln:initD}--\ref{ln:cliff:sample})}}
+ \system\  starts by invoking the existing (nominal) designer $\mathbb{D}$ to find a nominal design 
+ $D$ for the initial workload $W_0$. (Later, this design $D$ will be repeatedly replaced by designs that are more robust.)
+ \system\ also creates a finite set of perturbed workloads $P=\{W_1,\cdots,W_n\}$ by
+ sampling the workload space  in the $\Gamma$-neighborhood of $W_0$.
+ In other words, given a distance metric $\delta$, we find 
+$n$ workloads $W_1,\cdots,W_n$ such that 
+  $\delta(W_i, W_0)\leq \Gamma$ for $i=1,2,\cdots,n$.
+ (Section \ref{sec:distance} discusses how to define $\delta$ for database workloads, how to choose $n$, and how 
+ to sample the workload space efficiently.) 
+  Next, as in BNT, \system\ starts an iterative search with a neighborhood exploration and a robust local move in each iteration.
+  
+\paragraph{\textbf{Neighborhood Exploration (Algorithm \ref{algo:cliff}, Line \ref{ln:cliff:worst})}} 
+To find the worst-neighbors, in \system\ we need to also take the current design $D$ into account (i.e., 
+ the set of worst-case neighbors of $W_0$ will depend on the physical design that we choose).
+Given that we cannot rely on the differentiability (or even continuity) of our worst-case cost function (Challenge C2), we use the worst-case 
+costs on our sampled workloads $P$ a proxy; instead of solving 
+\begin{equation}
+\underset{\delta(W, W_0)\leq \Gamma}{Max}~f(W,D)
+\label{eq:actual}
+\end{equation}
+we  solve 
+\begin{equation}
+\underset{W\in P}{Max}~f(W,D)
+\label{eq:proxy}
+\end{equation}
+Note that (\ref{eq:proxy}) cannot provide an unbiased approximation for (\ref{eq:actual}) simply 
+because $P$ is a finite sample and finite samples lead to biased estimates for extreme statistics such as 
+  min and max \cite{van2000asymptotic}. Thus, we do not rely on the nominal value of (\ref{eq:proxy}) to
+  evaluate the quality of our design. Rather, we use the solutions to (\ref{eq:proxy}) as a proxy 
+  to guide our search in moving away from 
+  highly (though not necessarily the most) expensive
+  neighbors.
+  In our implementation, to further mitigate this sampling bias, we
+  loosen our selection criterion: 
+  instead of selecting only those workloads that have the maximum cost,
+  we select all neighbors that have a high-enough cost, say the top-K or top $20\%$  in terms of their worst-case cost. To implement this step, we simply enumerate
+  each workload in $P$ and measure its latency on the given design. 
+%  \barzan{(Speeding up these latency measurements  will be discussed in Section \ref{sec:??}.)}
+
+\paragraph{\textbf{Robust Local Move (Algorithm \ref{algo:cliff}, Lines \ref{ln:cliff:move:start}--\ref{ln:cliff:move:end})}}  
+To find equivalent database notions for a descent direction [C3] and movement along a direction [C4],
+ we use the following idea. 
+The ultimate goal of finding and moving along a descent direction is to reduce the worst-case cost of the current design.
+In \system, we can achieve this goal directly by \emph{manipulating}
+the existing designer by 
+feeding it a mixture of the existing workload and its worst-neighbors as a single workload.\footnote{Remember that existing designers only take a single workload as their input parameter.}
+The intuition is that  
+since nominal designers (by definition) produce designs that minimize the cost of their input workload, 
+the cost of our previous worst-neighbors will no longer be as high, which is equivalent to moving our design farther away 
+from those worst-neighbors.
+The questions then are (i) how do we mix these workloads, and (ii) what if the designer's output leads to a higher worst-case cost? 
+
+The answer to the first question is a weighted union, where we take the union of all the queries in the original workload as well
+as those in the worst-neighbors,
+after weighting the latter queries according to a scaling factor $\alpha$, 
+their individual frequencies of occurrence in their workload, and their latencies against the current design. 
+Taking latencies and frequencies into account encourages 
+ the nominal  designer to seek designs that reduce the cost of more expensive and/or popular queries. 
+ Scaling factor $\alpha$, which serves the same purpose as step-size in BNT, allows \system\ to control the distance of movement away from the worst-neighbors.
+ 
+ 
+We also need to address question (ii) because unlike BNT, where the step size $t_k$ could 
+be computed to ensure a reduction in the worst cost, here our $\alpha$ factor
+may  in fact lead to a worse design (e.g., by moving too far from the original workload). 
+To solve this problem, \system\ dynamically adjusts
+ the step-size using a common technique called \emph{backtracking line search} \cite{convex-book},
+which has a similar main idea as a binary-search.
+ Each time the algorithm succeeds in moving away from 
+ the worst-neighbors, we consider a larger step size (by a factor $\lambda_{success}>1$) 
+ to speed up the search towards the robust solution, and each time we fail, we 
+ reduce the step size
+ (by a factor $0<\lambda_{failure}<1$) 
+as we may have moved past the robust solution (hence observing a higher worst-case cost).
+
+  
+\paragraph{\textbf{Termination (Algorithm \ref{algo:cliff},  Lines \ref{ln:cliff:termination}--\ref{ln:cliff:return})}}  
+We repeat this process until we 
+ find a local robust optimum (or
+ reach the maximum number of steps, when a under time constraint).
+
+
+
+\begin{algorithm*}[th]
+    \DontPrintSemicolon
+    \LinesNumberedHidden
+    \SetKwInOut{Input}{~Inputs}
+    \SetKwInOut{Output}{Output}
+    \SetKwFunction{FindDescentDirection}{FindDescentDirection}
+    \SetKwData{rsp}{rsp}
+    \SetKwBlock{Proc}{}{end}
+    \SetKw{Subroutine}{subroutine}
+
+    \Input{%$\hat{x}$: initial design,\\
+ 		$\Gamma$: the desired degree of robustness,\\
+		$\delta$: a distance metric defined over pairs of workloads,\\
+		$W_0$: initial workload,\\
+		$\mathbb{D}$: a existing (nominal) designer,\\
+		$f$: the cost function (or its estimate),\\
+		%$\lambda_{\text{success}}$: success coefficient, \\
+		%$\lambda_{\text{failure}}$: failure coefficient, \\
+		%$\mathbb{D}(W)$ is the nominal design for workload $W$
+		}
+    \Output{$D^*$: a robust design, i.e., $D^*=\underset{D}{ArgMin} ~~ \underset{\delta(W-W_0) \leq \Gamma}{Max} ~~ {f(W, D)}$}
+    \BlankLine
+	\ShowLn \label{ln:initD} $D\leftarrow \mathbb{D}(W_0)$ ~~    	\textbf{//~Invoke the existing designer to find a nominal design for $W_0$\hspace*{-0.5cm}}\;
+	\ShowLn \label{ln:cliff:sample} $P\leftarrow \{W_1, \cdots, W_n ~~|~~ \delta(W_i,W) \leq \Gamma\}$ ~~\textbf{//~Sample some perturbed workloads in the $\Gamma$-neighbor of $W_0$} \barzan{remove indices? add tilde? now looks like a set of sequences!}\;
+	\ShowLn Pick some $\alpha>0$ ~~\textbf{//~some initial size for the descending steps}\;
+	
+	\BlankLine
+	\ShowLn \While{true}{
+		{\underline{\textbf{//~Neighborhood Exploration:}}}\;
+		$f_i\leftarrow f(W_i, D)$ ~~\textbf{//~Measure the performance of the sampled workloads on the current design $D$\hspace*{-0.5cm}}\barzan{I don't know how to express this. should i say for all i, or for all Wi in P, or just get rid of this step coz it will get confusing w/ fi's for tilde Wi's?}\;
+		\ShowLn  \label{ln:cliff:worst}  $U \leftarrow \{\tilde W_1, \cdots, \tilde W_m\}$ where $\tilde{W_i}$$\in$$P$ and 
+			$f$($\tilde{W}_i$, $D$)$=\underset{W\in P}{Max}$~$f$($W$,$D$) \textbf{//~Pick perturbed workloads with the worst performance on $D$\hspace*{-0.5cm}}\; \barzan{do we use $U$ or $\mathcal{U}$ for worst-neighbors?}
+		\BlankLine
+		{\underline{\textbf{//~Robust Local Move:}}}\;
+%		\ShowLn \eIf{\emph{FindDescentDirection($\mathcal{U}$) == null} {\textbf{~//no new directions}}\;}
+		\ShowLn \label{ln:cliff:move:start} $W_{moved}\leftarrow$ MoveWorkload($W_0, \{\tilde W_1, \cdots ,\tilde W_m\}, f, D, \alpha$) ~\textbf{//Build a new workload by moving  closer to $W_0$'s worst-neighbors (see Alg. \ref{algo:merge})}\hspace*{-0.5cm}\; 
+		\ShowLn $D'\leftarrow \mathbb{D}(W_{moved})$ \textbf{//~consider the nominal design for $W_{moved}$ as an alternative design}\;
+		\BlankLine
+		
+		\ShowLn \eIf{$\underset{W\in P}{Max}~f(W, D') < \underset{W\in P}{Max}~f(W, D)$ ~~\textbf{//~Does $D'$ improve on the existing design in terms of the  worst-case performance?} \barzan{this should actually be Avg, but how can i explain it?}\;}
+		    	{
+					\ShowLn 	$D\leftarrow D'$ ~~\textbf{//~Take $D'$ as your new design} \label{ln:a} \; \label{ln:b} 
+					\ShowLn   $\alpha \leftarrow \alpha * \lambda_{success} ~~(\text{for some}~~\lambda_{success}>1)$ ~~\textbf{//~increase the step size for the next move along the descent direction}\;
+		     	}
+	     		{
+					\ShowLn \label{ln:cliff:move:end}  $\alpha \leftarrow \alpha * \lambda_{failure}  ~~(\text{for some}~~\lambda_{failure}<1)$ ~~\textbf{//~consider a smaller step next time}\;
+	     		}
+		\ShowLn \label{ln:cliff:termination} \If{\emph{~~your time budget  is exhausted or many iterations have gone with no improvements}\;}
+			{
+				$D^*\leftarrow D$ ~\textbf{//~the current design is robust \barzan{should i say local?}}\;
+				\ShowLn \label{ln:cliff:return}  \Return $D^*$\;			
+			}	
+	} % While
+    
+    \BlankLine
+%    \caption{Generic robust optimization via gradient descend \cite{robust-simulation}.}
+\vspace{-0.2cm}
+  	\caption{The \system\ algorithm.}
+    \label{algo:cliff}
+\end{algorithm*}
+
+\section{Expressing Robustness Guarantees}
+\label{sec:distance}
+
+In this section, we define a database-specific distance metric $\delta$ so that users can express their robustness requirements by specifying a $\Gamma$-neighborhood (as an uncertainty set, described in Section~\ref{sec:statement}) around a given workload $W_0$, 
+and demanding that their design must be robust for any future workload $W$ as long as $\delta(W_0, W)\leq \Gamma$.
+ \cancut{Thus, user can demand arbitrary degrees of robustness according to their 
+performance requirements. 
+For mission-critical applications more sensitive to sudden performance drops, users can be more conservative (specifying a larger  $\Gamma$). At the other extreme, when users expect no change or are less sensitive to it,
+ they can fall back to 
+the nominal case ($\Gamma=0$).}
+
+
+A distance metric $\delta$ must satisfy the following 
+criteria to  
+be effectively used in our BNT-based framework
+ (Appendix \ref{app:advanced:distance} provides the intuition behind these criteria):
+\begin{enumerate}[(a)]
+\item \emph{Soundness}, which requires that the smaller the distance $\delta(W_1, W_2)$, the better the performance of $W_2$ on $W_1$'s nominally optimal design. Formally, we call a distance metric \emph{sound} if it that satisfies:
+\begin{equation}
+\delta(W_1, W_2) \leq \delta(W_1, W_3) \Rightarrow f(W_2, \mathbb{D}(W_1)) \leq f(W_3, \mathbb{D}(W_1))
+\label{eq:dist:criteria}
+\end{equation}
+\item $\delta$ should account for intra-query similarities; that is, if $r_i^1 > r_i^2$ and $r_j^1 < r_j^2$, 
+the distance $\delta(W_1, W_2)$ should become smaller based the similarity of the queries $q_i$ and $q_j$, assuming the
+same frequencies for the other queries.
+
+\item $\delta$ should be symmetric; that is, $\delta(W_1, W_2) = \delta(W_2, W_1)$ for any $W_1$ and $W_2$. (This is needed for the
+theoretical guarantees of the BNT framework.) \barzan{should we say this?}
+
+%Uncomment this in the better version of this paper!
+%\item Ideally, $d(.)$ should penalize workloads that have many queries with small frequencies.
+%\item Ideally, the distance metric should also support a number of user-specified parameters that allow for
+%for fine-turning of the distance metric for different applications, systems, and design problems. 
+
+\item $\delta$ must satisfy the \emph{triangular property}; that is, $\delta(W_1,W_2)\leq \delta(W_1,W_3) + \delta(W_3,W_2)$ for 
+any $W_1, W_2, W_3$. (This is an implicit assumption in almost all gradient-based optimization techniques, including BNT.)
+
+\end{enumerate}
+
+Before introducing a distance metric fulfilling these criteria, we need to introduce some notations.  
+Let us represent each  query as the union of all the columns that appear in it (e.g., unioning all the columns in the 
+\bmfont{select}, \bmfont{where}, \bmfont{group by}, and \bmfont{order by} clauses). 
+With this over-simplification, two queries will be considered identical as long as they reference the same set of columns, even if their SQL
+expressions, query plans, or latencies are substantially different. 
+Using this representation, there will be only $2^n-1$ possible queries where 
+ $n$ is the total number of columns 
+ in the database (including all the tables). (Here, we ignore queries that do not reference any columns.)
+Thus, we can represent a workload $W$ with a $(2^n-1)$-dimensional vector $V_W=\langle r_1, \cdots, r_{2^n-1}\rangle$
+where $r_i$ represents the normalized frequency of queries that are represented by the $i$'th subset of the columns for 
+$i=1,\cdots,2^n-1$.
+With this notation, we can now introduce our Euclidean distance for database workloads as:
+\begin{equation}
+\delta_{euclidean}(W_1, W_2 ) = |V_{W_1} -V_{W_2}| \times S \times |V_{W_1} - V_{W_2}|^T
+\label{eq:euclidean}
+\end{equation}
+Here, $S$ is a  $(2^n-1)\times (2^n-1)$ similarity matrix, where the 
+$S_{i,j}$ entry is defined as the total number of columns that are present only in $q_i$ or $q_j$ (but not in both), divided by $2\times n$.
+ In other words, $S_{i,j}$ is the Hamming distance between the binary representations of $i$ and $j$, divided by $2\times n$.
+Hamming distances are divided by $2\times n$ to ensure a normalized distance, i.e., 
+ $0\leq \delta_{euclidean}(W_1, W_2)\leq 1$.
+
+One can easily verify that $\delta_{euclidean}$ satisfies criteria (b), (c), and (d).
+In Section \ref{sec:expr:distance}, we empirically show that this distance metric also satisfies criterion (a) quite well.
+Finally, even though $V_W$ is exponential in the number of columns $n$, 
+it is merely a conceptual model; in practice, $\delta_{euclidean}$ can be easily computed in $O(T^2\cdot n)$ time and memory complexity, where $T$ is the number of input queries (say in a given query log). This is because  
+$V_W$ is an extremely sparse matrix, and most of the computation in (\ref{eq:euclidean}) can be avoided.
+
+\vspace{0.1cm}
+\noindent{\textbf{Limitations.}} $\delta_{euclidean}$ has a few limitations. 
+First,
+it does not factor in the clause in which a column appears. 
+For instance, 
+for fast filtering, it is more important for a materialized view to cover a column appearing in the \bmfont{where} clause than one appearing only in the \emph{select} clause.
+This limitation, however, can be easily resolved by
+representing each query as a $4$-tuple $\langle v_1, v_2, v_3, v_4\rangle$ where $v_1$ is the set of columns in
+ the \bmfont{select} clause and so on. Equation (\ref{eq:euclidean}) can be adjusted in a straightforward manner.
+ 
+ The second (and more important) limitation  is that $\delta_{euclidean}$ ignores many aspects of the SQL expression
+that can lead to drastically different latencies even if identical column sets are accessed. 
+For instance, $\delta_{euclidean}$ would ignore \bmfont{join} operators or even different query plans for the same query, although these can heavily impact the respective workload execution times.
+In fact, as a stricter version of requirement (\ref{eq:dist:criteria}), 
+ a better distance metric will be one that for all workloads $W_1, W_2, W_3$ and \emph{arbitrary} design $D$ satisfies:
+\begin{eqnarray}
+\delta(W_1, W_2) \leq \delta(W_1, W_3) & \Rightarrow & \\
+ |f(W_2, D)-f(W_1, D)| & \leq & |f(W_3, D)-f(W_1, D)| \nonumber
+\label{eq:dist:criteria:strong}
+\end{eqnarray}
+
+ In other words, the distance functions should directly match the performance characteristics of the workloads
+ (the lower their distance, the more similar their performance).
+ In Appendix \ref{app:advanced:distance},
+we introduce a more advanced  metric that aims to satisfy (\ref{eq:dist:criteria:strong}).
+However, in our experiments, we still use $\delta_{euclidean}$ for three reasons. 
+
+First, requirement (\ref{eq:dist:criteria:strong}) is unnecessary for our purposes. \system\ 
+only relies on this distance metric during the neighborhood exploration and feeds \emph{actual} SQL queries (and not just 
+their column sets) into the existing designer. 
+Internally, the existing designer
+  compares the actual latency of different SQL queries, accounting for their different plans, joins, and all other
+details of every input query. E.g., the designer  ignores the less expensive queries to spend its budget on the more expensive ones.
+
+Second, we must be able to efficiently sample the $\Gamma$-neighborhood of a given workload
+ (see Algorithm \ref{algo:cliff}, Line \ref{ln:cliff:sample}), which we can do  when our cost function is $\delta_{euclidean}$.
+The sampling  algorithm (which can be found in  Appendix \ref{app:sampling}) 
+becomes computationally prohibitive when our distance metric involves computing
+the latency of different queries. 
+In Section \ref{sec:experiments}, we thoroughly evaluate our \system\ algorithm overall, and our distance function in particular.
+
+
+The third, and final, reason is that the sole goal of our distance metric is to provide users a means to express and receive their desired degree of robustness. We show that  despite its  simplistic nature, $\delta_{euclidean}$ is still quite
+effective in satisfying (\ref{eq:dist:criteria}) (see Section \ref{sec:expr:distance}),
+%\cancut{and to some extent even (\ref{eq:dist:criteria:strong}) 
+%(see Section \ref{sec:expr:?}),} 
+and most importantly in enabling \system\  
+to achieve decisive superiority over existing designers (see Section \ref{sec:expr:quality}).
+
+In the end,  we 
+note that \emph{quantifying} the amount of change in SQL workloads is a research direction that will likely find many other  applications beyond robust  physical designs, e.g., in 
+%concept shift detection~\cite{concept-shift}, 
+workload monitoring \cite{workload-shift4, workload-shift2}, auto-tuning~\cite{oracle-viewindex}, or simply studying database usage patterns. We  believe that 
+$\delta_{euclidean}$ is merely a starting point in the development of more advanced and application-specific distance metrics for database workloads. 
+
+
+
+\begin{algorithm}[t]
+    \DontPrintSemicolon
+    \LinesNumberedHidden
+    \SetKwInOut{Input}{~Inputs}
+    \SetKwInOut{Output}{Output}
+    \SetKwFunction{MoveWorkload}{MoveWorkload}
+    \SetKwBlock{Proc}{}{end}
+    \SetKw{Procedure}{Subroutine}
+
+    \Input{$W_0$: an initial workload,\\
+	      $\{\tilde W_1, \cdots ,\tilde W_m\}$: workloads to merge with $W_0$,\\
+	      $f$: the cost function (or its estimate),\\
+	      $D$: a given design,\\
+	      $\alpha$: a scaling factor for the weight ($\alpha>0$)\\
+}
+    \Output{$W_{moved}$: a new (merged) workload which is closer to $\{\tilde W_1, \cdots ,\tilde W_N\}$ than $W_0$, 
+    i.e., $\Sigma_i \delta(\tilde W_i, W_{moved}) < \Sigma_i \delta(\tilde W_i, W_0)$}
+    \BlankLine
+    
+    \BlankLine
+    \Procedure \MoveWorkload($W_0, \{\tilde W_1, \cdots ,\tilde W_m\}, f, D, \alpha$)
+    \Proc{
+    \BlankLine
+    \ShowLn   $W_{moved}\leftarrow \{\}$\;
+    \ShowLn   $Q\leftarrow$ the set of all queries in $W_0$ and $\tilde W_1, \cdots ,\tilde W_m$ workloads\;
+    \ShowLn   \ForEach{\emph{query~} $q\in Q$}
+    	{
+ 		\ShowLn   $f_q\leftarrow f(\{q\}, D)$ ~~\textbf{//~the cost of query $q$ using design $D$}\;
+	    	\ShowLn   $\omega_q \leftarrow (f_q \cdot \sum_{i=1}^{m} \text{weight$(q, \tilde W_i)$})^\alpha + \text{weight($q, W_0$)}$\;
+		\ShowLn   $W_{moved}\leftarrow W_{moved}\cup \{(q, \omega_q)\}$\;
+	    }
+    \ShowLn   \Return $W_{moved}$\;	
+    }		
+  	\caption{The subroutine for moving a workload.}
+
+    \label{algo:merge}
+\end{algorithm}
+
+

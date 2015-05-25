@@ -1,0 +1,26 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Related\040Work}{}% 2
+\BOOKMARK [1][-]{section.3}{Identifying\040the\040Main\040Sources\040of\040Variance}{}% 3
+\BOOKMARK [2][-]{subsection.3.1}{Variance\040Break\040Down}{section.3}% 4
+\BOOKMARK [2][-]{subsection.3.2}{Factor\040Selection}{section.3}% 5
+\BOOKMARK [2][-]{subsection.3.3}{VProfiler:\040A\040Variance\040Source\040Discovery\040Framework}{section.3}% 6
+\BOOKMARK [2][-]{subsection.3.4}{DTrace\040v.s.\040VProfiler}{section.3}% 7
+\BOOKMARK [1][-]{section.4}{Main\040Sources\040of\040Latency\040Variance\040in\040MySQL}{}% 8
+\BOOKMARK [2][-]{subsection.4.1}{Experiment\040Setup}{section.4}% 9
+\BOOKMARK [2][-]{subsection.4.2}{Main\040Sources\040of\040Variance}{section.4}% 10
+\BOOKMARK [3][-]{subsubsection.4.2.1}{Var\(buf_pool_mutex_enter\)}{subsection.4.2}% 11
+\BOOKMARK [3][-]{subsubsection.4.2.2}{Var\(os_event_wait\)}{subsection.4.2}% 12
+\BOOKMARK [3][-]{subsubsection.4.2.3}{Var\(img_btr_cur_search_to_nth_level\)}{subsection.4.2}% 13
+\BOOKMARK [1][-]{section.5}{Achieving\040Predictability\040inMySQL}{}% 14
+\BOOKMARK [2][-]{subsection.5.1}{Reducing\040Contention}{section.5}% 15
+\BOOKMARK [2][-]{subsection.5.2}{Spin\040Lock\040With\040Timeout}{section.5}% 16
+\BOOKMARK [2][-]{subsection.5.3}{Experiment\040Setup}{section.5}% 17
+\BOOKMARK [2][-]{subsection.5.4}{Combing\040Every\040Possible\040Method}{section.5}% 18
+\BOOKMARK [2][-]{subsection.5.5}{Evaluation\040of\040Fixes\040for\040buf_pool_mutex_enter}{section.5}% 19
+\BOOKMARK [2][-]{subsection.5.6}{Using\040Faster\040Storage}{section.5}% 20
+\BOOKMARK [2][-]{subsection.5.7}{Variance-away\040Tuning}{section.5}% 21
+\BOOKMARK [2][-]{subsection.5.8}{Evaluation\040of\040VProfiler}{section.5}% 22
+\BOOKMARK [3][-]{subsubsection.5.8.1}{VProfiler\040vs.\040DTrace}{subsection.5.8}% 23
+\BOOKMARK [3][-]{subsubsection.5.8.2}{VProfiler vs. Naïve Profiler}{subsection.5.8}% 24
+\BOOKMARK [1][-]{section.6}{Conclusion}{}% 25
+\BOOKMARK [1][-]{section.7}{References}{}% 26

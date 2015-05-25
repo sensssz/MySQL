@@ -1,0 +1,103 @@
+%!TEX root = predictability.tex
+
+\section{Related Work}
+Although relatively ignored compared to performance of transaction processing,
+performance predictability has received some significant interest from the
+research community. Studies have been done regarding query progression
+indication and query performance prediction, architecture redesign and
+predictability improvement.
+
+\textbf{Query Progress Indication and Query Performance Prediction} There has
+been significant work \cite{chaudhuri:can, chaudhuri:estimating, luo:toward, 
+luo:increasing, luo:multi} about query progress indicators, which are used to
+estimate the progress of long-running queries. In \cite{chaudhuri:can, 
+chaudhuri:estimating, luo:toward, luo:increasing}, a set of techniques are
+proposed to keep track of how much of a query has been completed and 
+continuously estimate the remaining query execution time. These query progress
+indicator, however, are single-query indicators, which means that they only
+take the current workload and the estimated query into consideration, ignoring
+the impact from all other currently running queries. A query indicator that
+handles the performance impact of current queries is proposed in
+\cite{luo:multi}, which even considers the influence of queries expected to
+arrive in the future.
+
+There are also work \cite{ahmad:interaction, duggan:performance, gupta:pqr,
+ganapathi:predicting} about predicting the performance of queries that are not
+yet executed. \cite{ahmad:interaction} proposes an approach to predict the
+total execution time of a query workload consisting of different types of
+queries that are executed concurrently. However, this paper focuses on
+predicting the execution time of the whole workload, and does not address the
+problem of predicting execution time of individual queries.
+
+In \cite{ganapathi:predicting}, Archana \textit{et al.} propose a system that
+uses machine learning techniques to predict multiple performance matrices of
+database queries, including(but not limited to) records used, I/O operations
+and most importantly, query latency. The drawback of this paper is that it
+does not deal with concurrent workloads. Machine learning techniques are also
+used in \cite{gupta:pqr}, which provides query latency prediction as time
+ranges. \cite{duggan:performance} proposes a method for predicting the
+performance of queries in concurrent OLAP workloads. Unlike the other papers,
+it does not require semantic information, but rather uses a modeling approach
+that depends on the analysis of query behavior in isolation, the interactions
+of query in pairs and sampling techniques.
+
+Query progress indication and query performance prediction are more about
+predicting or estimating query latency. However, these paper make no attempt
+to deal with the problem of performance unpredictability, that is, they do not
+help to improve predictability matrices such as variance of latency, and 99th
+percentile of latency.
+
+\textbf{Architecture Redesign} People have thought of changing the design of
+current database management systems to improve the predictability of 
+performance. Surajit and Gerhard argue in \cite{chaudhuri:rethinking} that the 
+performance of current database systems are unpredictable because they are
+among the most complicated software systems ever built by humans and their
+major components seldom get redesigned when new features are added, resulting
+in a larger and larger and more and more complex code base that inherently
+causes the unpredictability of the exact behavior and performance. They propose
+building data management systems on RISC-style components, which are fairly
+simple by themselves, but can be combined to create richer components. These
+well-defined components with narrow functionality make it easier to predict and
+tune the performance of the system. However, they discuss these problems from a
+very high level perspective, and do not touch any implementation details. 
+Neither do they present any design of a new data management system built upon a
+set of RISC-style components.
+
+Another paper that rethinks the design of database management system is
+\cite{florescu:rethinking}. Daniela \textit{et al.} give a summary of the
+requirements people have for database management systems, including 
+performance, predictability, consistency, etc. However, due to the limitation
+of resources, database developers have to sacrifice some of the requirements
+for the others. Performance in terms of latency and throughput are usually
+preferred while the others receive relatively less attention. The authors
+point out that predictability is simply not taken into account when database 
+developers design modern database management systems. The implementations of
+the classic three-tier database architecture usually do not meet the
+predictability requirement. Therefore they present a new three-layer
+architecture in which consistency is maintained in the application layer and
+the storage layer is only responsible for storing data. The new design makes it
+possible to use a lot of cheap machines in the storage layer, unlike the
+traditional three-tier architecture, where the database has to guarantee
+consistency, and must be run on only a few expensive servers.
+
+Again, this paper addresses the problem of predictability(and other properties)
+from a very high level and gives no implementation details. Also, the new
+architecture basically delegates part of the functionality of a database
+to applications that uses databases, and therefore is incompatible with
+existing systems. Finally, this new design makes applications more difficult to
+build considering that they have to maintain data consistency themselves.
+
+\textbf{Predictability Improvement} There has been work that proposes 
+techniques to improve performance predictability. \cite{babcock:optimizer} 
+deals with unpredictability in a more practical manner --- it approaches the
+problem through the query optimizer. Traditionally, query optimizers use
+execution time as the sole heuristic for deciding which query plan to select,
+and ignore other important qualities, predictability being one of them. Brian
+Babcock \textit{et al.}\ build a new optimizer that uses a probability
+distribution over possible selectivity, which quantifies the estimation
+uncertainty and allows the optimizer to select the most appropriate query plan
+based on the pre-defined relatively importance of performance versus
+predictability.
+
+
+

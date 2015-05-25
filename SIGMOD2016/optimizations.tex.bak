@@ -1,0 +1,166 @@
+%!TEX root = predictability.tex
+
+\section{Achieving Predictability in\\MySQL}
+In the previous section, we described the main sources of variance discovered
+using the framework we proposed. As can be seen from the result, function
+\texttt{buf\_pool\_mutex\_enter} is a problem both on magnetic disk and SSD.
+We studied the distribution of its execution time to see why it had such high
+variance, and found that most of the times, its execution time was smaller than
+10ms. However, sometimes it went up as large as tens of thousands of
+milliseconds. For example, in one of the experiments on HDD, 96.5\% of the
+times the execution time of this function is below 10ms, and the variance of
+them is only 1.33E-6\% of the variance of latency. However, when taking those
+extreme cases into consideration, its total variance goes up to as much as
+30.5\% of the variance of latency. Based on this observation, we propose two
+methods to reduce the variance caused by this function.
+
+\subsection{Reducing Contention}
+Obviously we need to deal with the cases where the execution time is
+exceptionally high. This means that it's either waiting for some function that
+performs time-consuming operations on the buffer pool, waiting for a lot of
+functions that access the buffer pool, or both. One method is to reduce the
+contention between function \texttt{buf\_pool\_mutex\_enter} and those
+functions. We looked into the source code of the buffer pool in InnoDB, and
+found a problem in the implementation of this component. The \texttt{buf\_pool\_t} structure in InnoDB contains more than 30 fields, and only two of them are
+protected by their own mutexes. The rest of the fields are protected by one
+single mutex(called \texttt{mutex} in the source code), including the
+\texttt{LRU} list. The problem is that all of these fields are not closely
+related to each other, and don't need to be protected by the same mutex. For
+example, there's a \texttt{free} list in the buffer for storing the free pages
+not yet used, which is also protected by \texttt{mutex}, and by the logic of
+the algorithm, operations on the \texttt{free} list and the \texttt{LRU} list
+do not conflict with each other - it's absolutely fine to perform these 
+operations simultaneously. This single coarse-grained mutex causes a lot of
+unnecessary contentions among functions that do not logically conflict with
+each other. Therefore, to reduce the variance of function \texttt{buf\_pool\_mutex\_enter}, we can identify the fields that are logically related to each
+other, and divide them into several groups. For each group, we can create a
+separate mutex and use this new mutex instead of the \texttt{mutex} variable in
+the buffer pool to protect the fields in this group. Using these finer-grained
+mutexes can presumably reduce the contention between function
+\texttt{buf\_pool\_mutex\_enter} and other functions, thus eliminating some of
+the cases where the execution time shoots up by orders of magnitude.
+
+This method has actually been implemented in \textit{Percona Server}, an open
+source MySQL alternative bundled with a lot of performance and scalability
+improvements over the original MySQL. Splitting the \texttt{mutex} variable
+into multiple mutexes is implemented in \textit{Percona Server 5.5} as an
+improvement of scalability of the buffer pool. We adopted its implementation
+of this method, and split the \texttt{mutex} variable into four other mutexes.
+\footnote{Please refer to http://www.percona.com/doc/percona-server/5.5/
+scalability/innodb\_split\_buf\_pool\_mutex.html for more details.} Our
+experiment result shows that this method improves not only the scalability,
+but also the predictability of MySQL.
+
+\subsection{Spin Lock With Timeout}
+As described in section 4.3, the function we found in the experiments - 
+\texttt{buf\_pool\_mutex\_enter} - is called by another function
+\texttt{buf\_page\_make\_young}, which is used to move a buffer page to the
+head of the \texttt{LRU} list to keep the pages in LRU order. Actually InnoDB
+uses a variant of the LRU algorithm, and does not keep the pages in the strict
+LRU order. It divides the \texttt{URL} list into two sublists, the young list
+and the old list. By default, 3/8 of the pages at the tail of the list are
+devoted to the old list. Pages in the old list are accessed less recently, and
+are swapped out of the buffer pool when new pages come in. When a page is
+accessed, InnoDB checks if the target page is ``old'' enough or not ``young'' 
+enough, and moves this page to the head of the \texttt{LRU} list only if one
+of these two conditions is true. Therefore, pages in the \texttt{LRU} list are
+kept in a relaxed LRU order. We can relax this order a bit more to achieve
+higher predictability.
+
+The idea is to set a limit on the time the function waits for the lock to avoid
+the extreme cases. We change the mutex to a spin lock in order to control the
+time the function spends on waiting(line 1 in algorithm \ref{alg:buf-page-make-young-spin}). Using a spin lock here is not going to introduce too much
+overhead since more than 90\% of the times the lock can be acquired within
+0.01ms. When the spin lock times out and fails to acquire the lock, we give up
+the operation and do nothing this time. However, a page that InnoDB decides to
+move to the head of the \texttt{LRU} list is an important page, and is likely
+to be accessed again in the near future. Therefore, we can not just let it stay
+in the old list and slip out of the buffer pool. We have a list $l$ for storing
+the pages that fail to be moved to the head of the \texttt{LRU} list, and
+attempt to retry the failed operations at the next time. When a failure occurs,
+we add the page to $l$. If this page has been added to $l$ previously, we need
+to remove it from $l$ and then append it to the end of $l$(line 2 to 7 in
+algorithm \ref{alg:buf-page-make-young-spin}). This keeps the pages in $l$ in
+the LRU order. If the lock is successfully acquired within the time limit, we
+need to process the list $l$ before moving the target page. We iterate over all
+the pages in $l$ from start to the end(ordering is very important here), remove
+each page from $l$, and move it to the head of the \texttt{LRU} list. But
+before doing that, we need to check if the page is still in the buffer pool.
+It's possible that because of the failure, the page remains in the old list and
+finally gets evicted from the buffer pool to make room for a new page, thus
+becoming invalid. We only move pages that are still valid to the head (line 9
+to 13 in algorithm \ref{alg:buf-page-make-young-spin}). After processing all
+the pages in list $l$, we finally move the target page, which is the most
+recently accessed page to the start of the \texttt{LRU} list.
+
+Algorithm \ref{alg:buf-page-make-young} shows exactly the original process of 
+the function \texttt{buf\_page\_make\_young}, which is actually very simple.
+Algorithm \ref{alg:buf-page-make-young-spin} shows the algorithm we described
+above.
+
+\begin{algorithm}[t]
+    \SetAlgoLined
+    \SetKwInOut{Input}{Inputs}
+    \SetKwFunction{BufPoolMutexEnter}{buf\_pool\_mutex\_enter}
+    \SetKwFunction{BufLRUMakeBlockYoung}{buf\_LRU\_make\_block\_young}
+    \SetKwFunction{BufPoolMutexExit}{buf\_pool\_mutex\_exit}
+    
+    \Input{
+        $p$: buffer page to be moved to the start of the \texttt{LRU} list,\\
+        $b$: the buffer pool}
+        
+    \BlankLine
+        
+    $\BufPoolMutexEnter{b}$\;
+    $\BufLRUMakeBlockYoung{b, p}$\;
+    $\BufPoolMutexExit{b}$\;
+    
+\caption{\texttt{buf\_page\_make\_young}}
+\label{alg:buf-page-make-young}
+\end{algorithm}
+
+\begin{algorithm}[t]
+    \SetAlgoLined
+    \SetKwInOut{Input}{Inputs}
+    \SetKwFunction{SpinForTime}{spin\_for\_time}
+    \SetKwFunction{Append}{append}
+    \SetKwFunction{Remove}{remove}
+    \SetKwFunction{InBufferPool}{in\_buffer\_pool}
+    \SetKwFunction{BufLRUMakeBlockYoung}{buf\_LRU\_make\_block\_young}
+    \SetKwFunction{BufPoolMutexExit}{buf\_pool\_mutex\_exit}
+    
+    \Input{
+        $p$: buffer page to be moved to the start of the \texttt{LRU} list,\\
+        $b$: the buffer pool,\\
+        $l$: list of pages failed to be moved,\\
+        $t$: timeout for spin lock}
+        
+    \BlankLine
+        
+    $s \gets \SpinForTime{b, t}$\;
+    \BlankLine
+    
+    \uIf{$s = failure$} {
+        \If{$p \in l$} {
+            $l.\Remove{p}$\;
+        }
+        $l.\Append{p}$\;
+        Return\;
+    }
+    \uElse {
+        \ForEach{$page~u \in l$} {
+            \If{$\InBufferPool{b, u}$} {
+                $\BufLRUMakeBlockYoung{b, u}$\;
+                $l.\Remove{u}$\;
+            }
+        }
+        $\BufLRUMakeBlockYoung{b, p}$\;
+    }
+    \BlankLine
+    
+    $\BufPoolMutexExit{b}$\;
+    
+\caption{\texttt{buf\_page\_make\_young} with spin lock}
+\label{alg:buf-page-make-young-spin}
+\end{algorithm}
+
