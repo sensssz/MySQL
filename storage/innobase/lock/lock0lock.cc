@@ -2674,6 +2674,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2684,8 +2685,8 @@ lock_rec_dequeue_from_page(
       lock_grant(lock);
     }
   }
+   */
   
-  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2742,7 +2743,6 @@ lock_rec_dequeue_from_page(
       }
     }
   }
-   */
 }
 
 /*************************************************************//**

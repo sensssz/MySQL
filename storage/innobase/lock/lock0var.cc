@@ -302,12 +302,12 @@ g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *s
   para.k = size - 2;
   para.heu = 0;
 
-  round(betas, size, 2, size);
-  beta_stars[size - 2] = betas[size - 1];
-  for (ulint index = size - 3; index > 0; --index)
-  {
-    beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
-  }
+//  round(betas, size, 2, size);
+//  beta_stars[size - 2] = betas[size - 1];
+//  for (ulint index = size - 3; index > 0; --index)
+//  {
+//    beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
+//  }
   
   unordered_map<parameters, double> cache;
   g_recursive(para, size, betas, gammas, beta_stars, cache, solution);
@@ -375,12 +375,12 @@ h_starter(ulint size, double *betas, double *gammas, double *gamma_stars, bool *
   para.k = 2;
   para.heu = 0;
   
-  round(gammas, size, 1, size - 1);
-  gamma_stars[1] = gammas[1];
-  for (ulint index = 2; index < size - 1; ++index)
-  {
-    gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
-  }
+//  round(gammas, size, 1, size - 1);
+//  gamma_stars[1] = gammas[1];
+//  for (ulint index = 2; index < size - 1; ++index)
+//  {
+//    gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
+//  }
   
   unordered_map<parameters, double> cache;
   h_recursive(para, size, betas, gammas, gamma_stars, cache, solution);

@@ -21,6 +21,8 @@
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
+
+
 using std::endl;
 using std::ofstream;
 using std::vector;
@@ -33,9 +35,7 @@ TraceTool *TraceTool::instance = NULL;
 pthread_mutex_t TraceTool::instance_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_rwlock_t TraceTool::data_lock = PTHREAD_RWLOCK_INITIALIZER;
 __thread ulint TraceTool::current_transaction_id = 0;
-__thread timespec TraceTool::last_query;
 
-timespec TraceTool::start_time = {0, 0};
 timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -53,7 +53,6 @@ __thread bool TraceTool::commit_successful = true;
 __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
-__thread char * TraceTool::query = NULL;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -61,6 +60,7 @@ static const size_t ORDER_STATUS_LENGTH = strlen(ORDER_STATUS_MARKER);
 static const size_t DELIVERY_LENGTH = strlen(DELIVERY_MARKER);
 static const size_t STOCK_LEVEL_LENGTH = strlen(STOCK_LEVEL_MARKER);
 
+/* Define MONITOR if needs to trace running time of functions. */
 #ifdef MONITOR
 static __thread timespec function_start;
 static __thread timespec function_end;
@@ -117,11 +117,14 @@ TraceTool *TraceTool::get_instance()
   if (instance == NULL)
   {
     pthread_mutex_lock(&instance_mutex);
+    /* Check instance again after entering the ciritical section
+       to prevent double initilization. */
     if (instance == NULL)
     {
       instance = new TraceTool;
 #ifdef LATENCY
-      start_time = get_time();
+      /* Create a background thread for dumping function running time
+         and latency data. */
       pthread_t write_thread;
       pthread_create(&write_thread, NULL, check_write_log, NULL);
 #endif
@@ -160,22 +163,31 @@ bool TraceTool::should_monitor()
 
 void *TraceTool::check_write_log(void *arg)
 {
+  /* Runs in an infinite loop and for every 5 seconds,
+     check if there's any query comes in. If not, then
+     dump data to log files. */
   while (true)
   {
     sleep(5);
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
+      /* Create a back up of the debug log file in case it's overwritten. */
       std::ifstream src("logs/trace.log", std::ios::binary);
       std::ofstream dst("logs/trace.bak", std::ios::binary);
       dst << src.rdbuf();
       src.close();
       dst.close();
       
+      /* Create a new TraceTool instnance. */
       TraceTool *old_instace = instance;
       instance = new TraceTool;
+      
+      /* Reset the global transaction ID. */
       transaction_id = 0;
       
+      /* Dump data in the old instance to log files and
+         reclaim memory. */
       old_instace->write_log();
       delete old_instace;
     }
@@ -292,7 +304,6 @@ void TraceTool::start_new_query()
     transaction_types.push_back(NONE);
     pthread_rwlock_unlock(&data_lock);
   }
-  clock_gettime(CLOCK_REALTIME, &last_query);
   pthread_mutex_lock(&last_query_mutex);
   clock_gettime(CLOCK_REALTIME, &global_last_query);
   pthread_mutex_unlock(&last_query_mutex);
@@ -328,23 +339,10 @@ void TraceTool::set_query(const char *new_query)
     transaction_types[current_transaction_id] = type;
     new_transaction = false;
   }
-//  query = (char *) malloc(sizeof(char) * (length + 1));
-//  strncpy(query, new_query, length);
-//  query[length] = '\0';
-}
-
-void TraceTool::print_query()
-{
-  if (query != NULL)
-  {
-    log_file << query << endl;
-  }
 }
 
 void TraceTool::end_query()
 {
-  free(query);
-  query = NULL;
 #ifdef LATENCY
   if (is_commit)
   {
