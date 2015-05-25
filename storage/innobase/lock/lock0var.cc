@@ -550,7 +550,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
 //    log_file << final_schedule[index]->process_time << ",";
     final_schedule[index]->ranking = index;
   }
-//  log_file << endl;
+//  log_file << '\b' << endl;
   
   delete[] as;
   delete[] betas;
@@ -560,7 +560,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   delete[] quadratic_solution;
   delete[] final_schedule;
   
-  return final_schedule[0];
+  return locks.back();
 }
 
 /*************************************************************//**
