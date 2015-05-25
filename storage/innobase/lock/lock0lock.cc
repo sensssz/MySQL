@@ -2751,6 +2751,10 @@ lock_rec_dequeue_from_page(
       
       TraceTool::get_instance()->add_lock_candidate_info(grantable_locks.size(), num_granted_locks);
     }
+    else
+    {
+      TraceTool::get_instance()->add_lock_candidate_info(0, 0);
+    }
   }
 }
 
