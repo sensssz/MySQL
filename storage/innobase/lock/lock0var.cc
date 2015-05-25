@@ -262,7 +262,7 @@ estimate(
     y_index = length - 2;
   }
   ulint result = estimate[y_index + 1];
-  return result;
+  return result - time_so_far;
 }
 
 static
