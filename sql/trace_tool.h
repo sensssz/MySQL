@@ -82,6 +82,9 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
+    vector<ulint> estimated_latencies;        /*!< Estimated latency of an isotonic model. */
+    vector<ulint> transaction_ids;           /*!< Corresponding transaction ID for time so far. */
+    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
@@ -129,6 +132,12 @@ public:
     }
     
     /********************************************************************//**
+    Add a record about estimating latency using isotonic models. */
+    static ulint add_estimate_record(ulint estimated_latency, ulint transasction_id)
+    {
+    }
+    
+    /********************************************************************//**
     Start a new query. This may also start a new transaction. */
     void start_new_query();
     /********************************************************************//**
@@ -145,6 +154,9 @@ public:
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency();
+    /********************************************************************//**
+    Dump data about function running time and latency to log file. */
+    void write_isotonic_accuracy();
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();
