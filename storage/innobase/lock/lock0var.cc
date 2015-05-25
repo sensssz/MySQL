@@ -455,7 +455,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     return locks[0];
   }
   
-//  ofstream &log_file = TraceTool::get_instance()->get_log();
+  ofstream &log_file = TraceTool::get_instance()->get_log();
   ulint size = locks.size() - 1;
   double *as = new double[size];
   double *betas = new double[size];
@@ -545,11 +545,11 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     }
   }
   
-//  for (ulint index = 0; index <= size; ++index)
-//  {
+  for (ulint index = 0; index <= size; ++index)
+  {
 //    log_file << final_schedule[index]->process_time << ",";
-//    final_schedule[index]->ranking = index;
-//  }
+    final_schedule[index]->ranking = index;
+  }
 //  log_file << endl;
   
   delete[] as;
@@ -560,7 +560,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   delete[] quadratic_solution;
   delete[] final_schedule;
   
-  return locks[0];
+  return final_schedule[0];
 }
 
 /*************************************************************//**

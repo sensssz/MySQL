@@ -19,11 +19,13 @@ void
 indi_init();
 
 /*************************************************************//**
-Estimate remaining time given total time so far. */
+Estimate remaining time given total time so far
+and transaction type. */
 UNIV_INTERN
 ulint
 estimate(
-  ulint time_so_far); /*!< total time so far */
+  ulint time_so_far,     /*!< total time so far */
+  transaction_type type);/*!< Transaction type */
 
 /*************************************************************//**
 Find the lock that gives minimum CTV. */

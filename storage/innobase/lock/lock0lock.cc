@@ -865,6 +865,7 @@ lock_reset_lock_and_trx_wait(
 
   lock->trx->lock.wait_lock = NULL;
   lock->type_mode &= ~LOCK_WAIT;
+  lock->ranking = -1;
 }
 
 /*********************************************************************//**
@@ -2448,8 +2449,6 @@ lock_grant(
   timespec now = TraceTool::get_time();
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   lock->trx->total_wait_time += wait_time;
-  
-  lock->ranking = -1;
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2590,6 +2589,7 @@ lock_next_to_grant(
   vector<lock_t *> grantable_locks;
   lock_t *lock;
   
+  /* Find the first lock on this page and start from it. */
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space_id, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2687,6 +2687,7 @@ lock_rec_dequeue_from_page(
   }
    */
   
+  /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2694,9 +2695,11 @@ lock_rec_dequeue_from_page(
   }
   ulint rec_fold = lock_rec_fold(space, page_no);
   
+  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
+    /* Not a lock on this record. */
     if (!lock_rec_get_nth_bit(in_lock, heap_no))
     {
       continue;
@@ -2726,6 +2729,7 @@ lock_rec_dequeue_from_page(
       }
       lock_grant(lock_to_grant);
       
+      /* Find other locks that can also be granted. */
       lock = lock_rec_get_first_on_page_addr(space, page_no);
       if (!lock_rec_get_nth_bit(lock, heap_no))
       {

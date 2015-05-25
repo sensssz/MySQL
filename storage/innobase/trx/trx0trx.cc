@@ -1412,6 +1412,7 @@ trx_commit(
 /*=======*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
+  /* This marks a transaction commit. */
   TraceTool::is_commit = true;
 	mtr_t	local_mtr;
 	mtr_t*	mtr;

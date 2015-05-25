@@ -21,8 +21,6 @@
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
-
-
 using std::endl;
 using std::ofstream;
 using std::vector;
@@ -105,6 +103,8 @@ bool TRACE_END(int index)
   return false;
 }
 
+/********************************************************************//**
+Get the current TraceTool instance. */
 TraceTool *TraceTool::get_instance()
 {
   if (instance == NULL)
@@ -129,6 +129,7 @@ TraceTool *TraceTool::get_instance()
 
 TraceTool::TraceTool() : function_times()
 {
+  /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log", std::ofstream::out | std::ofstream::app);
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
@@ -146,7 +147,6 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(50000);
   transaction_types.push_back(NONE);
-  srand(now_micro());
 }
 
 bool TraceTool::should_monitor()
@@ -207,15 +207,12 @@ ulint TraceTool::now_micro()
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
-bool lock_equal(lock_info *lock1, lock_info *lock2)
-{
-  return EQUAL(lock1, lock2, space_id) && EQUAL(lock1, lock2, page_no) &&
-  EQUAL(lock1, lock2, heap_no) && EQUAL(lock1, lock2, type_mode);
-}
-
+/********************************************************************//**
+Start a new query. This may also start a new transaction. */
 void TraceTool::start_new_query()
 {
   is_commit = false;
+  /* This happens when a log write happens, which marks the end of a phase. */
   if (current_transaction_id > transaction_id)
   {
     current_transaction_id = 0;
@@ -223,10 +220,13 @@ void TraceTool::start_new_query()
     commit_successful = true;
   }
 #ifdef LATENCY
+  /* Start a new transaction. Note that we don't reset the value of new_transaction here.
+     We do it in set_query after looking at the first query of a transaction. */
   if (new_transaction)
   {
     trans_start = get_time();
     commit_successful = true;
+    /* Use a write lock here because we are appending content to the vector. */
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
@@ -273,6 +273,7 @@ void TraceTool::set_query(const char *new_query)
     }
     
     transaction_types[current_transaction_id] = type;
+    /* Reset the value of new_transaction. */
     new_transaction = false;
   }
 }
@@ -302,6 +303,7 @@ void TraceTool::end_transaction()
   }
   else
   {
+    /* Commit fails, we set its latency to 0 and ignore it. */
     pthread_rwlock_rdlock(&data_lock);
     // Reuse the last transaction
     function_times.back()[current_transaction_id] = 0;
