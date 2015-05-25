@@ -40,12 +40,6 @@ timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
-ulint TraceTool::num_of_deadlocks = 0;
-double TraceTool::average_latency = 0;
-ulint TraceTool::num_of_trans = 0;
-ulint TraceTool::num_of_rollback = 0;
-
-pthread_mutex_t TraceTool::lock_time_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
@@ -220,63 +214,6 @@ bool lock_equal(lock_info *lock1, lock_info *lock2)
   EQUAL(lock1, lock2, heap_no) && EQUAL(lock1, lock2, type_mode);
 }
 
-void TraceTool::start_waiting(lock_info *lock_info, lock_request *request)
-{
-  pthread_mutex_lock(&record_lock_mutex);
-  record_lock *lock_waiting_on = record_lock_map[*lock_info];
-  if (lock_waiting_on == NULL)
-  {
-    lock_waiting_on = new record_lock;
-    lock_waiting_on->info.space_id = lock_info->space_id;
-    lock_waiting_on->info.page_no = lock_info->page_no;
-    lock_waiting_on->info.heap_no = lock_info->heap_no;
-    lock_waiting_on->info.type_mode = lock_info->type_mode;
-    record_lock_map[*lock_info] = lock_waiting_on;
-  }
-  pthread_mutex_unlock(&record_lock_mutex);
-  request->lock = lock_waiting_on;
-  request->start_waiting_time = get_time();
-}
-
-void TraceTool::end_waiting(lock_request *request)
-{
-  if (request != NULL && request->lock_object != NULL)
-  {
-    long waiting_time = difftime(request->start_waiting_time, get_time());
-    request->lock->waiting_times.push_back(waiting_time);
-  }
-}
-
-void TraceTool::lock_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time, uint num_of_locks)
-{
-  lock_time_info info(trans_id, trx_id, work_time, wait_time, num_of_locks);
-  pthread_mutex_lock(&lock_time_mutex);
-  lock_time_infos.push_back(info);
-  pthread_mutex_unlock(&lock_time_mutex);
-}
-
-void TraceTool::remove(ulint trx_id)
-{
-  int num_removed = 0;
-  pthread_mutex_lock(&lock_time_mutex);
-  for (list<lock_time_info>::iterator iterator = lock_time_infos.begin();
-       iterator != lock_time_infos.end();
-       )
-  {
-    if (iterator->trx_id == trx_id)
-    {
-      // automatically moves the iterator forward
-      iterator = lock_time_infos.erase(iterator);
-      ++num_removed;
-    }
-    else
-    {
-      ++iterator;
-    }
-  }
-  pthread_mutex_unlock(&lock_time_mutex);
-}
-
 void TraceTool::start_new_query()
 {
   is_commit = false;
@@ -384,22 +321,6 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);
-}
-
-void TraceTool::add_record_if_zero(int function_index, long duration)
-{
-  if (current_transaction_id > transaction_id)
-  {
-    current_transaction_id = 0;
-  }
-  pthread_rwlock_rdlock(&data_lock);
-  function_times[function_index][current_transaction_id] = duration;
-  pthread_rwlock_unlock(&data_lock);
-}
-
-bool compare_record_lock(record_lock *lock1, record_lock *lock2)
-{
-  return lock1->waiting_times.size() > lock2->waiting_times.size();
 }
 
 void TraceTool::write_latency()

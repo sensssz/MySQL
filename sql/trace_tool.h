@@ -58,23 +58,6 @@ enum transaction_type
 };
 typedef enum transaction_type transaction_type;
 
-/********************************************************************//**
-Infomration about work time so far and wait time so far. */
-struct lock_time_info
-{
-    ulint transaction_id;     /*!< Transaction ID in our own system. */
-    ulint trx_id;             /*!< Transaction ID in InnoDB. */
-    ulint work_time_so_far;   /*!< Work time so far when a lock is granted */
-    ulint wait_time_so_far;   /*!< Wait time so far when a lock is granted */
-    uint num_of_locks_so_far; /*!< Number of locks a transaction hold when a lock is granted */
-    
-    lock_time_info(ulint trans_id, ulint tid, ulint work_time, ulint wait_time, uint locks):
-    transaction_id(trans_id), trx_id(tid), work_time_so_far(work_time),
-    wait_time_so_far(wait_time), num_of_locks_so_far(locks)
-    {}
-};
-typedef struct lock_time_info lock_time_info;
-
 class TraceTool
 {
 private:
@@ -102,19 +85,12 @@ private:
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
-    unordered_map<lock_info, record_lock *> record_lock_map; /*!< Stores information for record locks
-                                                                  See definitions of lock_info and
-                                                                  record_lock. */
-    
-    list<lock_time_info> lock_time_infos;   /*!< Stores information about locks. */
-    static pthread_mutex_t lock_time_mutex; /*!< Mutex for protecting lock_time_infos. */
     
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
     static __thread ulint current_transaction_id;   /*!< Each thread can execute only one transaction at
                                                          a time. This is the ID of the current transactions. */
-    static ulint num_of_deadlocks;          /*!< Number of deadlocks. */
     
     static __thread int path_count;         /*!< Number of node in the function call path. Used for
                                                  tracing running time of functions. */
@@ -124,10 +100,6 @@ public:
                                                  these two doesn't have to be true at the same time). */
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
-    
-    static double average_latency;  /*!< Average latency of all transactions so far. */
-    static ulint num_of_trans;      /*!< Number of transactions so far. */
-    static ulint num_of_rollback;   /*!< Number of transactions that roll back so far. */
     
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
@@ -154,28 +126,11 @@ public:
     static ulint now_micro();
     
     /********************************************************************//**
-    Marks the start of a lock waiting. Used for measuring lock information. */
-    void start_waiting(lock_info *lock_info, lock_request *request);
-    /********************************************************************//**
-    Marks the end of a lock waiting. */
-    void end_waiting(lock_request *request);
-    
-    /********************************************************************//**
     Retruns the log file for outputing debug information. */
     ofstream &get_log()
     {
         return log_file;
     }
-    
-    /********************************************************************//**
-    Add a record about work time and wait time. */
-    void lock_wait_info(ulint trans_id, ulint trx_id, ulint work_time,
-                        ulint wait_time, uint num_of_locks);
-    
-    /********************************************************************//**
-    Remove invalid record about work time and wait time given a transaction
-    ID in InnoDB */
-    void remove(ulint trx_id);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
@@ -192,14 +147,8 @@ public:
     void set_query(const char *query);
     
     /********************************************************************//**
-    Dump data about work time and wait time to log file. */
-    void write_work_wait();
-    /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency();
-    /********************************************************************//**
-    Dump data about lock wait information to log file. */
-    void write_lock_wait();
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();
@@ -207,9 +156,6 @@ public:
     /********************************************************************//**
     Record running time of a function. */
     void add_record(int function_index, long duration);
-    /********************************************************************//**
-    Record running time of a function if it's zero. */
-    void add_record_if_zero(int function_index, long duration);
 };
 
 #endif
