@@ -82,6 +82,10 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
+    static pthread_mutex_t candidate_mutex;
+    vector<uint> num_of_candidates;         /*!< Number of candidate locks for each record. */
+    vector<uint> num_of_selected;           /*!< Number of granted locks for each record. */
+    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
@@ -128,6 +132,8 @@ public:
         return log_file;
     }
     
+    void add_lock_candidate_info(uint num_candidates, uint num_granted);
+    
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
     void start_new_query();
@@ -145,6 +151,9 @@ public:
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency();
+    /********************************************************************//**
+    Dump data about number of lock candidates to log file. */
+    void write_candidates();
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();

@@ -21,8 +21,6 @@
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
-
-
 using std::endl;
 using std::ofstream;
 using std::vector;
@@ -38,6 +36,7 @@ __thread ulint TraceTool::current_transaction_id = 0;
 
 timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::candidate_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
@@ -207,10 +206,12 @@ ulint TraceTool::now_micro()
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
-bool lock_equal(lock_info *lock1, lock_info *lock2)
+void TraceTool::add_lock_candidate_info(uint num_candidates, uint num_granted)
 {
-  return EQUAL(lock1, lock2, space_id) && EQUAL(lock1, lock2, page_no) &&
-  EQUAL(lock1, lock2, heap_no) && EQUAL(lock1, lock2, type_mode);
+  pthread_mutex_lock(&candidate_mutex);
+  num_of_candidates.push_back(num_candidates);
+  num_of_selected.push_back(num_granted);
+  pthread_mutex_unlock(&candidate_mutex);
 }
 
 void TraceTool::start_new_query()
@@ -430,7 +431,20 @@ void TraceTool::write_latency()
   stock_level_log.close();
 }
 
+void TraceTool::write_candidates()
+{
+  ofstream num_candidate("num_candidates");
+  pthread_mutex_lock(&candidate_mutex);
+  for (ulint index = 0, size = num_of_selected.size(); index < size; ++index)
+  {
+    num_candidate << num_of_candidates[index] << "," << num_of_selected[index] << endl;
+  }
+  pthread_mutex_unlock(&candidate_mutex);
+  num_candidate.close();
+}
+
 void TraceTool::write_log()
 {
+  write_candidates();
   write_latency();
 }

@@ -2692,8 +2692,8 @@ lock_rec_dequeue_from_page(
   {
       return;
   }
-  ulint rec_fold = lock_rec_fold(space, page_no);
   
+  vector<lock_t *> grantable_locks;
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
@@ -2702,28 +2702,34 @@ lock_rec_dequeue_from_page(
       continue;
     }
     
-    lock_t *first_wait_lock = NULL;
-    lock_t *lock_to_grant = lock_next_to_grant(space, page_no, heap_no, first_lock_on_page);
+    lock_t *lock_to_grant = NULL;
+    
+    if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
+    {
+      lock = lock_rec_get_next(heap_no, first_lock_on_page);
+    }
+    else
+    {
+      lock = first_lock_on_page;
+    }
+    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+    {
+      if (lock_get_wait(lock))
+      {
+        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
+        {
+          if (lock_to_grant == NULL)
+          {
+            lock_to_grant = lock;
+          }
+          grantable_locks.push_back(lock);
+        }
+      }
+    }
     
     if (lock_to_grant != NULL)
     {
-      if (first_wait_lock != lock_to_grant)
-      {
-        // Move the target lock before the first wait lock.
-        hash_delete(lock_to_grant, rec_fold);
-        lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
-        if (first_lock_previous != NULL)
-        {
-          first_lock_previous->hash = lock_to_grant;
-        }
-        else
-        {
-          hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
-                   hash_calc_hash(rec_fold, lock_sys->rec_hash));
-          cell->node = lock_to_grant;
-        }
-        lock_to_grant->hash = first_wait_lock;
-      }
+      uint num_granted_locks = 1;
       lock_grant(lock_to_grant);
       
       lock = lock_rec_get_first_on_page_addr(space, page_no);
@@ -2737,10 +2743,13 @@ lock_rec_dequeue_from_page(
         {
           if (!lock_rec_has_to_wait_in_queue(lock))
           {
+            ++num_granted_locks;
             lock_grant(lock);
           }
         }
       }
+      
+      TraceTool::get_instance()->add_lock_candidate_info(grantable_locks.size(), num_granted_locks);
     }
   }
 }
