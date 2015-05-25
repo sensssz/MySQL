@@ -38,8 +38,6 @@ __thread ulint TraceTool::current_transaction_id = 0;
 
 timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t TraceTool::record_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t TraceTool::average_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
@@ -47,6 +45,7 @@ __thread bool TraceTool::commit_successful = true;
 __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
+
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);

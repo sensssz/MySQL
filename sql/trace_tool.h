@@ -67,10 +67,6 @@ private:
     static timespec global_last_query;      /*!< Time when MySQL receives the most recent query. */
     static pthread_mutex_t last_query_mutex;/*!< Mutex for protecting global_last_query */
     
-    static pthread_mutex_t record_lock_mutex;/*!< Mutex for protecting record_lock_map. */
-    static pthread_mutex_t average_mutex;   /*!< Mutex for protecting average_latency. */
-    static ulint commited_trans;            /*!< Number of committed transactions. */
-    
     static __thread timespec function_start;/*!< Time for the start of a function call. */
     static __thread timespec function_end;  /*!< Time for the end of a function call. */
     static __thread timespec call_start;    /*!< Time for the start of a child function call. */
@@ -78,8 +74,8 @@ private:
     static __thread bool new_transaction;   /*!< True if we need to start a new transaction. */
     static __thread timespec trans_start;   /*!< Start time of the current transaction. */
     
-    
     ofstream log_file;                      /*!< An log file for outputing debug messages. */
+    
     static pthread_rwlock_t data_lock;      /*!< A read-write lock for protecting function_times. */
     vector<vector<ulint> > function_times;  /*!< Stores the running time of the child functions
                                                  and also transaction latency (the last one). */
