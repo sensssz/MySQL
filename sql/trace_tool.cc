@@ -207,6 +207,12 @@ ulint TraceTool::now_micro()
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
+void TraceTool::add_estimate_record(ulint estimated_latency, ulint transasction_id)
+{
+  estimated_latencies.push_back(estimated_latency);
+  transaction_ids.push_back(transaction_id);
+}
+
 /********************************************************************//**
 Start a new query. This may also start a new transaction. */
 void TraceTool::start_new_query()

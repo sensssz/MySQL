@@ -133,9 +133,7 @@ public:
     
     /********************************************************************//**
     Add a record about estimating latency using isotonic models. */
-    static ulint add_estimate_record(ulint estimated_latency, ulint transasction_id)
-    {
-    }
+    static ulint add_estimate_record(ulint estimated_latency, ulint transasction_id);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */

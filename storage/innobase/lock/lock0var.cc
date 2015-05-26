@@ -455,7 +455,7 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     return locks[0];
   }
   
-  ofstream &log_file = TraceTool::get_instance()->get_log();
+//  ofstream &log_file = TraceTool::get_instance()->get_log();
   ulint size = locks.size() - 1;
   double *as = new double[size];
   double *betas = new double[size];
@@ -472,6 +472,8 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     lock_t *lock = locks[index];
     ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(time_so_far, lock->trx->type);
+    TraceTool::get_instance()->add_estimate_record(lock->process_time + time_so_far,
+                                                   lock->trx->transaction_id);
   }
 //  log_file << "estimated process time" << endl;
   sort(locks.begin(), locks.end(), compare);
