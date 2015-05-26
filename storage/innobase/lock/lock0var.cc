@@ -267,11 +267,33 @@ estimate(
 
 static
 bool
-compare(lock_t *lock1, lock_t *lock2)
+compare(
+  lock_t *lock1,
+  lock_t *lock2)
 {
   return lock1->process_time < lock2->process_time;
 }
 
+static
+void
+swap(
+  vector<lock_t *> &locks,
+  ulint index1,
+  ulint index2)
+{
+  lock_t *temp = locks[index1];
+  locks[index1] = locks[index2];
+  locks[index2] = locks[index1];
+}
+
+static
+void
+permutate(
+  vector<lock_t *> &locks,
+  vector<vector<lock_t *> > &permutations)
+{
+  
+}
 
 static
 void
