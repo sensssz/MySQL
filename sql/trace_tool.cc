@@ -43,7 +43,7 @@ __thread bool TraceTool::commit_successful = true;
 __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
-
+pthread_mutex_t TraceTool::estimate_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -205,6 +205,12 @@ ulint TraceTool::now_micro()
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
+}
+
+void TraceTool::add_estimate_record(ulint estimated_latency, ulint transaction_id)
+{
+  estimated_latencies.push_back(estimated_latency);
+  transaction_ids.push_back(transaction_id);
 }
 
 /********************************************************************//**
@@ -430,6 +436,49 @@ void TraceTool::write_latency()
   order_status_log.close();
   delivery_log.close();
   stock_level_log.close();
+}
+
+void TraceTool::write_accuracy()
+{
+  ofstream new_order_accuracy("new_order_accuracy");
+  ofstream payment_accuracy("payment_accuracy");
+  ofstream order_status_accuracy("order_status_accuracy");
+  ofstream delivery_accuracy("delivery_accuracy");
+  ofstream stock_level_accuracy("stock_level_accuracy");
+  
+  for (ulint index = 0, size = estimated_latencies.size(); index < size; ++index)
+  {
+    ulint latency = function_times.back()[transaction_ids[index]];
+    if (latency != 0)
+    {
+      switch (transaction_types[transaction_ids[index]])
+      {
+        case NEW_ORDER:
+          new_order_accuracy << estimated_latencies[index] << ',' << latency << endl;
+          break;
+        case PAYMENT:
+          payment_accuracy << estimated_latencies[index] << ',' << latency << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_accuracy << estimated_latencies[index] << ',' << latency << endl;
+          break;
+        case DELIVERY:
+          delivery_accuracy << estimated_latencies[index] << ',' << latency << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_accuracy << estimated_latencies[index] << ',' << latency << endl;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  
+  new_order_accuracy.close();
+  payment_accuracy.close();
+  order_status_accuracy.close();
+  delivery_accuracy.close();
+  stock_level_accuracy.close();
 }
 
 void TraceTool::write_log()
