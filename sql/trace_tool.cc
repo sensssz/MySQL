@@ -484,5 +484,6 @@ void TraceTool::write_isotonic_accuracy()
 
 void TraceTool::write_log()
 {
+  write_isotonic_accuracy();
   write_latency();
 }
