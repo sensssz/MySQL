@@ -74,6 +74,7 @@ struct lock_t {
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
     int             ranking;
+    ulint           time_so_far;
     ulint           process_time;
     timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */

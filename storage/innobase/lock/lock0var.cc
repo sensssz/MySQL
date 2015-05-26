@@ -470,8 +470,8 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   for (ulint index = 0; index <= size; ++index)
   {
     lock_t *lock = locks[index];
-    ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(time_so_far, lock->trx->type);
+    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
   }
 //  log_file << "estimated process time" << endl;
   sort(locks.begin(), locks.end(), compare);
