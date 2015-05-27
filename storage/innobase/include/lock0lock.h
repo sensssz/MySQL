@@ -39,6 +39,10 @@ Created 5/7/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "ut0vec.h"
 
+#define MIN_BATCH_SIZE 2
+#define MAX_BATCH_SIZE 5
+#define HARD_BOUNDARY true
+
 #ifdef UNIV_DEBUG
 extern ibool	lock_print_waits;
 #endif /* UNIV_DEBUG */

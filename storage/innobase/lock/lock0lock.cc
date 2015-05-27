@@ -54,6 +54,7 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
+
 #define SEE_NEXT_K_LOCKS  2
 
 /* Restricts the length of search we will do in the waits-for
@@ -439,6 +440,49 @@ lock_deadlock_check_and_resolve(
 /*===========================*/
   const lock_t* lock, /*!< in: lock the transaction is requesting */
   const trx_t*  trx); /*!< in: transaction */
+
+static
+lock_t *
+find_previous(
+  lock_t *lock,
+  ulint rec_fold);
+
+static
+void
+hash_delete(
+  lock_t *lock,
+  ulint rec_fold);
+
+static
+lock_t *
+lock_rec_find_first_wait(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no);
+
+static
+void
+lock_rec_move_to_front(
+  lock_t *lock_to_move,
+  lock_t *first_wait_lock,
+  ulint rec_fold);
+
+static
+void
+locks_grant(
+  vector<lock_t *> &locks_to_grant,
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no,
+  trx_t *trx);
+
+static
+void
+lock_next_to_grant(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no,
+  vector<lock_t *> &locks_to_grant);
 
 /*********************************************************************//**
 Gets the nth bit of a record lock.
@@ -1847,6 +1891,7 @@ lock_rec_create(
   lock->wait_start = TraceTool::get_time();
   lock->trx->type = TraceTool::type;
   lock->ranking = -1;
+  lock->in_batch = false;
 
   /* Reset to zero the bitmap which resides immediately after the
   lock struct */
@@ -1883,6 +1928,45 @@ lock_rec_create(
   MONITOR_INC(MONITOR_NUM_RECLOCK);
 
   return(lock);
+}
+
+static
+void
+rec_get_wait_granted_locks(
+  /*============*/
+  const buf_block_t*  block,  /*!< in: buffer block containing
+          the record */
+  ulint     heap_no,      /*!< in: heap number of the record */
+  vector<lock_t *> &wait_locks,  /*!< out: list of wait locks */
+  vector<lock_t *> &granted_locks, /*!< out: list of granted locks */
+  bool  &has_batch)   /*!< out: true if there is a batch in the queue */
+{
+  ulint size = 0;
+  for (lock_t *lock = lock_rec_get_first(block, heap_no);
+       lock != NULL;
+       lock = lock_rec_get_next(heap_no, lock))
+  {
+    if (lock_get_wait(lock))
+    {
+      if (size < MAX_BATCH_SIZE)
+      {
+        wait_locks.push_back(lock);
+        ++size;
+      }
+      if (lock->ranking != -1)
+      {
+        has_batch = true;
+      }
+    }
+    else
+    {
+      if (lock->in_batch)
+      {
+        has_batch = true;
+      }
+      granted_locks.push_back(lock);
+    }
+  }
 }
 
 /*********************************************************************//**
@@ -1956,7 +2040,27 @@ lock_rec_enqueue_waiting(
   we already own the trx mutex. */
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
-
+  
+  vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
+  vector<lock_t *> locks_to_grant;
+  bool has_batch = false;
+  
+  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+  
+  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
+  {
+    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+    locks_grant(locks_to_grant, buf_block_get_space(block),
+                buf_block_get_page_no(block), heap_no, trx);
+    if (!lock_get_wait(lock))
+    {
+      return DB_SUCCESS_LOCKED_REC;
+    }
+  }
+  
+  
   /* Release the mutex to obey the latching order.
   This is safe, because lock_deadlock_check_and_resolve()
   is invoked when a lock wait is enqueued for the currently
@@ -1966,7 +2070,7 @@ lock_rec_enqueue_waiting(
   currently associated with the transaction. */
 
   trx_mutex_exit(trx);
-
+  
   victim_trx_id = lock_deadlock_check_and_resolve(lock, trx);
 
   trx_mutex_enter(trx);
@@ -2005,18 +2109,6 @@ lock_rec_enqueue_waiting(
 #endif /* UNIV_DEBUG */
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
-  
-#ifdef LOCK_MONITOR
-  lock_info lock_to_wait;
-  lock_to_wait.space_id = block->page.space;
-  lock_to_wait.page_no = block->page.offset;
-  lock_to_wait.heap_no = heap_no;
-  lock_to_wait.type_mode = conflict_lock->type_mode;
-  lock_request *request = new lock_request;
-  request->lock_object = conflict_lock;
-  TraceTool::get_instance()->start_waiting(&lock_to_wait, request);
-  lock->request = request;
-#endif
   
   return(DB_LOCK_WAIT);
 }
@@ -2443,7 +2535,6 @@ lock_grant(
   lock_t* lock) /*!< in/out: waiting lock request */
 {
   ut_ad(lock_mutex_own());
-  
   trx_mutex_enter(lock->trx);
   
   timespec now = TraceTool::get_time();
@@ -2528,6 +2619,29 @@ lock_rec_cancel(
 
 static
 lock_t *
+lock_rec_get_first(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no)
+{
+  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space_id, page_no);
+  if (first_lock_on_page == NULL)
+  {
+    return NULL;
+  }
+  
+  if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
+  {
+    return lock_rec_get_next(heap_no, first_lock_on_page);
+  }
+  else
+  {
+    return first_lock_on_page;
+  }
+}
+
+static
+lock_t *
 find_previous(
   lock_t *lock,
   ulint rec_fold)
@@ -2578,60 +2692,133 @@ hash_delete(
 
 static
 lock_t *
+lock_rec_find_first_wait(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no)
+{
+  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
+       lock != NULL;
+       lock = lock_rec_get_next(heap_no, lock))
+  {
+    if (lock_get_wait(lock))
+    {
+      return lock;
+    }
+  }
+  
+  return NULL;
+}
+
+static
+void
+lock_rec_move_to_front(
+  lock_t *lock_to_move,
+  lock_t *first_wait_lock,
+  ulint rec_fold)
+{
+  if (first_wait_lock != lock_to_move)
+  {
+    // Move the target lock before the first wait lock.
+    hash_delete(lock_to_move, rec_fold);
+    lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
+    if (first_lock_previous != NULL)
+    {
+      first_lock_previous->hash = lock_to_move;
+    }
+    else
+    {
+      hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+                                            hash_calc_hash(rec_fold, lock_sys->rec_hash));
+      cell->node = lock_to_move;
+    }
+    lock_to_move->hash = first_wait_lock;
+  }
+}
+
+static
+void
+locks_grant(
+  vector<lock_t *> &locks_to_grant,
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no,
+  trx_t *trx)
+{
+  if (locks_to_grant.size() > 0)
+  {
+    ulint rec_fold = lock_rec_fold(space_id, page_no);;
+    
+    lock_t *first_wait_lock = lock_rec_find_first_wait(space_id, page_no, heap_no);
+    for (ulint index = 0, size = locks_to_grant.size(); index < size; ++index)
+    {
+      lock_t *lock = locks_to_grant[index];
+      if (lock->trx != trx)
+      {
+        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        lock_grant(lock);
+      }
+      else
+      {
+        lock_reset_lock_and_trx_wait(lock);
+      }
+    }
+  }
+}
+
+static
+void
 lock_next_to_grant(
   ulint space_id,
   ulint page_no,
   ulint heap_no,
-  lock_t *&first_wait_lock)
+  vector<lock_t *> &locks_to_grant)
 {
-  lock_t *lock_to_grant = NULL;
-  int smallest_index = INT_MAX;
-  vector<lock_t *> grantable_locks;
-  lock_t *lock;
+  int smallest_ranking = INT_MAX;
+  vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
   
-  /* Find the first lock on this page and start from it. */
-  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space_id, page_no);
-  if (first_lock_on_page == NULL)
+  int size = 0;
+  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
+       lock != NULL;
+       lock = lock_rec_get_next(heap_no, lock))
   {
-    return NULL;
-  }
-  
-  if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
-  {
-    lock = lock_rec_get_next(heap_no, first_lock_on_page);
-  }
-  else
-  {
-    lock = first_lock_on_page;
-  }
-  for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-  {
-    if (lock_get_wait(lock))
+    /* If there is still any lock on this record, we will not
+      grant other locks */
+    if (!lock_get_wait(lock))
+    {
+      locks_to_grant.clear();
+      return;
+    }
+    else
     {
       if (lock->ranking != -1 &&
-          lock->ranking < smallest_index)
+          lock->ranking < smallest_ranking)
       {
-        smallest_index = lock->ranking;
-        lock_to_grant = lock;
+        smallest_ranking = lock->ranking;
+        locks_to_grant.clear();
+        locks_to_grant.push_back(lock);
       }
-      if (first_wait_lock == NULL)
+      else if (lock->ranking == smallest_ranking)
       {
-        first_wait_lock = lock;
+        locks_to_grant.push_back(lock);
       }
-      if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
+      if (size < MAX_BATCH_SIZE)
       {
-        grantable_locks.push_back(lock);
+        wait_locks.push_back(lock);
+        ++size;
       }
     }
   }
   
-  if (lock_to_grant != NULL)
+  /* No one is holding a lock on this record when we reach here */
+  if (wait_locks.size() > 0) /* Queue is not empty */
   {
-    return lock_to_grant;
-  }
-  else
-  {
-     return CTV_schedule(grantable_locks);
+    if (!HARD_BOUNDARY ||           /* Use soft boundary */
+        locks_to_grant.size() == 0) /* No batch in queue */
+    {
+      LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+    }
   }
 }
 
@@ -2693,7 +2880,6 @@ lock_rec_dequeue_from_page(
   {
       return;
   }
-  ulint rec_fold = lock_rec_fold(space, page_no);
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2705,44 +2891,24 @@ lock_rec_dequeue_from_page(
       continue;
     }
     
-    lock_t *first_wait_lock = NULL;
-    lock_t *lock_to_grant = lock_next_to_grant(space, page_no, heap_no, first_lock_on_page);
     
-    if (lock_to_grant != NULL)
+    vector<lock_t *> locks_to_grant;
+    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
+    
+    /* Find other locks that can also be granted. */
+    lock = lock_rec_get_first_on_page_addr(space, page_no);
+    if (!lock_rec_get_nth_bit(lock, heap_no))
     {
-      if (first_wait_lock != lock_to_grant)
+      lock = lock_rec_get_next(heap_no, lock);
+    }
+    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+    {
+      if (lock_get_wait(lock))
       {
-        // Move the target lock before the first wait lock.
-        hash_delete(lock_to_grant, rec_fold);
-        lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
-        if (first_lock_previous != NULL)
+        if (!lock_rec_has_to_wait_in_queue(lock))
         {
-          first_lock_previous->hash = lock_to_grant;
-        }
-        else
-        {
-          hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
-                   hash_calc_hash(rec_fold, lock_sys->rec_hash));
-          cell->node = lock_to_grant;
-        }
-        lock_to_grant->hash = first_wait_lock;
-      }
-      lock_grant(lock_to_grant);
-      
-      /* Find other locks that can also be granted. */
-      lock = lock_rec_get_first_on_page_addr(space, page_no);
-      if (!lock_rec_get_nth_bit(lock, heap_no))
-      {
-        lock = lock_rec_get_next(heap_no, lock);
-      }
-      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-      {
-        if (lock_get_wait(lock))
-        {
-          if (!lock_rec_has_to_wait_in_queue(lock))
-          {
-            lock_grant(lock);
-          }
+          lock_grant(lock);
         }
       }
     }

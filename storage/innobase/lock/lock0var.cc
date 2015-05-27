@@ -10,20 +10,17 @@
 #include "trx0trx.h"
 #include "trace_tool.h"
 
-#include <unordered_map>
 #include <algorithm>
 #include <fstream>
 #include <float.h>
 #include <list>
-
-// 0.05, 0.1, 0.2, 0.5, 1, 2, 5
-#define RELATIVE_ERROR 0.1
+#include <string>
 
 using std::list;
-using std::unordered_map;
 using std::ifstream;
 using std::sort;
 using std::find;
+using std::string;
 
 static ulint *tpcc_work_wait = NULL;
 static ulint *tpcc_estimated = NULL;
@@ -45,75 +42,10 @@ static ulint order_status_length = 0;
 static ulint delivery_length = 0;
 static ulint stock_level_length = 0;
 
-bool double_equals(double a, double b, double epsilon = 0.00001)
-{
-  return std::abs(a - b) < epsilon;
-}
-
-struct parameters
-{
-  ulint k;
-  double heu;
-  
-  bool operator==(const struct parameters &another) const
-  {
-    return k == another.k && double_equals(heu, another.heu);
-  }
-};
-typedef struct parameters parameters;
-namespace std
-{
-  template<>
-  struct hash<parameters>
-  {
-    ulint operator()(const struct parameters &parameter) const
-    {
-      size_t hash1 = hash<long>()(parameter.k);
-      size_t hash2 = hash<double>()(parameter.heu);
-      return hash1 ^ hash2;
-    }
-  };
-}
-
-struct record
-{
-  ulint space_id;
-  ulint page_no;
-  ulint heap_no;
-  
-  bool operator==(const struct record &another) const
-  {
-    return space_id == another.space_id &&
-           page_no == another.page_no &&
-           heap_no == another.heap_no;
-  }
-};
-typedef struct record record;
-namespace std
-{
-  template<>
-  struct hash<record>
-  {
-    ulint operator()(const record &record) const
-    {
-      size_t hash1 = hash<long>()(record.space_id);
-      size_t hash2 = hash<long>()(record.page_no);
-      size_t hash3 = hash<long>()(record.heap_no);
-      return hash1 ^ hash2 ^ hash3;
-    }
-  };
-}
-
-static void g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *solution);
-static double g_recursive(parameters &para, ulint size,
-                          double *betas, double *gammas, double *beta_stars,
-                          unordered_map<parameters, double> &cache,
-                          bool *solution);
-static void h_starter(ulint size, double *betas, double *gammas, double *gamma_stars, bool *solution);
-static double h_recursive(parameters &para, ulint size,
-                          double *betas, double *gammas, double *gamma_stars,
-                          unordered_map<parameters, double> &cache,
-                          bool *solution);
+static
+string
+lock_get_mode(
+  lock_t *lock);
 
 static
 void
@@ -125,7 +57,6 @@ read_isotonic(
 {
   ifstream isotonic_file(name);
   isotonic_file >> length >> length;
-//  TraceTool::get_instance()->get_log() << length << endl;
   so_far = (ulint *)malloc(sizeof(ulint) * length);
   estimated = (ulint *)malloc(sizeof(ulint) * length);
   double x = 0;
@@ -265,15 +196,8 @@ estimate(
   return result - time_so_far;
 }
 
-static
-bool
-compare(
-  lock_t *lock1,
-  lock_t *lock2)
-{
-  return lock1->process_time < lock2->process_time;
-}
-
+/*************************************************************//**
+Swap two elements in a vector. */
 static
 void
 swap(
@@ -281,189 +205,99 @@ swap(
   ulint index1,
   ulint index2)
 {
-  lock_t *temp = locks[index1];
-  locks[index1] = locks[index2];
-  locks[index2] = locks[index1];
-}
-
-static
-void
-permutate(
-  vector<lock_t *> &locks,
-  vector<vector<lock_t *> > &permutations)
-{
-  
-}
-
-static
-void
-round(
-  double *array,
-  int length,
-  int start,
-  int end)
-{
-  double sum = 0;
-  for (int index = start; index < end; ++index)
+  if (index1 != index2)
   {
-    sum += array[index];
-  }
-  double mean = sum / (length - 2);
-  double round_factor = RELATIVE_ERROR * mean / 2;
-  for (int index = start; index < end; ++index)
-  {
-    array[index] = (int) (array[index] / round_factor);
-  }
-}
-
-static
-void
-g_starter(ulint size, double *betas, double *gammas, double *beta_stars, bool *solution)
-{
-  parameters para;
-  para.k = size - 2;
-  para.heu = 0;
-
-//  round(betas, size, 2, size);
-//  beta_stars[size - 2] = betas[size - 1];
-//  for (ulint index = size - 3; index > 0; --index)
-//  {
-//    beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
-//  }
-  
-  unordered_map<parameters, double> cache;
-  g_recursive(para, size, betas, gammas, beta_stars, cache, solution);
-}
-
-static
-double
-g_recursive(parameters &para, ulint size,
-            double *betas, double *gammas, double *beta_stars,
-            unordered_map<parameters, double> &cache,
-            bool *solution)
-{
-  ulint k = para.k;
-  double beta = para.heu;
-  // g(1) = 0
-  if (k == 0)
-  {
-    return 0;
-  }
-  unordered_map<parameters, double>::iterator iterator = cache.find(para);
-  if (iterator != cache.end())
-  {
-    // Already calculated the value for this pair of parameters
-    return iterator->second;
-  }
-  
-  parameters new_para_before;
-  new_para_before.k = k - 1;
-  new_para_before.heu = beta;
-  double recursive_before = g_recursive(new_para_before, size, betas, gammas, beta_stars, cache, solution);
-  double put_before = recursive_before + gammas[k] * beta;
-  
-  parameters new_para_after;
-  new_para_after.k = k - 1;
-  new_para_after.heu = beta + betas[k];
-  double recursive_after = g_recursive(new_para_after, size, betas, gammas, beta_stars, cache, solution);
-  double put_after = recursive_after + gammas[k] * (beta_stars[k] - beta);
-  
-  cache[new_para_before] = recursive_before;
-  cache[new_para_after] = recursive_after;
-  
-  if (put_before > put_after)
-  {
-    if (beta == 0)
-    {
-      solution[k] = 0;
-    }
-    return put_before;
-  }
-  else
-  {
-    if (beta == 0)
-    {
-      solution[k] = 1;
-    }
-    return put_after;
-  }
-}
-
-static
-void
-h_starter(ulint size, double *betas, double *gammas, double *gamma_stars, bool *solution)
-{
-  parameters para;
-  para.k = 2;
-  para.heu = 0;
-  
-//  round(gammas, size, 1, size - 1);
-//  gamma_stars[1] = gammas[1];
-//  for (ulint index = 2; index < size - 1; ++index)
-//  {
-//    gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
-//  }
-  
-  unordered_map<parameters, double> cache;
-  h_recursive(para, size, betas, gammas, gamma_stars, cache, solution);
-}
-
-static
-double
-h_recursive(parameters &para, ulint size,
-            double *betas, double *gammas, double *gamma_stars,
-            unordered_map<parameters, double> &cache,
-            bool *solution)
-{
-  ulint k = para.k;
-  double gamma = para.heu;
-  // h(n + 1) = 0
-  if (k == size)
-  {
-    return 0;
-  }
-  unordered_map<parameters, double>::iterator iterator = cache.find(para);
-  if (iterator != cache.end())
-  {
-    // Already calculated the value for this pair of parameters
-    return iterator->second;
-  }
-  
-  parameters new_para_before;
-  new_para_before.k = k + 1;
-  new_para_before.heu = gamma;
-  double recursive_before = h_recursive(new_para_before, size, betas, gammas, gamma_stars, cache, solution);
-  double put_before = recursive_before + betas[k] * gamma;
-  
-  parameters new_para_after;
-  new_para_after.k = k + 1;
-  new_para_after.heu = gamma + gammas[k];
-  double recursive_after = h_recursive(new_para_after, size, betas, gammas, gamma_stars, cache, solution);
-  double put_after = recursive_after + betas[k] * (gamma_stars[k - 1] - gamma);
-  
-  cache[new_para_before] = recursive_before;
-  cache[new_para_after] = recursive_after;
-  
-  if (put_before > put_after)
-  {
-    if (gamma == 0)
-    {
-      solution[k] = 0;
-    }
-    return put_before;
-  }
-  else
-  {
-    if (gamma == 0)
-    {
-      solution[k] = 1;
-    }
-    return put_after;
+    lock_t *temp = locks[index1];
+    locks[index1] = locks[index2];
+    locks[index2] = temp;
   }
 }
 
 /*************************************************************//**
-Find the lock that gives minimum CTV. */
+Generate all possible permutations of the given vector. */
+static
+void
+permutate(
+  vector<lock_t *> &locks,
+  ulint start,
+  ulint end,
+  vector<vector<lock_t *> > &permutations)
+{
+  if (start == end)
+  {
+    vector<lock_t *> permutation(locks);
+    permutations.push_back(permutation);
+    return;
+  }
+  
+  for (ulint index = start; index <= end; ++index)
+  {
+    /* Swap these two elements. */
+    swap(locks, start, index);
+    permutate(locks, start + 1, end, permutations);
+    /* Swap them back. */
+    swap(locks, start, index);
+  }
+}
+
+/*************************************************************//**
+Calculat the variance of a list of numbers. */
+static
+double
+var(
+  vector<ulint> &numbers)
+{
+  double mean = 0;
+  for (ulint index = 0, size = numbers.size(); index < size; ++index)
+  {
+    mean += numbers[index];
+  }
+  mean /= numbers.size();
+  
+  double variance = 0;
+  for (ulint index = 0, size = numbers.size(); index < size; ++index)
+  {
+    double difference = numbers[index] - mean;
+    variance += difference * difference;
+  }
+  
+  return variance;
+}
+
+/*************************************************************//**
+Calculate the cumulative sum of latency for the list of given locks. */
+static
+void
+cumsum(
+  vector<lock_t *> &locks,
+  vector<ulint> &rolling_sum)
+{
+  ulint sum_of_previous_process_time = 0;
+  int previous_ranking = 0;
+  ulint max_process = 0;
+  
+  for (ulint index = 0, size = locks.size(); index < size; ++index)
+  {
+    lock_t *lock = locks[index];
+    
+    if (lock->ranking == previous_ranking &&
+        lock->process_time > max_process)
+    {
+      max_process = lock->process_time;
+    }
+    else
+    {
+      sum_of_previous_process_time += max_process;
+      max_process = lock->process_time;
+      previous_ranking = lock->ranking;
+    }
+    
+    rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
+  }
+}
+
+/*************************************************************//**
+Find the lock that gives minimum variance of estimated latency. */
 UNIV_INTERN
 lock_t *
 CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
@@ -477,112 +311,303 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
     return locks[0];
   }
   
-//  ofstream &log_file = TraceTool::get_instance()->get_log();
-  ulint size = locks.size() - 1;
-  double *as = new double[size];
-  double *betas = new double[size];
-  double *beta_stars = new double[size];
-  double *gammas = new double[size];
-  double *gamma_stars = new double[size];
-  bool *quadratic_solution = new bool[size + 1];
-  lock_t **final_schedule = new lock_t *[size + 1];
+  int random = rand() % 100;
+  bool do_log = random < 42;
+  
+  ofstream &log_file = TraceTool::get_instance()->get_log();
   
   timespec now = TraceTool::get_time();
-  // Note that size here is actually length - 1
-  for (ulint index = 0; index <= size; ++index)
+  for (ulint index = 0, size = locks.size(); index < size; ++index)
   {
     lock_t *lock = locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    
+    if (do_log)
+    {
+      log_file << lock->time_so_far << ",";
+    }
   }
-//  log_file << "estimated process time" << endl;
-  sort(locks.begin(), locks.end(), compare);
-//  log_file << "locks sorted" << endl;
-  
-  // The last one is always at the first place
-  quadratic_solution[size - 1] = 0;
-  quadratic_solution[0] = 0;
-  quadratic_solution[1] = 0;
-  
-  if (size + 1 > 3)
+  if (do_log)
   {
-    // Calculate betas and gammas
-    for (ulint index = 0; index < size; ++index)
+    log_file << endl;
+  
+    for (ulint index = 0, size = locks.size(); index < size; ++index)
     {
-      ulint sum = 0;
-      ulint process_time = locks[index]->process_time;
-      for (ulint i = 0; i < index; ++i)
-      {
-        sum += locks[i]->process_time;
-      }
-      as[index] = process_time + sum / 2.0;
-      // We need to use index + 1 for calculating beta and gamma
-      betas[index] = (size - index - 1) * process_time + 2 * as[index];
-      gammas[index] = (index + 1 + 1) * process_time - 2 * as[index];
+      log_file << locks[index]->process_time << ",";
     }
-//    log_file << "beta and gamma calcualted" << endl;
+    log_file << endl;
+  }
+  
+  vector<vector<lock_t *> > perms;
+  permutate(locks, 0, locks.size() - 1, perms);
+  
+  double min_variance = std::numeric_limits<double>::max();
+  int min_var_index = -1;
+  for (ulint index = 0, size = perms.size(); index < size; ++index)
+  {
+    vector<ulint> rolling_sum;
+    cumsum(perms[index], rolling_sum);
+    double variance = var(rolling_sum);
+    if (variance < min_variance)
+    {
+      min_variance = variance;
+      min_var_index = index;
+    }
+  }
+  
+  for (ulint index = 0, size = perms[min_var_index].size();
+       index < size; ++index)
+  {
+    perms[min_var_index][index]->ranking = index;
     
-    beta_stars[size - 2] = betas[size - 1];
-    gamma_stars[1] = gammas[1];
-    // Calculate beta stars and gamma stars
-    for (ulint index = size - 3; index > 0; --index)
+    if (do_log)
     {
-      beta_stars[index] = beta_stars[index + 1] + betas[index + 1];
+      log_file << perms[min_var_index][index]->time_so_far << ",";
     }
-    for (ulint index = 2; index < size - 1; ++index)
-    {
-      gamma_stars[index] = gamma_stars[index - 1] + gammas[index];
-    }
-//    log_file << "beta_star and gamma_star calculated" << endl;
+  }
+  
+  if (do_log)
+  {
+    log_file << endl;
     
-    if (beta_stars[1] < gamma_stars[size - 2])
+    for (ulint index = 0, size = perms[min_var_index].size();
+         index < size; ++index)
     {
-//      log_file << "using beta" << endl;
-      g_starter(size, betas, gammas, beta_stars, quadratic_solution);
+      log_file << perms[min_var_index][index]->process_time << ",";
+    }
+    log_file << endl;
+  }
+  
+  return perms[min_var_index][0];
+}
+
+static
+void
+enumerate_rankings(
+  vector<int> &rankings,
+  int start,
+  int end,
+  list<vector<int> > &ranking_enumerations)
+{
+  for (int ranking = 0; ranking <= end + 1; ++ranking)
+  {
+    rankings[start] = ranking;
+    if (start == end)
+    {
+      ranking_enumerations.push_back(rankings);
     }
     else
     {
-//      log_file << "using gamma" << endl;
-      h_starter(size, betas, gammas, gamma_stars, quadratic_solution);
+      enumerate_rankings(rankings, start + 1, end, ranking_enumerations);
     }
   }
-  
-  int schedule_index = 1;
-  final_schedule[0] = locks.back();
-  for (int solution_index = size - 1; solution_index > 0; --solution_index)
+}
+
+/*
+static
+bool
+lock_compatible(
+  vector<lock_t *> &locks,
+  lock_t *lock)
+{
+  for (ulint index = 0, size = locks.size(); index < size; ++index)
   {
-    if (quadratic_solution[solution_index] == 0)
+    if (lock_has_to_wait(lock, locks[index]))
     {
-      // Should be moved before the shortest job
-      final_schedule[schedule_index++] = locks[solution_index];
+      return false;
     }
   }
-  final_schedule[schedule_index++] = locks[0];
-  for (ulint solution_index = 1; solution_index < size; ++solution_index)
+  return true;
+}
+
+static
+string
+lock_get_mode(
+              lock_t *lock)
+{
+  string mode;
+  if ((LOCK_MODE_MASK & lock->type_mode) == LOCK_X)
   {
-    // Should be moved after the shortest job
-    if (quadratic_solution[solution_index] == 1)
+    mode.append("X");
+  }
+  else
+  {
+    mode.append("R");
+  }
+  if (lock->type_mode & LOCK_INSERT_INTENTION)
+  {
+    mode.append("I");
+  }
+  else if (lock->type_mode & LOCK_GAP)
+  {
+    mode.append("G");
+  }
+  else if (lock->type_mode & LOCK_ORDINARY)
+  {
+    mode.append("N");
+  }
+  else if (lock->type_mode & LOCK_REC_NOT_GAP)
+  {
+    mode.append("R");
+  }
+  
+  return mode;
+}
+ */
+
+static
+void
+remove_invalid_ranking(
+  vector<lock_t *> &waiting_locks,
+  vector<lock_t *> &granted_locks,
+  list<vector<int> > &ranking_enumerations)
+{
+  ulint size = waiting_locks.size();
+  
+  lock_t **previous_locks = new lock_t *[size + 1];
+  
+  for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
+       iterator != ranking_enumerations.end(); ++iterator)
+  {
+    vector<int> &enumeration = *iterator;
+    
+    if(granted_locks.size() > 0)
     {
-      final_schedule[schedule_index++] = locks[solution_index];
+      previous_locks[0] = granted_locks.back();
+    }
+    else
+    {
+      previous_locks[0] = NULL;
+    }
+    for (ulint index = 1; index <= size; ++index)
+    {
+      previous_locks[index] = NULL;
+    }
+    
+    for (ulint index = 0; index < size; ++index)
+    {
+      int ranking = enumeration[index];
+      lock_t *previous_lock = previous_locks[ranking];
+      previous_locks[ranking] = waiting_locks[index];
+      
+      if (previous_lock != NULL &&
+          lock_has_to_wait(waiting_locks[index], previous_lock))
+      {
+        iterator = --ranking_enumerations.erase(iterator);
+        break;
+      }
     }
   }
   
-  for (ulint index = 0; index <= size; ++index)
+  delete[] previous_locks;
+}
+
+static
+bool
+compare(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  return lock1->ranking < lock2->ranking;
+}
+
+/*************************************************************//**
+Find the lock that gives minimum CTV. */
+UNIV_INTERN
+void
+LVM_schedule(
+  vector<lock_t *> &waiting_locks,  /*!< waiting locks */
+  vector<lock_t *> &granted_locks,  /*!< granted locks */
+  vector<lock_t *> &locks_to_grant) /*!< locks to grant */
+{
+  if (waiting_locks.size() == 0)
   {
-//    log_file << final_schedule[index]->process_time << ",";
-    final_schedule[index]->ranking = index;
+    return;
   }
-//  log_file << '\b' << endl;
+  if (waiting_locks.size() == 1 &&
+      granted_locks.size() == 0)
+  {
+    waiting_locks[0]->ranking = 0;
+    return;
+  }
   
-  delete[] as;
-  delete[] betas;
-  delete[] beta_stars;
-  delete[] gammas;
-  delete[] gamma_stars;
-  delete[] quadratic_solution;
-  delete[] final_schedule;
+  for (ulint index = 0, size = granted_locks.size();
+       index < size; ++index)
+  {
+    granted_locks[index]->ranking = 0;
+    granted_locks[index]->in_batch = true;
+  }
   
-  return locks.back();
+  timespec now = TraceTool::get_time();
+  for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+  {
+    lock_t *lock = waiting_locks[index];
+    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+  }
+  
+  vector<int> rankings(waiting_locks.size());
+  list<vector<int> > ranking_enumerations;
+  enumerate_rankings(rankings, 0, waiting_locks.size() - 1, ranking_enumerations);
+  remove_invalid_ranking(waiting_locks, granted_locks, ranking_enumerations);
+  ut_a(ranking_enumerations.size() > 0);
+  
+  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
+  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
+  int granted_size = granted_locks.size();
+  
+  double min_variance = std::numeric_limits<double>::max();
+  int min_var_index = -1;
+  int enum_index = 0;
+  for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
+       iterator != ranking_enumerations.end(); ++iterator)
+  {
+    vector<int> &enumeration = *iterator;
+    for (ulint index = 0, size = enumeration.size(); index < size; ++index)
+    {
+      all_locks[index + granted_size]->ranking = enumeration[index];
+    }
+    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+    vector<ulint> rolling_sum;
+    cumsum(all_locks, rolling_sum);
+    double variance = var(rolling_sum);
+    if (variance < min_variance)
+    {
+      min_variance = variance;
+      min_var_index = enum_index;
+    }
+  }
+  
+  int smallest_ranking = INT_MAX;
+  list<vector<int> >::iterator enum_iter = ranking_enumerations.begin();
+  for (int count = 0; count < min_var_index; ++count)
+  {
+    enum_iter++;
+  }
+  vector<int> &enumeration = *enum_iter;
+  for (ulint index = 0, size = enumeration.size(); index < size; ++index)
+  {
+    lock_t *lock = waiting_locks[index];
+    lock->ranking = enumeration[index];
+    if (lock->ranking != -1 &&
+        lock->ranking < smallest_ranking)
+    {
+      smallest_ranking = lock->ranking;
+      locks_to_grant.clear();
+      locks_to_grant.push_back(lock);
+    }
+    else if (lock->ranking == smallest_ranking)
+    {
+      locks_to_grant.push_back(lock);
+    }
+  }
+  
+  if (granted_locks.size() > 0 &&
+      smallest_ranking != 0)
+  {
+    locks_to_grant.clear();
+  }
 }
 
 /*************************************************************//**

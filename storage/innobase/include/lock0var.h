@@ -35,6 +35,15 @@ CTV_schedule(
   vector<lock_t *> &locks); /*!< candidate locks */
 
 /*************************************************************//**
+Find the lock that gives minimum CTV. */
+UNIV_INTERN
+void
+LVM_schedule(
+  vector<lock_t *> &waiting_locks,  /*!< waiting locks */
+  vector<lock_t *> &granted_locks,  /*!< granted locks */
+  vector<lock_t *> &locks_to_grant);/*!< locks to grant */
+
+/*************************************************************//**
 Clean up resources. */
 UNIV_INTERN
 void

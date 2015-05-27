@@ -129,7 +129,7 @@ TraceTool *TraceTool::get_instance()
 TraceTool::TraceTool() : function_times()
 {
   /* Open the log file in append mode so that it won't be overwritten */
-  log_file.open("logs/trace.log", std::ofstream::out | std::ofstream::app);
+  log_file.open("logs/trace.log");
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
@@ -146,6 +146,8 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(50000);
   transaction_types.push_back(NONE);
+  
+  srand(time(0));
 }
 
 bool TraceTool::should_monitor()
