@@ -56,7 +56,7 @@ Created 5/7/1996 Heikki Tuuri
 
 ulint MIN_BATCH_SIZE = 5;
 ulint MAX_BATCH_SIZE = 5;
-ibool HARD_BOUNDARY = false;
+ibool HARD_BOUNDARY = true;
 
 #define SEE_NEXT_K_LOCKS  2
 
@@ -2781,7 +2781,7 @@ lock_next_to_grant(
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   
-  int size = 0;
+  ulint size = 0;
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
        lock != NULL;
        lock = lock_rec_get_next(heap_no, lock))
