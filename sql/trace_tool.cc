@@ -272,6 +272,11 @@ void TraceTool::set_query(const char *new_query)
     {
       type = STOCK_LEVEL;
     }
+    else
+    {
+      type = NONE;
+      commit_successful = false;
+    }
     
     transaction_types[current_transaction_id] = type;
     /* Reset the value of new_transaction. */

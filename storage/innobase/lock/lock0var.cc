@@ -528,7 +528,7 @@ LVM_schedule(
   if (waiting_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
-    waiting_locks[0]->ranking = 0;
+    locks_to_grant.push_back(waiting_locks[0]);
     return;
   }
   
@@ -577,6 +577,7 @@ LVM_schedule(
       min_variance = variance;
       min_var_index = enum_index;
     }
+    enum_index++;
   }
   
   int smallest_ranking = INT_MAX;
@@ -590,8 +591,7 @@ LVM_schedule(
   {
     lock_t *lock = waiting_locks[index];
     lock->ranking = enumeration[index];
-    if (lock->ranking != -1 &&
-        lock->ranking < smallest_ranking)
+    if (lock->ranking < smallest_ranking)
     {
       smallest_ranking = lock->ranking;
       locks_to_grant.clear();
