@@ -123,6 +123,9 @@ trx_create(void)
 	trx->check_unique_secondary = TRUE;
 
 	trx->dict_operation = TRX_DICT_OP_NONE;
+  
+  trx->transaction_id = 0;
+  trx->real_transaction_id = NULL;
 
 	mutex_create(trx_undo_mutex_key, &trx->undo_mutex, SYNC_TRX_UNDO);
 
@@ -860,6 +863,8 @@ trx_start_low(
   trx->trx_start_time = TraceTool::get_time();
   trx->total_wait_time = 0;
   trx->type = NONE;
+  trx->transaction_id = TraceTool::current_transaction_id;
+  trx->real_transaction_id = &TraceTool::current_transaction_id;
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -1401,7 +1406,21 @@ trx_commit_low(
 		lsn = 0;
 	}
   
-	trx_commit_in_memory(trx, lsn);
+  trx_commit_in_memory(trx, lsn);
+  
+  if (trx->real_transaction_id != NULL &&
+      trx->transaction_id == *(trx->real_transaction_id))
+  {
+    timespec now = TraceTool::get_time();
+    ulint total = TraceTool::difftime(trx->trx_start_time, now);
+    ulint total_work = total - trx->total_wait_time;
+    TraceTool::get_instance()->add_record_if_zero(0, total_work);
+    TraceTool::get_instance()->add_record_if_zero(1, trx->total_wait_time);
+  }
+  else
+  {
+    TraceTool::get_instance()->remove(trx->id);
+  }
 }
 
 /****************************************************************//**

@@ -545,6 +545,20 @@ LVM_schedule(
     lock_t *lock = waiting_locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    
+    trx_t *trx = lock->trx;
+    if (rand() % 100 < 50 &&
+        trx->real_transaction_id != NULL &&
+        trx->transaction_id != 0 &&
+        trx->transaction_id == *(trx->real_transaction_id))
+    {
+      ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+      ulint work_time = total_time_so_far - trx->total_wait_time;
+      TraceTool::get_instance()->work_wait_info(trx->transaction_id,
+                                                trx->id,
+                                                work_time,
+                                                trx->total_wait_time);
+    }
   }
   
   vector<int> rankings(waiting_locks.size());

@@ -36,6 +36,7 @@ __thread ulint TraceTool::current_transaction_id = 0;
 
 timespec TraceTool::global_last_query;
 pthread_mutex_t TraceTool::last_query_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 __thread int TraceTool::path_count = 0;
 __thread bool TraceTool::is_commit = false;
@@ -133,7 +134,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 3;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -146,6 +147,7 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(50000);
   transaction_types.push_back(NONE);
+  srand(now_micro());
   
   srand(time(0));
 }
@@ -206,6 +208,36 @@ ulint TraceTool::now_micro()
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
+}
+
+void TraceTool::work_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time)
+{
+  work_wait_time info(trans_id, trx_id, work_time, wait_time);
+  pthread_mutex_lock(&work_wait_mutex);
+  work_wait_infos.push_back(info);
+  pthread_mutex_unlock(&work_wait_mutex);
+}
+
+void TraceTool::remove(ulint trx_id)
+{
+  int num_removed = 0;
+  pthread_mutex_lock(&work_wait_mutex);
+  for (list<work_wait_time>::iterator iterator = work_wait_infos.begin();
+       iterator != work_wait_infos.end();
+       )
+  {
+    if (iterator->trx_id == trx_id)
+    {
+      // automatically moves the iterator forward
+      iterator = work_wait_infos.erase(iterator);
+      ++num_removed;
+    }
+    else
+    {
+      ++iterator;
+    }
+  }
+  pthread_mutex_unlock(&work_wait_mutex);
 }
 
 /********************************************************************//**
@@ -325,6 +357,17 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
+void TraceTool::add_record_if_zero(int function_index, long duration)
+{
+  if (current_transaction_id > transaction_id)
+  {
+    current_transaction_id = 0;
+  }
+  pthread_rwlock_rdlock(&data_lock);
+  function_times[function_index][current_transaction_id] = duration;
+  pthread_rwlock_unlock(&data_lock);
+}
+
 void TraceTool::write_latency()
 {
   ofstream overall_log;
@@ -433,7 +476,63 @@ void TraceTool::write_latency()
   stock_level_log.close();
 }
 
+void TraceTool::write_work_wait()
+{
+  ofstream new_order_work_wait("logs/new_order_work_wait");
+  ofstream payment_work_wait("logs/payment_work_wait");
+  ofstream order_status_work_wait("logs/order_status_work_wait");
+  ofstream delivery_work_wait("logs/delivery_work_wait");
+  ofstream stock_level_work_wait("logs/stock_level_work_wait");
+  stringstream line;
+  pthread_mutex_lock(&work_wait_mutex);
+  for (list<work_wait_time>::iterator iterator = work_wait_infos.begin();
+       iterator != work_wait_infos.end();
+       ++iterator)
+  {
+    work_wait_time &info = *iterator;
+    if (info.transaction_id != 0 &&
+        function_times.back()[info.transaction_id] != 0)
+    {
+      assert(function_times[0][info.transaction_id] > info.work_time_so_far);
+      assert(function_times[1][info.transaction_id] >= info.wait_time_so_far);
+      line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
+      info.work_time_so_far << "," << info.wait_time_so_far << "," <<
+      function_times[0][info.transaction_id] <<  "," << function_times[1][info.transaction_id];
+      const char *work_wait_info = line.str().c_str();
+      switch (transaction_types[info.transaction_id])
+      {
+        case NEW_ORDER:
+          new_order_work_wait << work_wait_info << endl;
+          break;
+        case PAYMENT:
+          payment_work_wait << work_wait_info << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_work_wait << work_wait_info << endl;
+          break;
+        case DELIVERY:
+          delivery_work_wait << work_wait_info << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_work_wait << work_wait_info << endl;
+          break;
+        default:
+          break;
+      }
+      line.str("");
+    }
+  }
+  work_wait_infos.clear();
+  pthread_mutex_unlock(&work_wait_mutex);
+  new_order_work_wait.close();
+  payment_work_wait.close();
+  order_status_work_wait.close();
+  delivery_work_wait.close();
+  stock_level_work_wait.close();
+}
+
 void TraceTool::write_log()
 {
+  write_work_wait();
   write_latency();
 }

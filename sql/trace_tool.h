@@ -58,6 +58,20 @@ enum transaction_type
 };
 typedef enum transaction_type transaction_type;
 
+struct work_wait_time
+{
+    ulint transaction_id;
+    ulint trx_id;
+    ulint work_time_so_far;
+    ulint wait_time_so_far;
+    
+    work_wait_time(ulint trans_id, ulint tid, ulint work_time, ulint wait_time):
+    transaction_id(trans_id), trx_id(tid), work_time_so_far(work_time),
+    wait_time_so_far(wait_time)
+    {}
+};
+typedef struct work_wait_time work_wait_time;
+
 class TraceTool
 {
 private:
@@ -81,6 +95,9 @@ private:
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
+    
+    list<work_wait_time> work_wait_infos;
+    static pthread_mutex_t work_wait_mutex;
     
     TraceTool();
     TraceTool(TraceTool const&){};
@@ -128,6 +145,10 @@ public:
         return log_file;
     }
     
+    void work_wait_info(ulint trans_id, ulint trx_id, ulint work_time,
+                        ulint wait_time);
+    void remove(ulint trx_id);
+    
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
     void start_new_query();
@@ -142,6 +163,7 @@ public:
     Analysis the current query to find out the transaction type. */
     void set_query(const char *query);
     
+    void write_work_wait();
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency();
@@ -152,6 +174,7 @@ public:
     /********************************************************************//**
     Record running time of a function. */
     void add_record(int function_index, long duration);
+    void add_record_if_zero(int function_index, long duration);
 };
 
 #endif

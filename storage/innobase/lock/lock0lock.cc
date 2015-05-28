@@ -2041,6 +2041,20 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
+//  timespec now = TraceTool::get_time();
+//  if (rand() % 100 < 20 &&
+//      trx->real_transaction_id != NULL &&
+//      trx->transaction_id != 0 &&
+//      trx->transaction_id == *(trx->real_transaction_id))
+//  {
+//    ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+//    ulint work_time = total_time_so_far - trx->total_wait_time;
+//    TraceTool::get_instance()->work_wait_info(trx->transaction_id,
+//                                              trx->id,
+//                                              work_time,
+//                                              trx->total_wait_time);
+//  }
+  
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   vector<lock_t *> locks_to_grant;
@@ -2538,8 +2552,9 @@ lock_grant(
   trx_mutex_enter(lock->trx);
   
   timespec now = TraceTool::get_time();
+  trx_t *trx = lock->trx;
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-  lock->trx->total_wait_time += wait_time;
+  trx->total_wait_time += wait_time;
 
   lock_reset_lock_and_trx_wait(lock);
 
