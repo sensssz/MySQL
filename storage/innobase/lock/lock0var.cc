@@ -404,7 +404,6 @@ enumerate_rankings(
   }
 }
 
-/*
 static
 bool
 lock_compatible(
@@ -424,7 +423,7 @@ lock_compatible(
 static
 string
 lock_get_mode(
-              lock_t *lock)
+  lock_t *lock)
 {
   string mode;
   if ((LOCK_MODE_MASK & lock->type_mode) == LOCK_X)
@@ -452,9 +451,30 @@ lock_get_mode(
     mode.append("R");
   }
   
+  switch (lock->trx->type)
+  {
+    case NEW_ORDER:
+      mode.append("O");
+      break;
+    case PAYMENT:
+      mode.append("P");
+      break;
+    case ORDER_STATUS:
+      mode.append("S");
+      break;
+    case DELIVERY:
+      mode.append("D");
+      break;
+    case STOCK_LEVEL:
+      mode.append("L");
+      break;
+    default:
+      mode.append("N");
+      break;
+  }
+  
   return mode;
 }
- */
 
 static
 void
@@ -539,6 +559,10 @@ LVM_schedule(
     granted_locks[index]->in_batch = true;
   }
   
+  ofstream &log_file = TraceTool::get_instance()->get_log();
+  
+  log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
+  
   timespec now = TraceTool::get_time();
   for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
   {
@@ -602,6 +626,28 @@ LVM_schedule(
       locks_to_grant.push_back(lock);
     }
   }
+  sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+  {
+    log_file << lock_get_mode(all_locks[index]) << ",";
+  }
+  log_file << endl;
+  
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+  {
+    log_file << all_locks[index]->ranking << ",";
+  }
+  log_file << endl;
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+  {
+    log_file << all_locks[index]->time_so_far << ",";
+  }
+  log_file << endl;
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+  {
+    log_file << all_locks[index]->process_time << ",";
+  }
+  log_file << endl << endl;
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)

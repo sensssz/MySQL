@@ -39,13 +39,13 @@ Created 5/7/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "ut0vec.h"
 
-#define MIN_BATCH_SIZE 2
-#define MAX_BATCH_SIZE 5
-#define HARD_BOUNDARY false
-
 #ifdef UNIV_DEBUG
 extern ibool	lock_print_waits;
 #endif /* UNIV_DEBUG */
+
+extern ulint MIN_BATCH_SIZE;
+extern ulint MAX_BATCH_SIZE;
+extern ibool HARD_BOUNDARY;
 
 /*********************************************************************//**
 Gets the size of a lock struct.
