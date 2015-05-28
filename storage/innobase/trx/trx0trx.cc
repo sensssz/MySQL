@@ -1411,11 +1411,7 @@ trx_commit_low(
   if (trx->real_transaction_id != NULL &&
       trx->transaction_id == *(trx->real_transaction_id))
   {
-    timespec now = TraceTool::get_time();
-    ulint total = TraceTool::difftime(trx->trx_start_time, now);
-    ulint total_work = total - trx->total_wait_time;
-    TraceTool::get_instance()->add_record_if_zero(0, total_work);
-    TraceTool::get_instance()->add_record_if_zero(1, trx->total_wait_time);
+//    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
   }
   else
   {

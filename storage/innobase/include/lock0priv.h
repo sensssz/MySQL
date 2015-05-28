@@ -73,6 +73,7 @@ struct lock_t {
 					wait flag, ORed */
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
+    ulint           *trx_total_wait_time;
     bool            in_batch;
     int             ranking;
     ulint           time_so_far;

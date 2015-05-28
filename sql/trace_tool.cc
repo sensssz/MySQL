@@ -134,7 +134,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 3;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -220,7 +220,6 @@ void TraceTool::work_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ul
 
 void TraceTool::remove(ulint trx_id)
 {
-  int num_removed = 0;
   pthread_mutex_lock(&work_wait_mutex);
   for (list<work_wait_time>::iterator iterator = work_wait_infos.begin();
        iterator != work_wait_infos.end();
@@ -230,7 +229,6 @@ void TraceTool::remove(ulint trx_id)
     {
       // automatically moves the iterator forward
       iterator = work_wait_infos.erase(iterator);
-      ++num_removed;
     }
     else
     {
@@ -304,6 +302,11 @@ void TraceTool::set_query(const char *new_query)
     {
       type = STOCK_LEVEL;
     }
+    else
+    {
+      type = NONE;
+      commit_successful = false;
+    }
     
     transaction_types[current_transaction_id] = type;
     /* Reset the value of new_transaction. */
@@ -346,7 +349,7 @@ void TraceTool::end_transaction()
 #endif
 }
 
-void TraceTool::add_record(int function_index, long duration)
+void TraceTool::add_record(int function_index, ulint duration)
 {
   if (current_transaction_id > transaction_id)
   {
@@ -357,15 +360,37 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::add_record_if_zero(int function_index, long duration)
+void TraceTool::add_record_if_zero(int function_index, ulint duration)
 {
   if (current_transaction_id > transaction_id)
   {
     current_transaction_id = 0;
   }
   pthread_rwlock_rdlock(&data_lock);
-  function_times[function_index][current_transaction_id] = duration;
+  if (function_times[function_index][current_transaction_id] == 0)
+  {
+    function_times[function_index][current_transaction_id] = duration;
+  }
   pthread_rwlock_unlock(&data_lock);
+}
+
+void TraceTool::add_record(int function_index, ulint transaction_id, ulint duration)
+{
+  pthread_rwlock_rdlock(&data_lock);
+  if (function_times[function_index][transaction_id] == 0)
+  {
+    function_times[function_index][transaction_id] = duration;
+  }
+  pthread_rwlock_unlock(&data_lock);
+}
+
+ulint TraceTool::get_record(int function_index, ulint transaction_id)
+{
+  ulint result = 0;
+  pthread_rwlock_rdlock(&data_lock);
+  result = function_times[function_index][transaction_id];
+  pthread_rwlock_unlock(&data_lock);
+  return result;
 }
 
 void TraceTool::write_latency()
@@ -490,14 +515,20 @@ void TraceTool::write_work_wait()
        ++iterator)
   {
     work_wait_time &info = *iterator;
+    ulint latency = function_times.back()[info.transaction_id];
     if (info.transaction_id != 0 &&
-        function_times.back()[info.transaction_id] != 0)
+        latency != 0)
     {
-      assert(function_times[0][info.transaction_id] > info.work_time_so_far);
-      assert(function_times[1][info.transaction_id] >= info.wait_time_so_far);
+      ulint total_wait = function_times[0][info.transaction_id];
+      ulint total_work = latency - total_wait;
+      if (total_wait < info.wait_time_so_far ||
+          total_work < info.work_time_so_far)
+      {
+        continue;
+      }
       line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
       info.work_time_so_far << "," << info.wait_time_so_far << "," <<
-      function_times[0][info.transaction_id] <<  "," << function_times[1][info.transaction_id];
+      total_work <<  "," << total_wait;
       const char *work_wait_info = line.str().c_str();
       switch (transaction_types[info.transaction_id])
       {

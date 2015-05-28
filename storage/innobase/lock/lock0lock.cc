@@ -2555,6 +2555,11 @@ lock_grant(
   trx_t *trx = lock->trx;
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   trx->total_wait_time += wait_time;
+  if (trx->real_transaction_id != NULL &&
+      trx->transaction_id == *(trx->real_transaction_id))
+  {
+    TraceTool::get_instance()->add_record(0, trx->transaction_id, wait_time);
+  }
 
   lock_reset_lock_and_trx_wait(lock);
 

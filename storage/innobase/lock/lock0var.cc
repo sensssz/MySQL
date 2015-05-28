@@ -22,8 +22,6 @@ using std::sort;
 using std::find;
 using std::string;
 
-static ulint *tpcc_work_wait = NULL;
-static ulint *tpcc_estimated = NULL;
 static ulint *new_order_work_wait = NULL;
 static ulint *new_order_estimated = NULL;
 static ulint *payment_work_wait = NULL;
@@ -35,7 +33,6 @@ static ulint *delivery_estimated = NULL;
 static ulint *stock_level_work_wait = NULL;
 static ulint *stock_level_estimated = NULL;
 
-static ulint tpcc_length = 0;
 static ulint new_order_length = 0;
 static ulint payment_length = 0;
 static ulint order_status_length = 0;
@@ -76,8 +73,6 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_original", tpcc_work_wait,
-                tpcc_estimated, tpcc_length);
   read_isotonic("isotonic_new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
   read_isotonic("isotonic_payment", payment_work_wait,
@@ -154,10 +149,6 @@ estimate(
   ulint length = 0;
   
   switch (type) {
-    case NONE:
-      so_far = tpcc_work_wait;
-      estimate = tpcc_estimated;
-      length = tpcc_length;
     case NEW_ORDER:
       so_far = new_order_work_wait;
       estimate = new_order_estimated;
@@ -529,6 +520,7 @@ LVM_schedule(
       granted_locks.size() == 0)
   {
     waiting_locks[0]->ranking = 0;
+    locks_to_grant.push_back(waiting_locks[0]);
     return;
   }
   
@@ -553,11 +545,13 @@ LVM_schedule(
         trx->transaction_id == *(trx->real_transaction_id))
     {
       ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-      ulint work_time = total_time_so_far - trx->total_wait_time;
+      ulint wait_time_so_far = TraceTool::get_instance()->get_record(0, trx->transaction_id)
+              + TraceTool::difftime(lock->wait_start, now);
+      ulint work_time = total_time_so_far - wait_time_so_far;
       TraceTool::get_instance()->work_wait_info(trx->transaction_id,
                                                 trx->id,
                                                 work_time,
-                                                trx->total_wait_time);
+                                                wait_time_so_far);
     }
   }
   
@@ -591,6 +585,7 @@ LVM_schedule(
       min_variance = variance;
       min_var_index = enum_index;
     }
+    ++enum_index;
   }
   
   int smallest_ranking = INT_MAX;
@@ -604,8 +599,7 @@ LVM_schedule(
   {
     lock_t *lock = waiting_locks[index];
     lock->ranking = enumeration[index];
-    if (lock->ranking != -1 &&
-        lock->ranking < smallest_ranking)
+    if (lock->ranking < smallest_ranking)
     {
       smallest_ranking = lock->ranking;
       locks_to_grant.clear();
@@ -630,8 +624,6 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
-  free(tpcc_work_wait);
-  free(tpcc_estimated);
   free(new_order_work_wait);
   free(new_order_estimated);
   free(payment_work_wait);

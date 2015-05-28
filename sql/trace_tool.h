@@ -86,7 +86,6 @@ private:
     static __thread timespec call_start;    /*!< Time for the start of a child function call. */
     static __thread timespec call_end;      /*!< Time for the end of a child function call. */
     static __thread bool new_transaction;   /*!< True if we need to start a new transaction. */
-    static __thread timespec trans_start;   /*!< Start time of the current transaction. */
     
     ofstream log_file;                      /*!< An log file for outputing debug messages. */
     
@@ -102,6 +101,7 @@ private:
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
+    static __thread timespec trans_start;   /*!< Start time of the current transaction. */
     static __thread ulint current_transaction_id;   /*!< Each thread can execute only one transaction at
                                                          a time. This is the ID of the current transactions. */
     
@@ -173,8 +173,10 @@ public:
     
     /********************************************************************//**
     Record running time of a function. */
-    void add_record(int function_index, long duration);
-    void add_record_if_zero(int function_index, long duration);
+    void add_record(int function_index, ulint duration);
+    void add_record_if_zero(int function_index, ulint duration);
+    void add_record(int function_index, ulint transaction_id, ulint duration);
+    ulint get_record(int function_index, ulint transaction_id);
 };
 
 #endif
