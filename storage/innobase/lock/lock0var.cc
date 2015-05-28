@@ -76,7 +76,7 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_original", tpcc_work_wait,
+  read_isotonic("isotonic_tpcc", tpcc_work_wait,
                 tpcc_estimated, tpcc_length);
   read_isotonic("isotonic_new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
@@ -469,44 +469,44 @@ lock_get_mode(
   {
     mode.append("R");
   }
-//  if (lock->type_mode & LOCK_INSERT_INTENTION)
-//  {
-//    mode.append("I");
-//  }
-//  else if (lock->type_mode & LOCK_GAP)
-//  {
-//    mode.append("G");
-//  }
-//  else if (lock->type_mode & LOCK_ORDINARY)
-//  {
-//    mode.append("N");
-//  }
-//  else if (lock->type_mode & LOCK_REC_NOT_GAP)
-//  {
-//    mode.append("R");
-//  }
-//  
-//  switch (lock->trx->type)
-//  {
-//    case NEW_ORDER:
-//      mode.append("O");
-//      break;
-//    case PAYMENT:
-//      mode.append("P");
-//      break;
-//    case ORDER_STATUS:
-//      mode.append("S");
-//      break;
-//    case DELIVERY:
-//      mode.append("D");
-//      break;
-//    case STOCK_LEVEL:
-//      mode.append("L");
-//      break;
-//    default:
-//      mode.append("N");
-//      break;
-//  }
+  if (lock->type_mode & LOCK_INSERT_INTENTION)
+  {
+    mode.append("I");
+  }
+  else if (lock->type_mode & LOCK_GAP)
+  {
+    mode.append("G");
+  }
+  else if (lock->type_mode & LOCK_ORDINARY)
+  {
+    mode.append("N");
+  }
+  else if (lock->type_mode & LOCK_REC_NOT_GAP)
+  {
+    mode.append("R");
+  }
+  
+  switch (lock->trx->type)
+  {
+    case NEW_ORDER:
+      mode.append("O");
+      break;
+    case PAYMENT:
+      mode.append("P");
+      break;
+    case ORDER_STATUS:
+      mode.append("S");
+      break;
+    case DELIVERY:
+      mode.append("D");
+      break;
+    case STOCK_LEVEL:
+      mode.append("L");
+      break;
+    default:
+      mode.append("N");
+      break;
+  }
   
   return mode;
 }
@@ -594,19 +594,27 @@ LVM_schedule(
     granted_locks[index]->in_batch = true;
   }
   
-//  ofstream &log_file = TraceTool::get_instance()->get_log();
-//  log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-  
-  timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
-  {
-    lock_t *lock = waiting_locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-  }
+  ofstream &log_file = TraceTool::get_instance()->get_log();
   
   vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
   all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
+  
+  timespec now = TraceTool::get_time();
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+  {
+    lock_t *lock = all_locks[index];
+    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    
+    
+    if (lock->time_so_far > 200000000000 ||
+        lock->time_so_far == 0)
+    {
+      timespec start = lock->trx->trx_start_time;
+      log_file << start.tv_sec << "," << start.tv_nsec << endl;
+      log_file << now.tv_sec << "," << now.tv_nsec << endl << endl;
+    }
+  }
   
   vector<int> rankings(waiting_locks.size());
   list<vector<int> > ranking_enumerations;
@@ -653,14 +661,18 @@ LVM_schedule(
     }
   }
   
-//  sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-//  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
-//  {
-//    lock_t *lock = all_locks[index];
-//    log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//    << lock_get_mode(all_locks[index]) << "'};" << endl;
-//  }
-//  log_file << endl;
+  if (rand() % 100 < 20)
+  {
+    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
+    for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = all_locks[index];
+      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+      << lock_get_mode(all_locks[index]) << "'};" << endl;
+    }
+    log_file << endl;
+  }
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
