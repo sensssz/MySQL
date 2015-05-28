@@ -41,7 +41,7 @@ Created 5/7/1996 Heikki Tuuri
 
 #define MIN_BATCH_SIZE 2
 #define MAX_BATCH_SIZE 5
-#define HARD_BOUNDARY true
+#define HARD_BOUNDARY false
 
 #ifdef UNIV_DEBUG
 extern ibool	lock_print_waits;
