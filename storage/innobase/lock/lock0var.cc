@@ -22,6 +22,8 @@ using std::sort;
 using std::find;
 using std::string;
 
+static ulint *tpcc_work_wait = NULL;
+static ulint *tpcc_estimated = NULL;
 static ulint *new_order_work_wait = NULL;
 static ulint *new_order_estimated = NULL;
 static ulint *payment_work_wait = NULL;
@@ -33,6 +35,7 @@ static ulint *delivery_estimated = NULL;
 static ulint *stock_level_work_wait = NULL;
 static ulint *stock_level_estimated = NULL;
 
+static ulint tpcc_length = 0;
 static ulint new_order_length = 0;
 static ulint payment_length = 0;
 static ulint order_status_length = 0;
@@ -73,6 +76,8 @@ UNIV_INTERN
 void
 indi_init()
 {
+  read_isotonic("isotonic_tpcc", tpcc_work_wait,
+                tpcc_estimated, tpcc_length);
   read_isotonic("isotonic_new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
   read_isotonic("isotonic_payment", payment_work_wait,
@@ -149,6 +154,10 @@ estimate(
   ulint length = 0;
   
   switch (type) {
+    case NONE:
+      so_far = tpcc_work_wait;
+      estimate = tpcc_estimated;
+      length = tpcc_length;
     case NEW_ORDER:
       so_far = new_order_work_wait;
       estimate = new_order_estimated;
@@ -271,10 +280,12 @@ cumsum(
   {
     lock_t *lock = locks[index];
     
-    if (lock->ranking == previous_ranking &&
-        lock->process_time > max_process)
+    if (lock->ranking == previous_ranking)
     {
-      max_process = lock->process_time;
+      if (lock->process_time > max_process)
+      {
+        max_process = lock->process_time;
+      }
     }
     else
     {
@@ -373,6 +384,36 @@ CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
   return perms[min_var_index][0];
 }
 
+
+static
+bool
+is_redundant(
+  vector<int> &rankings,
+  ulint num_of_ranking)
+{
+  vector<bool> rank_exists(num_of_ranking, false);
+  int max_rank = 0;
+  for (ulint index = 0, size = rankings.size(); index < size; ++index)
+  {
+    int ranking = rankings[index];
+    rank_exists[ranking] = true;
+    
+    if (ranking > max_rank)
+    {
+      max_rank = ranking;
+    }
+  }
+  
+  for (int ranking = 1; ranking < max_rank; ++ranking)
+  {
+    if (!rank_exists[ranking])
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 static
 void
 enumerate_rankings(
@@ -386,7 +427,10 @@ enumerate_rankings(
     rankings[start] = ranking;
     if (start == end)
     {
-      ranking_enumerations.push_back(rankings);
+      if (!is_redundant(rankings, end + 2))
+      {
+        ranking_enumerations.push_back(rankings);
+      }
     }
     else
     {
@@ -395,7 +439,6 @@ enumerate_rankings(
   }
 }
 
-/*
 static
 bool
 lock_compatible(
@@ -415,7 +458,7 @@ lock_compatible(
 static
 string
 lock_get_mode(
-              lock_t *lock)
+  lock_t *lock)
 {
   string mode;
   if ((LOCK_MODE_MASK & lock->type_mode) == LOCK_X)
@@ -426,26 +469,47 @@ lock_get_mode(
   {
     mode.append("R");
   }
-  if (lock->type_mode & LOCK_INSERT_INTENTION)
-  {
-    mode.append("I");
-  }
-  else if (lock->type_mode & LOCK_GAP)
-  {
-    mode.append("G");
-  }
-  else if (lock->type_mode & LOCK_ORDINARY)
-  {
-    mode.append("N");
-  }
-  else if (lock->type_mode & LOCK_REC_NOT_GAP)
-  {
-    mode.append("R");
-  }
+//  if (lock->type_mode & LOCK_INSERT_INTENTION)
+//  {
+//    mode.append("I");
+//  }
+//  else if (lock->type_mode & LOCK_GAP)
+//  {
+//    mode.append("G");
+//  }
+//  else if (lock->type_mode & LOCK_ORDINARY)
+//  {
+//    mode.append("N");
+//  }
+//  else if (lock->type_mode & LOCK_REC_NOT_GAP)
+//  {
+//    mode.append("R");
+//  }
+//  
+//  switch (lock->trx->type)
+//  {
+//    case NEW_ORDER:
+//      mode.append("O");
+//      break;
+//    case PAYMENT:
+//      mode.append("P");
+//      break;
+//    case ORDER_STATUS:
+//      mode.append("S");
+//      break;
+//    case DELIVERY:
+//      mode.append("D");
+//      break;
+//    case STOCK_LEVEL:
+//      mode.append("L");
+//      break;
+//    default:
+//      mode.append("N");
+//      break;
+//  }
   
   return mode;
 }
- */
 
 static
 void
@@ -519,7 +583,6 @@ LVM_schedule(
   if (waiting_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
-    waiting_locks[0]->ranking = 0;
     locks_to_grant.push_back(waiting_locks[0]);
     return;
   }
@@ -530,6 +593,9 @@ LVM_schedule(
     granted_locks[index]->ranking = 0;
     granted_locks[index]->in_batch = true;
   }
+  
+//  ofstream &log_file = TraceTool::get_instance()->get_log();
+//  log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
   
   timespec now = TraceTool::get_time();
   for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
@@ -542,7 +608,8 @@ LVM_schedule(
     if (rand() % 100 < 50 &&
         trx->real_transaction_id != NULL &&
         trx->transaction_id != 0 &&
-        trx->transaction_id == *(trx->real_transaction_id))
+        trx->transaction_id == *(trx->real_transaction_id) &&
+        trx->type != NONE)
     {
       ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
       ulint wait_time_so_far = TraceTool::get_instance()->get_record(0, trx->transaction_id)
@@ -555,26 +622,25 @@ LVM_schedule(
     }
   }
   
+  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
+  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
+  
   vector<int> rankings(waiting_locks.size());
   list<vector<int> > ranking_enumerations;
   enumerate_rankings(rankings, 0, waiting_locks.size() - 1, ranking_enumerations);
   remove_invalid_ranking(waiting_locks, granted_locks, ranking_enumerations);
   ut_a(ranking_enumerations.size() > 0);
-  
-  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
-  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
   int granted_size = granted_locks.size();
   
   double min_variance = std::numeric_limits<double>::max();
-  int min_var_index = -1;
-  int enum_index = 0;
+  vector<int> *min_enum = NULL;
   for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
        iterator != ranking_enumerations.end(); ++iterator)
   {
     vector<int> &enumeration = *iterator;
     for (ulint index = 0, size = enumeration.size(); index < size; ++index)
     {
-      all_locks[index + granted_size]->ranking = enumeration[index];
+      waiting_locks[index]->ranking = enumeration[index];
     }
     sort(all_locks.begin() + granted_size, all_locks.end(), compare);
     vector<ulint> rolling_sum;
@@ -583,22 +649,15 @@ LVM_schedule(
     if (variance < min_variance)
     {
       min_variance = variance;
-      min_var_index = enum_index;
+      min_enum = &enumeration;
     }
-    ++enum_index;
   }
   
   int smallest_ranking = INT_MAX;
-  list<vector<int> >::iterator enum_iter = ranking_enumerations.begin();
-  for (int count = 0; count < min_var_index; ++count)
-  {
-    enum_iter++;
-  }
-  vector<int> &enumeration = *enum_iter;
-  for (ulint index = 0, size = enumeration.size(); index < size; ++index)
+  for (ulint index = 0, size = min_enum->size(); index < size; ++index)
   {
     lock_t *lock = waiting_locks[index];
-    lock->ranking = enumeration[index];
+    lock->ranking = (*min_enum)[index];
     if (lock->ranking < smallest_ranking)
     {
       smallest_ranking = lock->ranking;
@@ -610,6 +669,15 @@ LVM_schedule(
       locks_to_grant.push_back(lock);
     }
   }
+  
+//  sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+//  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+//  {
+//    lock_t *lock = all_locks[index];
+//    log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+//    << lock_get_mode(all_locks[index]) << "'};" << endl;
+//  }
+//  log_file << endl;
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
@@ -624,6 +692,8 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
+  free(tpcc_work_wait);
+  free(tpcc_estimated);
   free(new_order_work_wait);
   free(new_order_estimated);
   free(payment_work_wait);
@@ -635,4 +705,3 @@ indi_cleanup()
   free(stock_level_work_wait);
   free(stock_level_estimated);
 }
-

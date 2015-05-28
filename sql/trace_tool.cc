@@ -503,6 +503,7 @@ void TraceTool::write_latency()
 
 void TraceTool::write_work_wait()
 {
+  ofstream tpcc_work_wait("logs/tpcc_work_wait");
   ofstream new_order_work_wait("logs/new_order_work_wait");
   ofstream payment_work_wait("logs/payment_work_wait");
   ofstream order_status_work_wait("logs/order_status_work_wait");
@@ -530,6 +531,7 @@ void TraceTool::write_work_wait()
       info.work_time_so_far << "," << info.wait_time_so_far << "," <<
       total_work <<  "," << total_wait;
       const char *work_wait_info = line.str().c_str();
+      tpcc_work_wait << work_wait_info << endl;
       switch (transaction_types[info.transaction_id])
       {
         case NEW_ORDER:
