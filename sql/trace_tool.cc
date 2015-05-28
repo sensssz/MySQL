@@ -144,7 +144,7 @@ TraceTool::TraceTool() : function_times()
   }
   transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
-  transaction_types.reserve(50000);
+  transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
   
   srand(time(0));
