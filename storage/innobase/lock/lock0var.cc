@@ -545,6 +545,13 @@ LVM_schedule(
     lock_t *lock = waiting_locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    
+    if (lock->trx->real_transaction_id != NULL &&
+        lock->trx->transaction_id == *(lock->trx->real_transaction_id))
+    {
+      TraceTool::get_instance()->add_estimate_record(lock->time_so_far + lock->process_time,
+                                                     lock->trx->transaction_id);
+    }
   }
   
   vector<int> rankings(waiting_locks.size());

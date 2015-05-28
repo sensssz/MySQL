@@ -144,8 +144,10 @@ TraceTool::TraceTool() : function_times()
   }
   transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
-  transaction_types.reserve(50000);
+  transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
+  estimated_latencies.reserve(500000);
+  transaction_ids.reserve(500000);
   
   srand(time(0));
 }
@@ -245,6 +247,12 @@ void TraceTool::start_new_query()
   clock_gettime(CLOCK_REALTIME, &global_last_query);
   pthread_mutex_unlock(&last_query_mutex);
 #endif
+}
+
+void TraceTool::add_estimate_record(ulint estimated_latency, ulint transasction_id)
+{
+  estimated_latencies.push_back(estimated_latency);
+  transaction_ids.push_back(transaction_id);
 }
 
 void TraceTool::set_query(const char *new_query)
@@ -438,7 +446,54 @@ void TraceTool::write_latency()
   stock_level_log.close();
 }
 
+void TraceTool::write_isotonic_accuracy()
+{
+  ofstream new_order_accuracy("logs/new_order_accuracy");
+  ofstream payment_accuracy("logs/payment_accuracy");
+  ofstream order_status_accuracy("logs/order_status_accuracy");
+  ofstream delivery_accuracy("logs/delivery_accuracy");
+  ofstream stock_level_accuracy("logs/stock_level_accuracy");
+  for (ulint index = 0, size = estimated_latencies.size(); index < size; ++index)
+  {
+    transaction_type type = transaction_types[transaction_ids[index]];
+    ulint estimated_latency = estimated_latencies[index];
+    ulint latency = function_times.back()[transaction_ids[index]];
+    
+    if (latency != 0)
+    {
+      switch (type)
+      {
+        case NEW_ORDER:
+          new_order_accuracy << estimated_latency << ',' << latency << endl;
+          break;
+        case PAYMENT:
+          payment_accuracy << estimated_latency << ',' << latency << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_accuracy << estimated_latency << ',' << latency << endl;
+          break;
+        case DELIVERY:
+          delivery_accuracy << estimated_latency << ',' << latency << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_accuracy << estimated_latency << ',' << latency << endl;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  estimated_latencies.clear();
+  transaction_ids.clear();
+  new_order_accuracy.close();
+  payment_accuracy.close();
+  order_status_accuracy.close();
+  delivery_accuracy.close();
+  stock_level_accuracy.close();
+}
+
 void TraceTool::write_log()
 {
+  write_isotonic_accuracy();
   write_latency();
 }

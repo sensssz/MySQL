@@ -118,6 +118,9 @@ trx_create(void)
 	trx->no = TRX_ID_MAX;
 
 	trx->support_xa = TRUE;
+  
+  trx->real_transaction_id = NULL;
+  trx->transaction_id = 0;
 
 	trx->check_foreigns = TRUE;
 	trx->check_unique_secondary = TRUE;
@@ -860,6 +863,8 @@ trx_start_low(
   trx->trx_start_time = TraceTool::get_time();
   trx->total_wait_time = 0;
   trx->type = NONE;
+  trx->transaction_id = TraceTool::current_transaction_id;
+  trx->real_transaction_id = &TraceTool::current_transaction_id;
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */

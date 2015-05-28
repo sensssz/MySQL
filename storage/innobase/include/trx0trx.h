@@ -745,6 +745,8 @@ struct trx_t{
     timespec    trx_start_time;
     ulint       total_wait_time;
     transaction_type    type;
+    ulint       transaction_id;
+    ulint       *real_transaction_id;
 
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by
