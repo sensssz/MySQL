@@ -12,6 +12,7 @@
 #define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -332,7 +333,7 @@ void TraceTool::add_record(int function_index, long duration)
 
 void TraceTool::write_latency()
 {
-  ofstream overall_log;
+  ofstream tpcc_log;
   ofstream new_order_log;
   ofstream payment_log;
   ofstream order_status_log;
@@ -341,7 +342,7 @@ void TraceTool::write_latency()
   
   stringstream sstream;
   sstream << "logs/tpcc";
-  overall_log.open(sstream.str().c_str());
+  tpcc_log.open(sstream.str().c_str());
   
   sstream.str("");
   sstream << "logs/new_order";
@@ -363,14 +364,13 @@ void TraceTool::write_latency()
   sstream << "logs/stock_level";
   stock_level_log.open(sstream.str().c_str());
   
-  int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
-  for (unsigned long index = 0; index < transaction_start_times.size(); ++index)
+  for (ulint index = 0; index < transaction_start_times.size(); ++index)
   {
     ulint start_time = transaction_start_times[index];
     if (start_time > 0)
     {
-      overall_log << start_time << endl;
+      tpcc_log << start_time << endl;
       switch (transaction_types[index])
       {
         case NEW_ORDER:
@@ -394,15 +394,16 @@ void TraceTool::write_latency()
     }
   }
   
+  int function_index = 0;
   for (vector<vector<ulint> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
-    long number_of_transactions = iterator->size();
-    for (long index = 0; index < number_of_transactions; ++index)
+    ulint number_of_transactions = iterator->size();
+    for (ulint index = 0; index < number_of_transactions; ++index)
     {
       if (function_times.back()[index] > 0)
       {
         ulint latency = (*iterator)[index];
-        overall_log << function_index << ',' << latency << endl;
+        tpcc_log << function_index << ',' << latency << endl;
         switch (transaction_types[index])
         {
           case NEW_ORDER:
@@ -430,7 +431,7 @@ void TraceTool::write_latency()
   }
   function_times.clear();
   pthread_rwlock_unlock(&data_lock);
-  overall_log.close();
+  tpcc_log.close();
   new_order_log.close();
   payment_log.close();
   order_status_log.close();

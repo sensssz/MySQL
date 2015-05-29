@@ -576,14 +576,22 @@ LVM_schedule(
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
+  bool do_monitor = rand() % 100 < 2;
+  
+  if (do_monitor)
+    TRACE_FUNCTION_START();
   if (waiting_locks.size() == 0)
   {
+    if (do_monitor)
+      TRACE_FUNCTION_END();
     return;
   }
   if (waiting_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
     locks_to_grant.push_back(waiting_locks[0]);
+    if (do_monitor)
+      TRACE_FUNCTION_END();
     return;
   }
   
@@ -605,15 +613,6 @@ LVM_schedule(
     lock_t *lock = all_locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    
-    
-    if (lock->time_so_far > 200000000000 ||
-        lock->time_so_far == 0)
-    {
-      timespec start = lock->trx->trx_start_time;
-      log_file << start.tv_sec << "," << start.tv_nsec << endl;
-      log_file << now.tv_sec << "," << now.tv_nsec << endl << endl;
-    }
   }
   
   vector<int> rankings(waiting_locks.size());
@@ -661,15 +660,23 @@ LVM_schedule(
     }
   }
   
-  if (rand() % 100 < 20)
+  if (do_monitor)
   {
     sort(all_locks.begin() + granted_size, all_locks.end(), compare);
     log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-    for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
     {
-      lock_t *lock = all_locks[index];
+      lock_t *lock = granted_locks[index];
       log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-      << lock_get_mode(all_locks[index]) << "'};" << endl;
+      << lock_get_mode(granted_locks[index]) << "'};" << endl;
+    }
+    log_file << endl;
+
+    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = waiting_locks[index];
+      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
     }
     log_file << endl;
   }
@@ -679,6 +686,8 @@ LVM_schedule(
   {
     locks_to_grant.clear();
   }
+  if (do_monitor)
+    TRACE_FUNCTION_END();
 }
 
 /*************************************************************//**
