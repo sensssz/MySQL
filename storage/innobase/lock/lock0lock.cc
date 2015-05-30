@@ -54,8 +54,9 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-
-#define SEE_NEXT_K_LOCKS  2
+ulint MIN_BATCH_SIZE = 2;
+ulint MAX_BATCH_SIZE = 5;
+ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
@@ -2778,7 +2779,7 @@ lock_next_to_grant(
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   
-  int size = 0;
+  ulint size = 0;
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
        lock != NULL;
        lock = lock_rec_get_next(heap_no, lock))

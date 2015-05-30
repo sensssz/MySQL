@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cassert>
 
-#define TARGET_PATH_COUNT 13
+#define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
 
