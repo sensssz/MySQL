@@ -97,6 +97,15 @@ public:
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
     
+    static ulint num_trans;                 /*!< Number of successfully submitted transactions. */
+    static __thread double submitted_wait_time;  /*!< Total wait time of thew new committed transaction (which
+                                                      is not necessarily successful) */
+    static double wait_time_mean;           /*!< Mean of total wait time of successfully committed
+                                                 transactions*/
+    static double wait_time_variance;       /*!< Variance of total wait time of successfully committed
+                                                 transactions*/
+    static pthread_mutex_t wtv_mutex;
+    
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
     static TraceTool *get_instance();
@@ -128,6 +137,16 @@ public:
         return log_file;
     }
     
+    
+    /********************************************************************//**
+    Sumbits the total wait time of a transaction. */
+    void trans_wait_time(ulint wait_time);
+    /********************************************************************//**
+    Sumbits the total wait time of a transaction. */
+    ulint update_wtv(ulint wait_time, double &mean, double &variance);
+    /********************************************************************//**
+    Sumbits the total wait time of a transaction. */
+    ulint update_wtv(ulint wait_time, double old_mean, double old_variance, double &mean, double &variance);
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
     void start_new_query();

@@ -54,9 +54,9 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-ulint MIN_BATCH_SIZE = 2;
+ulint MIN_BATCH_SIZE = 5;
 ulint MAX_BATCH_SIZE = 5;
-ibool HARD_BOUNDARY = false;
+ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
@@ -2439,51 +2439,6 @@ lock_rec_lock(
 
   ut_error;
   return(DB_ERROR);
-}
-
-/*********************************************************************//**
-Checks if a waiting record lock request still has to wait in a queue.
-@return lock that is causing the wait */
-static
-const lock_t*
-lock_rec_has_to_wait_in_queue_no_wait_lock(
-/*==========================*/
-  const lock_t* wait_lock)  /*!< in: waiting record lock */
-{
-  const lock_t* lock;
-  ulint   space;
-  ulint   page_no;
-  ulint   heap_no;
-  ulint   bit_mask;
-  ulint   bit_offset;
-
-  ut_ad(lock_mutex_own());
-  ut_ad(lock_get_wait(wait_lock));
-  ut_ad(lock_get_type_low(wait_lock) == LOCK_REC);
-
-  space = wait_lock->un_member.rec_lock.space;
-  page_no = wait_lock->un_member.rec_lock.page_no;
-  heap_no = lock_rec_find_set_bit(wait_lock);
-
-  bit_offset = heap_no / 8;
-  bit_mask = static_cast<ulint>(1 << (heap_no % 8));
-
-  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != wait_lock;
-       lock = lock_rec_get_next_on_page_const(lock)) {
-
-    const byte* p = (const byte*) &lock[1];
-
-    if (!lock_get_wait(lock)
-        && heap_no < lock_rec_get_n_bits(lock)
-        && (p[bit_offset] & bit_mask)
-        && lock_has_to_wait(wait_lock, lock)) {
-
-      return(lock);
-    }
-  }
-
-  return(NULL);
 }
 
 /*********************************************************************//**

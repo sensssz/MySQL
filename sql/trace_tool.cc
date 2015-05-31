@@ -44,6 +44,12 @@ __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
 
+ulint TraceTool::num_trans = 0;
+__thread double TraceTool::submitted_wait_time = 0;
+double TraceTool::wait_time_mean = 0;
+double TraceTool::wait_time_variance = 0;
+pthread_mutex_t TraceTool::wtv_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
 static const size_t ORDER_STATUS_LENGTH = strlen(ORDER_STATUS_MARKER);
@@ -209,6 +215,13 @@ ulint TraceTool::now_micro()
 }
 
 /********************************************************************//**
+Sumbits the total wait time of a transaction. */
+void TraceTool::trans_wait_time(ulint wait_time)
+{
+  submitted_wait_time = wait_time;
+}
+
+/********************************************************************//**
 Start a new query. This may also start a new transaction. */
 void TraceTool::start_new_query()
 {
@@ -294,6 +307,28 @@ void TraceTool::end_query()
 #endif
 }
 
+
+/********************************************************************//**
+Sumbits the total wait time of a transaction. */
+ulint TraceTool::update_wtv(ulint wait_time, double &mean, double &variance)
+{
+  ulint trans = num_trans + 1;
+  double old_mean = wait_time_mean;
+  mean = old_mean + (wait_time - old_mean) / trans;
+  variance = wait_time_variance + (wait_time - old_mean) * (wait_time - mean);
+  return trans;
+}
+
+/********************************************************************//**
+Sumbits the total wait time of a transaction. */
+ulint TraceTool::update_wtv(ulint wait_time, double old_mean, double old_variance, double &mean, double &variance)
+{
+  ulint trans = num_trans + 1;
+  mean = old_mean + (wait_time - old_mean) / trans;
+  variance = old_variance + (wait_time - old_mean) * (wait_time - mean);
+  return trans;
+}
+
 void TraceTool::end_transaction()
 {
   new_transaction = true;
@@ -306,6 +341,10 @@ void TraceTool::end_transaction()
     pthread_rwlock_rdlock(&data_lock);
     function_times.back()[current_transaction_id] = latency;
     pthread_rwlock_unlock(&data_lock);
+    
+    pthread_mutex_lock(&wtv_mutex);
+    num_trans = update_wtv(submitted_wait_time, wait_time_mean, wait_time_variance);
+    pthread_mutex_unlock(&wtv_mutex);
   }
   else
   {

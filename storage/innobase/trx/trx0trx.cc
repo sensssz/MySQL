@@ -1402,6 +1402,7 @@ trx_commit_low(
 	}
   
 	trx_commit_in_memory(trx, lsn);
+  TraceTool::get_instance()->trans_wait_time(trx->total_wait_time);
 }
 
 /****************************************************************//**

@@ -19,22 +19,6 @@ void
 indi_init();
 
 /*************************************************************//**
-Estimate remaining time given total time so far
-and transaction type. */
-UNIV_INTERN
-ulint
-estimate(
-  ulint time_so_far,     /*!< total time so far */
-  transaction_type type);/*!< Transaction type */
-
-/*************************************************************//**
-Find the lock that gives minimum CTV. */
-UNIV_INTERN
-lock_t *
-CTV_schedule(
-  vector<lock_t *> &locks); /*!< candidate locks */
-
-/*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
 void

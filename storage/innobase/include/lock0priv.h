@@ -75,6 +75,7 @@ struct lock_t {
 					lock */
     bool            in_batch;
     int             ranking;
+    ulint           total_wait;
     ulint           time_so_far;
     ulint           process_time;
     timespec        wait_start;

@@ -22,25 +22,41 @@ using std::sort;
 using std::find;
 using std::string;
 
-static ulint *tpcc_work_wait = NULL;
-static ulint *tpcc_estimated = NULL;
-static ulint *new_order_work_wait = NULL;
-static ulint *new_order_estimated = NULL;
-static ulint *payment_work_wait = NULL;
-static ulint *payment_estimated = NULL;
-static ulint *order_status_work_wait = NULL;
-static ulint *order_status_estimated = NULL;
-static ulint *delivery_work_wait = NULL;
-static ulint *delivery_estimated = NULL;
-static ulint *stock_level_work_wait = NULL;
-static ulint *stock_level_estimated = NULL;
+/* Isotonic models for estimating latency */
+static ulint *tpcc_work_wait_latency = NULL;
+static ulint *tpcc_estimate_latency = NULL;
+static ulint *new_order_work_wait_latency = NULL;
+static ulint *new_order_estimate_latency = NULL;
+static ulint *payment_work_wait_latency = NULL;
+static ulint *payment_estimate_latency = NULL;
+static ulint *delivery_work_wait_latency = NULL;
+static ulint *delivery_estimate_latency = NULL;
+static ulint *stock_level_work_wait_latency = NULL;
+static ulint *stock_level_estimate_latency = NULL;
 
-static ulint tpcc_length = 0;
-static ulint new_order_length = 0;
-static ulint payment_length = 0;
-static ulint order_status_length = 0;
-static ulint delivery_length = 0;
-static ulint stock_level_length = 0;
+static ulint tpcc_length_latency = 0;
+static ulint new_order_length_latency = 0;
+static ulint payment_length_latency = 0;
+static ulint delivery_length_latency = 0;
+static ulint stock_level_length_latency = 0;
+
+/* Isotonic models for estimating wait time */
+static ulint *tpcc_work_wait_wait = NULL;
+static ulint *tpcc_estimate_wait = NULL;
+static ulint *new_order_work_wait_wait = NULL;
+static ulint *new_order_estimate_wait = NULL;
+static ulint *payment_work_wait_wait = NULL;
+static ulint *payment_estimate_wait = NULL;
+static ulint *delivery_work_wait_wait = NULL;
+static ulint *delivery_estimate_wait = NULL;
+static ulint *stock_level_work_wait_wait = NULL;
+static ulint *stock_level_estimate_wait = NULL;
+
+static ulint tpcc_length_wait = 0;
+static ulint new_order_length_wait = 0;
+static ulint payment_length_wait = 0;
+static ulint delivery_length_wait = 0;
+static ulint stock_level_length_wait = 0;
 
 static
 string
@@ -76,18 +92,27 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_tpcc", tpcc_work_wait,
-                tpcc_estimated, tpcc_length);
-  read_isotonic("isotonic_new_order", new_order_work_wait,
-                new_order_estimated, new_order_length);
-  read_isotonic("isotonic_payment", payment_work_wait,
-                payment_estimated, payment_length);
-  read_isotonic("isotonic_order_status", order_status_work_wait,
-                order_status_estimated, order_status_length);
-  read_isotonic("isotonic_delivery", delivery_work_wait,
-                delivery_estimated, delivery_length);
-  read_isotonic("isotonic_stock_level", stock_level_work_wait,
-                stock_level_estimated, stock_level_length);
+  read_isotonic("isotonics/latency_tpcc", tpcc_work_wait_latency,
+                tpcc_estimate_latency, tpcc_length_latency);
+  read_isotonic("isotonics/latency_new_order", new_order_work_wait_latency,
+                new_order_estimate_latency, new_order_length_latency);
+  read_isotonic("isotonics/latency_payment", payment_work_wait_latency,
+                payment_estimate_latency, payment_length_latency);
+  read_isotonic("isotonics/latency_delivery", delivery_work_wait_latency,
+                delivery_estimate_latency, delivery_length_latency);
+  read_isotonic("isotonics/latency_stock_level", stock_level_work_wait_latency,
+                stock_level_estimate_latency, stock_level_length_latency);
+  
+  read_isotonic("isotonics/wait_tpcc", tpcc_work_wait_wait,
+                tpcc_estimate_wait, tpcc_length_wait);
+  read_isotonic("isotonics/wait_new_order", new_order_work_wait_wait,
+                new_order_estimate_wait, new_order_length_wait);
+  read_isotonic("isotonics/wait_payment", payment_work_wait_wait,
+                payment_estimate_wait, payment_length_wait);
+  read_isotonic("isotonics/wait_delivery", delivery_work_wait_wait,
+                delivery_estimate_wait, delivery_length_wait);
+  read_isotonic("isotonics/wait_stock_level", stock_level_work_wait_wait,
+                stock_level_estimate_wait, stock_level_length_wait);
 }
 
 /*************************************************************//**
@@ -141,11 +166,12 @@ binary_search(
   return length - 1;
 }
 
+
 /*************************************************************//**
 Estimate remaining time given total time so far. */
 UNIV_INTERN
 ulint
-estimate(
+estimate_wait(
   ulint time_so_far,
   transaction_type type)
 {
@@ -155,33 +181,29 @@ estimate(
   
   switch (type) {
     case NONE:
-      so_far = tpcc_work_wait;
-      estimate = tpcc_estimated;
-      length = tpcc_length;
+    case ORDER_STATUS:
+      so_far = tpcc_work_wait_wait;
+      estimate = tpcc_estimate_wait;
+      length = tpcc_length_wait;
     case NEW_ORDER:
-      so_far = new_order_work_wait;
-      estimate = new_order_estimated;
-      length = new_order_length;
+      so_far = new_order_work_wait_wait;
+      estimate = new_order_estimate_wait;
+      length = new_order_length_wait;
       break;
     case PAYMENT:
-      so_far = payment_work_wait;
-      estimate = payment_estimated;
-      length = payment_length;
-      break;
-    case ORDER_STATUS:
-      so_far = order_status_work_wait;
-      estimate = order_status_estimated;
-      length = order_status_length;
+      so_far = payment_work_wait_wait;
+      estimate = payment_estimate_wait;
+      length = payment_length_wait;
       break;
     case DELIVERY:
-      so_far = delivery_work_wait;
-      estimate = delivery_estimated;
-      length = delivery_length;
+      so_far = delivery_work_wait_wait;
+      estimate = delivery_estimate_wait;
+      length = delivery_length_wait;
       break;
     case STOCK_LEVEL:
-      so_far = stock_level_work_wait;
-      estimate = stock_level_estimated;
-      length = stock_level_length;
+      so_far = stock_level_work_wait_wait;
+      estimate = stock_level_estimate_wait;
+      length = stock_level_length_wait;
       break;
     default:
       break;
@@ -197,47 +219,54 @@ estimate(
 }
 
 /*************************************************************//**
-Swap two elements in a vector. */
-static
-void
-swap(
-  vector<lock_t *> &locks,
-  ulint index1,
-  ulint index2)
+Estimate remaining time given total time so far. */
+UNIV_INTERN
+ulint
+estimate_latency(
+  ulint time_so_far,
+  transaction_type type)
 {
-  if (index1 != index2)
-  {
-    lock_t *temp = locks[index1];
-    locks[index1] = locks[index2];
-    locks[index2] = temp;
-  }
-}
-
-/*************************************************************//**
-Generate all possible permutations of the given vector. */
-static
-void
-permutate(
-  vector<lock_t *> &locks,
-  ulint start,
-  ulint end,
-  vector<vector<lock_t *> > &permutations)
-{
-  if (start == end)
-  {
-    vector<lock_t *> permutation(locks);
-    permutations.push_back(permutation);
-    return;
+  ulint *so_far = NULL;
+  ulint *estimate = NULL;
+  ulint length = 0;
+  
+  switch (type) {
+    case NONE:
+    case ORDER_STATUS:
+      so_far = tpcc_work_wait_latency;
+      estimate = tpcc_estimate_latency;
+      length = tpcc_length_latency;
+    case NEW_ORDER:
+      so_far = new_order_work_wait_latency;
+      estimate = new_order_estimate_latency;
+      length = new_order_length_latency;
+      break;
+    case PAYMENT:
+      so_far = payment_work_wait_latency;
+      estimate = payment_estimate_latency;
+      length = payment_length_latency;
+      break;
+    case DELIVERY:
+      so_far = delivery_work_wait_latency;
+      estimate = delivery_estimate_latency;
+      length = delivery_length_latency;
+      break;
+    case STOCK_LEVEL:
+      so_far = stock_level_work_wait_latency;
+      estimate = stock_level_estimate_latency;
+      length = stock_level_length_latency;
+      break;
+    default:
+      break;
   }
   
-  for (ulint index = start; index <= end; ++index)
+  ulint y_index = binary_search(so_far, length, time_so_far);
+  if (y_index == length - 1)
   {
-    /* Swap these two elements. */
-    swap(locks, start, index);
-    permutate(locks, start + 1, end, permutations);
-    /* Swap them back. */
-    swap(locks, start, index);
+    y_index = length - 2;
   }
+  ulint result = estimate[y_index + 1];
+  return result - time_so_far;
 }
 
 /*************************************************************//**
@@ -245,20 +274,16 @@ Calculat the variance of a list of numbers. */
 static
 double
 var(
-  vector<ulint> &numbers)
+  vector<ulint> &wait_times)
 {
   double mean = 0;
-  for (ulint index = 0, size = numbers.size(); index < size; ++index)
-  {
-    mean += numbers[index];
-  }
-  mean /= numbers.size();
-  
   double variance = 0;
-  for (ulint index = 0, size = numbers.size(); index < size; ++index)
+  
+  TraceTool::get_instance()->update_wtv(wait_times[0], mean, variance);
+  
+  for (ulint index = 1; index < wait_times.size(); ++index)
   {
-    double difference = numbers[index] - mean;
-    variance += difference * difference;
+    TraceTool::get_instance()->update_wtv(wait_times[index], mean, variance, mean, variance);
   }
   
   return variance;
@@ -294,96 +319,9 @@ cumsum(
       previous_ranking = lock->ranking;
     }
     
-    rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
+    rolling_sum.push_back(lock->total_wait + sum_of_previous_process_time);
   }
 }
-
-/*************************************************************//**
-Find the lock that gives minimum variance of estimated latency. */
-UNIV_INTERN
-lock_t *
-CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
-{
-  if (locks.size() == 0)
-  {
-    return NULL;
-  }
-  else if (locks.size() == 1)
-  {
-    return locks[0];
-  }
-  
-  int random = rand() % 100;
-  bool do_log = random < 42;
-  
-  ofstream &log_file = TraceTool::get_instance()->get_log();
-  
-  timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = locks.size(); index < size; ++index)
-  {
-    lock_t *lock = locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    
-    if (do_log)
-    {
-      log_file << lock->time_so_far << ",";
-    }
-  }
-  if (do_log)
-  {
-    log_file << endl;
-  
-    for (ulint index = 0, size = locks.size(); index < size; ++index)
-    {
-      log_file << locks[index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  vector<vector<lock_t *> > perms;
-  permutate(locks, 0, locks.size() - 1, perms);
-  
-  double min_variance = std::numeric_limits<double>::max();
-  int min_var_index = -1;
-  for (ulint index = 0, size = perms.size(); index < size; ++index)
-  {
-    vector<ulint> rolling_sum;
-    cumsum(perms[index], rolling_sum);
-    double variance = var(rolling_sum);
-    if (variance < min_variance)
-    {
-      min_variance = variance;
-      min_var_index = index;
-    }
-  }
-  
-  for (ulint index = 0, size = perms[min_var_index].size();
-       index < size; ++index)
-  {
-    perms[min_var_index][index]->ranking = index;
-    
-    if (do_log)
-    {
-      log_file << perms[min_var_index][index]->time_so_far << ",";
-    }
-  }
-  
-  if (do_log)
-  {
-    log_file << endl;
-    
-    for (ulint index = 0, size = perms[min_var_index].size();
-         index < size; ++index)
-    {
-      log_file << perms[min_var_index][index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  return perms[min_var_index][0];
-}
-
 
 static
 bool
@@ -606,7 +544,8 @@ LVM_schedule(
   {
     lock_t *lock = all_locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    lock->process_time = estimate_latency(lock->time_so_far, lock->trx->type);
+    lock->total_wait = estimate_wait(lock->time_so_far, lock->trx->type);
   }
   
   vector<int> rankings(waiting_locks.size());
@@ -688,17 +627,26 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
-  free(tpcc_work_wait);
-  free(tpcc_estimated);
-  free(new_order_work_wait);
-  free(new_order_estimated);
-  free(payment_work_wait);
-  free(payment_estimated);
-  free(order_status_work_wait);
-  free(order_status_estimated);
-  free(delivery_work_wait);
-  free(delivery_estimated);
-  free(stock_level_work_wait);
-  free(stock_level_estimated);
+  free(tpcc_work_wait_latency);
+  free(tpcc_estimate_latency);
+  free(new_order_work_wait_latency);
+  free(new_order_estimate_latency);
+  free(payment_work_wait_latency);
+  free(payment_estimate_latency);
+  free(delivery_work_wait_latency);
+  free(delivery_estimate_latency);
+  free(stock_level_work_wait_latency);
+  free(stock_level_estimate_latency);
+  
+  free(tpcc_work_wait_wait);
+  free(tpcc_estimate_wait);
+  free(new_order_work_wait_wait);
+  free(new_order_estimate_wait);
+  free(payment_work_wait_wait);
+  free(payment_estimate_wait);
+  free(delivery_work_wait_wait);
+  free(delivery_estimate_wait);
+  free(stock_level_work_wait_wait);
+  free(stock_level_estimate_wait);
 }
 
