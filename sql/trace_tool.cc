@@ -210,9 +210,9 @@ ulint TraceTool::now_micro()
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
-void TraceTool::work_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time)
+void TraceTool::work_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time, ulint num_locks)
 {
-  work_wait_time info(trans_id, trx_id, work_time, wait_time);
+  work_wait_time info(trans_id, trx_id, work_time, wait_time, num_locks);
   pthread_mutex_lock(&work_wait_mutex);
   work_wait_infos.push_back(info);
   pthread_mutex_unlock(&work_wait_mutex);
@@ -528,7 +528,7 @@ void TraceTool::write_work_wait()
         continue;
       }
       line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
-      info.work_time_so_far << "," << info.wait_time_so_far << "," <<
+      info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_locks << "," <<
       total_work <<  "," << total_wait;
       const char *work_wait_info = line.str().c_str();
       tpcc_work_wait << work_wait_info << endl;

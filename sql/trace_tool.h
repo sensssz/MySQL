@@ -64,10 +64,11 @@ struct work_wait_time
     ulint trx_id;
     ulint work_time_so_far;
     ulint wait_time_so_far;
+    ulint num_locks;
     
-    work_wait_time(ulint trans_id, ulint tid, ulint work_time, ulint wait_time):
+    work_wait_time(ulint trans_id, ulint tid, ulint work_time, ulint wait_time, ulint locks):
     transaction_id(trans_id), trx_id(tid), work_time_so_far(work_time),
-    wait_time_so_far(wait_time)
+    wait_time_so_far(wait_time), num_locks(locks)
     {}
 };
 typedef struct work_wait_time work_wait_time;
@@ -146,7 +147,7 @@ public:
     }
     
     void work_wait_info(ulint trans_id, ulint trx_id, ulint work_time,
-                        ulint wait_time);
+                        ulint wait_time, ulint num_locks);
     void remove(ulint trx_id);
     
     /********************************************************************//**

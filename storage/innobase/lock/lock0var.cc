@@ -615,10 +615,12 @@ LVM_schedule(
       ulint wait_time_so_far = TraceTool::get_instance()->get_record(0, trx->transaction_id)
               + TraceTool::difftime(lock->wait_start, now);
       ulint work_time = total_time_so_far - wait_time_so_far;
+      ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
       TraceTool::get_instance()->work_wait_info(trx->transaction_id,
                                                 trx->id,
                                                 work_time,
-                                                wait_time_so_far);
+                                                wait_time_so_far,
+                                                num_locks);
     }
   }
   
