@@ -576,22 +576,16 @@ LVM_schedule(
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
-  bool do_monitor = rand() % 100 < 2;
+//  bool do_monitor = rand() % 100 < 2;
   
-  if (do_monitor)
-    TRACE_FUNCTION_START();
   if (waiting_locks.size() == 0)
   {
-    if (do_monitor)
-      TRACE_FUNCTION_END();
     return;
   }
   if (waiting_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
     locks_to_grant.push_back(waiting_locks[0]);
-    if (do_monitor)
-      TRACE_FUNCTION_END();
     return;
   }
   
@@ -602,7 +596,7 @@ LVM_schedule(
     granted_locks[index]->in_batch = true;
   }
   
-  ofstream &log_file = TraceTool::get_instance()->get_log();
+//  ofstream &log_file = TraceTool::get_instance()->get_log();
   
   vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
   all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
@@ -660,34 +654,32 @@ LVM_schedule(
     }
   }
   
-  if (do_monitor)
-  {
-    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
-    {
-      lock_t *lock = granted_locks[index];
-      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-      << lock_get_mode(granted_locks[index]) << "'};" << endl;
-    }
-    log_file << endl;
-
-    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
-    {
-      lock_t *lock = waiting_locks[index];
-      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
-    }
-    log_file << endl;
-  }
+//  if (do_monitor)
+//  {
+//    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+//    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
+//    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
+//    {
+//      lock_t *lock = granted_locks[index];
+//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+//      << lock_get_mode(granted_locks[index]) << "'};" << endl;
+//    }
+//    log_file << endl;
+//
+//    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+//    {
+//      lock_t *lock = waiting_locks[index];
+//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+//      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
+//    }
+//    log_file << endl;
+//  }
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
   {
     locks_to_grant.clear();
   }
-  if (do_monitor)
-    TRACE_FUNCTION_END();
 }
 
 /*************************************************************//**
