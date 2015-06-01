@@ -22,26 +22,6 @@ using std::sort;
 using std::find;
 using std::string;
 
-static ulint *tpcc_work_wait = NULL;
-static ulint *tpcc_estimated = NULL;
-static ulint *new_order_work_wait = NULL;
-static ulint *new_order_estimated = NULL;
-static ulint *payment_work_wait = NULL;
-static ulint *payment_estimated = NULL;
-static ulint *order_status_work_wait = NULL;
-static ulint *order_status_estimated = NULL;
-static ulint *delivery_work_wait = NULL;
-static ulint *delivery_estimated = NULL;
-static ulint *stock_level_work_wait = NULL;
-static ulint *stock_level_estimated = NULL;
-
-static ulint tpcc_length = 0;
-static ulint new_order_length = 0;
-static ulint payment_length = 0;
-static ulint order_status_length = 0;
-static ulint delivery_length = 0;
-static ulint stock_level_length = 0;
-
 static
 string
 lock_get_mode(
@@ -76,18 +56,6 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_tpcc", tpcc_work_wait,
-                tpcc_estimated, tpcc_length);
-  read_isotonic("isotonic_new_order", new_order_work_wait,
-                new_order_estimated, new_order_length);
-  read_isotonic("isotonic_payment", payment_work_wait,
-                payment_estimated, payment_length);
-  read_isotonic("isotonic_order_status", order_status_work_wait,
-                order_status_estimated, order_status_length);
-  read_isotonic("isotonic_delivery", delivery_work_wait,
-                delivery_estimated, delivery_length);
-  read_isotonic("isotonic_stock_level", stock_level_work_wait,
-                stock_level_estimated, stock_level_length);
 }
 
 /*************************************************************//**
@@ -396,44 +364,6 @@ lock_get_mode(
   {
     mode.append("R");
   }
-//  if (lock->type_mode & LOCK_INSERT_INTENTION)
-//  {
-//    mode.append("I");
-//  }
-//  else if (lock->type_mode & LOCK_GAP)
-//  {
-//    mode.append("G");
-//  }
-//  else if (lock->type_mode & LOCK_ORDINARY)
-//  {
-//    mode.append("N");
-//  }
-//  else if (lock->type_mode & LOCK_REC_NOT_GAP)
-//  {
-//    mode.append("R");
-//  }
-//  
-//  switch (lock->trx->type)
-//  {
-//    case NEW_ORDER:
-//      mode.append("O");
-//      break;
-//    case PAYMENT:
-//      mode.append("P");
-//      break;
-//    case ORDER_STATUS:
-//      mode.append("S");
-//      break;
-//    case DELIVERY:
-//      mode.append("D");
-//      break;
-//    case STOCK_LEVEL:
-//      mode.append("L");
-//      break;
-//    default:
-//      mode.append("N");
-//      break;
-//  }
   
   return mode;
 }
@@ -503,13 +433,18 @@ LVM_schedule(
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
+  ofstream &log = TraceTool::get_instance()->get_log();
+  
+  
   if (waiting_locks.size() == 0)
   {
     return;
   }
+  log << "Schedule Starts" << endl;
   if (waiting_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
+    log << "Only one lock in queue" << endl;
     locks_to_grant.push_back(waiting_locks[0]);
     return;
   }
@@ -582,20 +517,13 @@ LVM_schedule(
     }
   }
   
-//  sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-//  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
-//  {
-//    lock_t *lock = all_locks[index];
-//    log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//    << lock_get_mode(all_locks[index]) << "'};" << endl;
-//  }
-//  log_file << endl;
-  
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
   {
     locks_to_grant.clear();
   }
+  
+  log << "Schedule Ends" << endl << endl;
 }
 
 /*************************************************************//**
@@ -604,16 +532,4 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
-  free(tpcc_work_wait);
-  free(tpcc_estimated);
-  free(new_order_work_wait);
-  free(new_order_estimated);
-  free(payment_work_wait);
-  free(payment_estimated);
-  free(order_status_work_wait);
-  free(order_status_estimated);
-  free(delivery_work_wait);
-  free(delivery_estimated);
-  free(stock_level_work_wait);
-  free(stock_level_estimated);
 }

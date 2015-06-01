@@ -2049,14 +2049,34 @@ lock_rec_enqueue_waiting(
   
   rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
   
+  ofstream &log = TraceTool::get_instance()->get_log();
+  ulint space_id = lock->un_member.rec_lock.space;
+  ulint page_no = lock->un_member.rec_lock.page_no;
+  if (space_id == 14 && page_no == 3)
+  {
+    if (heap_no == 5 || heap_no ==  13 || heap_no == 21)
+    {
+      log << "Arrival:" << endl;
+      log << "(" << heap_no << ")["
+      for (ulint index = 0; index < granted_locks.size(); ++index)
+      {
+        lock_t *lock = granted_locks[index];
+        log << "(" << lock->trx->id << "," << lock_get_mode_str(lock) << "),";
+      }
+      log << "]";
+      for (ulint index = 0; index < wait_locks.size(); ++index)
+      {
+        lock_t *lock = wait_locks[index];
+        log << "(" << lock->trx->id << "," << lock_get_mode_str(lock) << "," << lock->ranking << "),";
+      }
+      log << endl << endl;
+    }
+  }
+  
   if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
       !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
   {
-    TraceTool::path_count = 42;
-    TRACE_FUNCTION_START();
     LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-    TRACE_FUNCTION_END();
-    TraceTool::path_count = 0;
     locks_grant(locks_to_grant, buf_block_get_space(block),
                 buf_block_get_page_no(block), heap_no, trx);
     if (!lock_get_wait(lock))
