@@ -141,59 +141,73 @@ binary_search(
   return length - 1;
 }
 
+static
+ulint
+tpcc_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  return 5488089.615703 * num_locks + 1.942222 * work + 0.766192 * wait + 298666199.000513;
+}
+
+static
+ulint
+new_order_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  return 9849050.582090 * num_locks + 2.393067 * work + 0.788607 * wait + 293570030.003463;
+}
+
+static
+ulint
+payment_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  return 148662428.974091 * num_locks + 1.548239 * work + 0.736832 * wait + 0.000000;
+}
+
+static
+ulint
+delivery_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  return -13306266.992916 * num_locks + 2.613634 * work + 0.652131 * wait + 907693255.087883;
+}
+
+static
+ulint
+stock_level_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  return -444879.387608 * num_locks + 0.866669 * work + 0.944012 * wait + 193479572.897411;
+}
+
 /*************************************************************//**
 Estimate remaining time given total time so far. */
 UNIV_INTERN
 ulint
 estimate(
-  ulint time_so_far,
-  transaction_type type)
+         ulint num_locks,
+         ulint work,
+         ulint wait,
+         transaction_type type)
 {
-  ulint *so_far = NULL;
-  ulint *estimate = NULL;
-  ulint length = 0;
-  
   switch (type) {
     case NONE:
-      so_far = tpcc_work_wait;
-      estimate = tpcc_estimated;
-      length = tpcc_length;
+      return tpcc_estimate(num_locks, work, wait);
     case NEW_ORDER:
-      so_far = new_order_work_wait;
-      estimate = new_order_estimated;
-      length = new_order_length;
+      return new_order_estimate(num_locks, work, wait);
       break;
     case PAYMENT:
-      so_far = payment_work_wait;
-      estimate = payment_estimated;
-      length = payment_length;
+      return payment_estimate(num_locks, work, wait);
       break;
     case ORDER_STATUS:
-      so_far = order_status_work_wait;
-      estimate = order_status_estimated;
-      length = order_status_length;
+      return tpcc_estimate(num_locks, work, wait);
       break;
     case DELIVERY:
-      so_far = delivery_work_wait;
-      estimate = delivery_estimated;
-      length = delivery_length;
+      return delivery_estimate(num_locks, work, wait);
       break;
     case STOCK_LEVEL:
-      so_far = stock_level_work_wait;
-      estimate = stock_level_estimated;
-      length = stock_level_length;
+      return stock_level_estimate(num_locks, work, wait);
       break;
     default:
+      return tpcc_estimate(num_locks, work, wait);
       break;
   }
-  
-  ulint y_index = binary_search(so_far, length, time_so_far);
-  if (y_index == length - 1)
-  {
-    y_index = length - 2;
-  }
-  ulint result = estimate[y_index + 1];
-  return result - time_so_far;
 }
 
 /*************************************************************//**
@@ -298,93 +312,6 @@ cumsum(
   }
 }
 
-/*************************************************************//**
-Find the lock that gives minimum variance of estimated latency. */
-UNIV_INTERN
-lock_t *
-CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
-{
-  if (locks.size() == 0)
-  {
-    return NULL;
-  }
-  else if (locks.size() == 1)
-  {
-    return locks[0];
-  }
-  
-  int random = rand() % 100;
-  bool do_log = random < 42;
-  
-  ofstream &log_file = TraceTool::get_instance()->get_log();
-  
-  timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = locks.size(); index < size; ++index)
-  {
-    lock_t *lock = locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    
-    if (do_log)
-    {
-      log_file << lock->time_so_far << ",";
-    }
-  }
-  if (do_log)
-  {
-    log_file << endl;
-  
-    for (ulint index = 0, size = locks.size(); index < size; ++index)
-    {
-      log_file << locks[index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  vector<vector<lock_t *> > perms;
-  permutate(locks, 0, locks.size() - 1, perms);
-  
-  double min_variance = std::numeric_limits<double>::max();
-  int min_var_index = -1;
-  for (ulint index = 0, size = perms.size(); index < size; ++index)
-  {
-    vector<ulint> rolling_sum;
-    cumsum(perms[index], rolling_sum);
-    double variance = var(rolling_sum);
-    if (variance < min_variance)
-    {
-      min_variance = variance;
-      min_var_index = index;
-    }
-  }
-  
-  for (ulint index = 0, size = perms[min_var_index].size();
-       index < size; ++index)
-  {
-    perms[min_var_index][index]->ranking = index;
-    
-    if (do_log)
-    {
-      log_file << perms[min_var_index][index]->time_so_far << ",";
-    }
-  }
-  
-  if (do_log)
-  {
-    log_file << endl;
-    
-    for (ulint index = 0, size = perms[min_var_index].size();
-         index < size; ++index)
-    {
-      log_file << perms[min_var_index][index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  return perms[min_var_index][0];
-}
-
-
 static
 bool
 is_redundant(
@@ -469,44 +396,44 @@ lock_get_mode(
   {
     mode.append("R");
   }
-  if (lock->type_mode & LOCK_INSERT_INTENTION)
-  {
-    mode.append("I");
-  }
-  else if (lock->type_mode & LOCK_GAP)
-  {
-    mode.append("G");
-  }
-  else if (lock->type_mode & LOCK_ORDINARY)
-  {
-    mode.append("N");
-  }
-  else if (lock->type_mode & LOCK_REC_NOT_GAP)
-  {
-    mode.append("R");
-  }
-  
-  switch (lock->trx->type)
-  {
-    case NEW_ORDER:
-      mode.append("O");
-      break;
-    case PAYMENT:
-      mode.append("P");
-      break;
-    case ORDER_STATUS:
-      mode.append("S");
-      break;
-    case DELIVERY:
-      mode.append("D");
-      break;
-    case STOCK_LEVEL:
-      mode.append("L");
-      break;
-    default:
-      mode.append("N");
-      break;
-  }
+//  if (lock->type_mode & LOCK_INSERT_INTENTION)
+//  {
+//    mode.append("I");
+//  }
+//  else if (lock->type_mode & LOCK_GAP)
+//  {
+//    mode.append("G");
+//  }
+//  else if (lock->type_mode & LOCK_ORDINARY)
+//  {
+//    mode.append("N");
+//  }
+//  else if (lock->type_mode & LOCK_REC_NOT_GAP)
+//  {
+//    mode.append("R");
+//  }
+//  
+//  switch (lock->trx->type)
+//  {
+//    case NEW_ORDER:
+//      mode.append("O");
+//      break;
+//    case PAYMENT:
+//      mode.append("P");
+//      break;
+//    case ORDER_STATUS:
+//      mode.append("S");
+//      break;
+//    case DELIVERY:
+//      mode.append("D");
+//      break;
+//    case STOCK_LEVEL:
+//      mode.append("L");
+//      break;
+//    default:
+//      mode.append("N");
+//      break;
+//  }
   
   return mode;
 }
@@ -576,8 +503,6 @@ LVM_schedule(
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
-//  bool do_monitor = rand() % 100 < 2;
-  
   if (waiting_locks.size() == 0)
   {
     return;
@@ -596,18 +521,21 @@ LVM_schedule(
     granted_locks[index]->in_batch = true;
   }
   
-//  ofstream &log_file = TraceTool::get_instance()->get_log();
+  
+  timespec now = TraceTool::get_time();
+  for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+  {
+    lock_t *lock = waiting_locks[index];
+    trx_t *trx = lock->trx;
+    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+    ulint wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+    ulint work_so_far = lock->time_so_far - wait_so_far;
+    ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
+    lock->process_time = estimate(num_locks, work_so_far, wait_so_far, lock->trx->type) - lock->time_so_far;
+  }
   
   vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
   all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
-  
-  timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
-  {
-    lock_t *lock = all_locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-  }
   
   vector<int> rankings(waiting_locks.size());
   list<vector<int> > ranking_enumerations;
@@ -654,26 +582,14 @@ LVM_schedule(
     }
   }
   
-//  if (do_monitor)
+//  sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+//  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
 //  {
-//    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-//    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-//    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
-//    {
-//      lock_t *lock = granted_locks[index];
-//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//      << lock_get_mode(granted_locks[index]) << "'};" << endl;
-//    }
-//    log_file << endl;
-//
-//    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
-//    {
-//      lock_t *lock = waiting_locks[index];
-//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
-//    }
-//    log_file << endl;
+//    lock_t *lock = all_locks[index];
+//    log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+//    << lock_get_mode(all_locks[index]) << "'};" << endl;
 //  }
+//  log_file << endl;
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
@@ -701,4 +617,3 @@ indi_cleanup()
   free(stock_level_work_wait);
   free(stock_level_estimated);
 }
-

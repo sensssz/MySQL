@@ -54,9 +54,9 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-ulint MIN_BATCH_SIZE = 2;
+ulint MIN_BATCH_SIZE = 5;
 ulint MAX_BATCH_SIZE = 5;
-ibool HARD_BOUNDARY = false;
+ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
