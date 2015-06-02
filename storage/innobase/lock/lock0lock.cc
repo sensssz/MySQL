@@ -56,7 +56,7 @@ Created 5/7/1996 Heikki Tuuri
 
 ulint MIN_BATCH_SIZE = 2;
 ulint MAX_BATCH_SIZE = 5;
-ibool HARD_BOUNDARY = false;
+ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
@@ -2819,7 +2819,8 @@ lock_next_to_grant(
   /* No one is holding a lock on this record when we reach here */
   if (wait_locks.size() > 0) /* Queue is not empty */
   {
-    if (!HARD_BOUNDARY ||           /* Use soft boundary */
+    bool new_wait_lock = wait_locks.back()->ranking == -1;
+    if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
         locks_to_grant.size() == 0) /* No batch in queue */
     {
       LVM_schedule(wait_locks, granted_locks, locks_to_grant);
