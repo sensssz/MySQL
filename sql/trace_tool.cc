@@ -440,5 +440,14 @@ void TraceTool::write_latency()
 
 void TraceTool::write_log()
 {
+  ofstream log_actual_latency("actual_latencies");
+  for (ulint index = 0; index < actual_latencies.size(); ++index)
+  {
+    trx_actual_latency &record = actual_latencies[index];
+    ulint actual_total = function_times.back()[record.transaction_id];
+    ulint actual_remaining = actual_total - record.time_so_far;
+    log_actual_latency << "rem" << record.trx_id << "=" << actual_remaining << ",";
+  }
+  log_actual_latency.close();
   write_latency();
 }

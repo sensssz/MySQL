@@ -26,6 +26,13 @@ using std::endl;
 using std::unordered_map;
 using std::string;
 
+typedef struct trx_actual_latency
+{
+    ulint trx_id;
+    ulint transaction_id;
+    ulint time_so_far;
+} trx_actual_latency;
+
 /** The global transaction id counter */
 extern ulint transaction_id;
 
@@ -81,6 +88,7 @@ private:
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
+    vector<trx_actual_latency> actual_latencies;
     
     TraceTool();
     TraceTool(TraceTool const&){};
@@ -126,6 +134,15 @@ public:
     ofstream &get_log()
     {
         return log_file;
+    }
+    
+    void add_actual_latency(ulint trx_id, ulint transaction_id, ulint time_so_far)
+    {
+        trx_actual_latency record;
+        record.trx_id = trx_id;
+        record.transaction_id = transaction_id;
+        record.time_so_far = time_so_far;
+        actual_latencies.push_back(record);
     }
     
     /********************************************************************//**

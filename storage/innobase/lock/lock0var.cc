@@ -572,20 +572,31 @@ Find the lock that gives minimum CTV. */
 UNIV_INTERN
 void
 LVM_schedule(
-  vector<lock_t *> &waiting_locks,  /*!< waiting locks */
+  vector<lock_t *> &wait_locks,  /*!< waiting locks */
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
-//  bool do_monitor = rand() % 100 < 2;
+  ofstream &log = TraceTool::get_instance()->get_log();
   
-  if (waiting_locks.size() == 0)
+  if (wait_locks.size() == 0)
   {
     return;
   }
-  if (waiting_locks.size() == 1 &&
+  
+  lock_t *lock = wait_locks[0];
+  ulint space_id = lock->un_member.rec_lock.space;
+  ulint page_no = lock->un_member.rec_lock.page_no;
+  ulint heap_no = lock_rec_find_set_bit(lock);
+  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
+  
+  if (do_monitor)
+    log << "Schedule Starts" << endl;
+  if (wait_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
-    locks_to_grant.push_back(waiting_locks[0]);
+    if (do_monitor)
+      log << "Only one lock in queue" << endl;
+    locks_to_grant.push_back(wait_locks[0]);
     return;
   }
   
@@ -596,23 +607,23 @@ LVM_schedule(
     granted_locks[index]->in_batch = true;
   }
   
-//  ofstream &log_file = TraceTool::get_instance()->get_log();
-  
   vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
-  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
+  all_locks.insert(all_locks.end(), wait_locks.begin(), wait_locks.end());
   
   timespec now = TraceTool::get_time();
   for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
     lock_t *lock = all_locks[index];
+    trx_t *trx = lock->trx;
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    TraceTool::get_instance()->add_actual_latency(trx->id, trx->transaction_id, lock->time_so_far);
   }
   
-  vector<int> rankings(waiting_locks.size());
+  vector<int> rankings(wait_locks.size());
   list<vector<int> > ranking_enumerations;
-  enumerate_rankings(rankings, 0, waiting_locks.size() - 1, ranking_enumerations);
-  remove_invalid_ranking(waiting_locks, granted_locks, ranking_enumerations);
+  enumerate_rankings(rankings, 0, wait_locks.size() - 1, ranking_enumerations);
+  remove_invalid_ranking(wait_locks, granted_locks, ranking_enumerations);
   ut_a(ranking_enumerations.size() > 0);
   int granted_size = granted_locks.size();
   
@@ -624,7 +635,7 @@ LVM_schedule(
     vector<int> &enumeration = *iterator;
     for (ulint index = 0, size = enumeration.size(); index < size; ++index)
     {
-      waiting_locks[index]->ranking = enumeration[index];
+      wait_locks[index]->ranking = enumeration[index];
     }
     sort(all_locks.begin() + granted_size, all_locks.end(), compare);
     vector<ulint> rolling_sum;
@@ -640,7 +651,7 @@ LVM_schedule(
   int smallest_ranking = INT_MAX;
   for (ulint index = 0, size = min_enum->size(); index < size; ++index)
   {
-    lock_t *lock = waiting_locks[index];
+    lock_t *lock = wait_locks[index];
     lock->ranking = (*min_enum)[index];
     if (lock->ranking < smallest_ranking)
     {
@@ -654,32 +665,35 @@ LVM_schedule(
     }
   }
   
-//  if (do_monitor)
-//  {
-//    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-//    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-//    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
-//    {
-//      lock_t *lock = granted_locks[index];
-//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//      << lock_get_mode(granted_locks[index]) << "'};" << endl;
-//    }
-//    log_file << endl;
-//
-//    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
-//    {
-//      lock_t *lock = waiting_locks[index];
-//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
-//    }
-//    log_file << endl;
-//  }
+  if (do_monitor)
+  {
+    log << granted_locks.size() << "," << wait_locks.size() << endl;
+    ulint lock_index = 0;
+    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = granted_locks[index];
+      log << "lock_t lock" << lock_index++ << "=(" << lock->trx->id << ",'" << lock_get_mode_str(lock)
+      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time
+      << ",{rem" << lock->trx->id << "});" << endl;
+      
+    }
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = wait_locks[index];
+      log << "lock_t lock" << lock_index++ << "=(" << lock->trx->id << ",'" << lock_get_mode_str(lock)
+      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time
+      << ",{rem" << lock->trx->id << "});" << endl;
+    }
+  }
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
   {
     locks_to_grant.clear();
   }
+  
+  if (do_monitor)
+    log << "Schedule Ends" << endl << endl;
 }
 
 /*************************************************************//**

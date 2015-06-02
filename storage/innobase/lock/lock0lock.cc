@@ -54,7 +54,7 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-ulint MIN_BATCH_SIZE = 2;
+ulint MIN_BATCH_SIZE = 5;
 ulint MAX_BATCH_SIZE = 5;
 ibool HARD_BOUNDARY = false;
 
@@ -1939,6 +1939,7 @@ rec_get_wait_granted_locks(
           the record */
   ulint     heap_no,      /*!< in: heap number of the record */
   vector<lock_t *> &wait_locks,  /*!< out: list of wait locks */
+  vector<lock_t *> &candidate_locks,  /*!< out: list of wait locks */
   vector<lock_t *> &granted_locks, /*!< out: list of granted locks */
   bool  &has_batch)   /*!< out: true if there is a batch in the queue */
 {
@@ -1949,9 +1950,10 @@ rec_get_wait_granted_locks(
   {
     if (lock_get_wait(lock))
     {
+      wait_locks.push_back(lock);
       if (size < MAX_BATCH_SIZE)
       {
-        wait_locks.push_back(lock);
+        candidate_locks.push_back(lock);
         ++size;
       }
       if (lock->ranking != -1)
@@ -2043,20 +2045,51 @@ lock_rec_enqueue_waiting(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
   vector<lock_t *> wait_locks;
+  vector<lock_t *> candidate_locks;
   vector<lock_t *> granted_locks;
   vector<lock_t *> locks_to_grant;
   bool has_batch = false;
   
-  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+  rec_get_wait_granted_locks(block, heap_no, wait_locks, candidate_locks, granted_locks, has_batch);
   
-  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+  ofstream &log = TraceTool::get_instance()->get_log();
+  ulint space_id = lock->un_member.rec_lock.space;
+  ulint page_no = lock->un_member.rec_lock.page_no;
+  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
+  if (do_monitor)
+  {
+    log << "Arrival: " << endl;
+    log << "Granted:" << endl;
+    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = granted_locks[index];
+      log << lock->trx->id << "," << lock_get_mode_str(lock) << endl;
+    }
+    log << endl;
+    
+    log << "Waiting:" << endl;
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = wait_locks[index];
+      log << lock->trx->id << "," << lock_get_mode_str(lock) << "," << lock->ranking << endl;
+    }
+    log << endl;
+  }
+  
+  if (candidate_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
       !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
   {
-    TraceTool::path_count = 42;
-    TRACE_FUNCTION_START();
-    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-    TRACE_FUNCTION_END();
-    TraceTool::path_count = 0;
+    LVM_schedule(candidate_locks, granted_locks, locks_to_grant);
+    if (do_monitor && locks_to_grant.size() > 0)
+    {
+      log << "To Grant:" << endl;
+      for (ulint index = 0; index < locks_to_grant.size(); ++index)
+      {
+        lock_t *lock = locks_to_grant[index];
+        log << lock->trx->id << "," << lock_get_mode_str(lock) << "," << lock->ranking << endl;
+      }
+      log << endl;
+    }
     locks_grant(locks_to_grant, buf_block_get_space(block),
                 buf_block_get_page_no(block), heap_no, trx);
     if (!lock_get_wait(lock))
@@ -2446,51 +2479,6 @@ Checks if a waiting record lock request still has to wait in a queue.
 @return lock that is causing the wait */
 static
 const lock_t*
-lock_rec_has_to_wait_in_queue_no_wait_lock(
-/*==========================*/
-  const lock_t* wait_lock)  /*!< in: waiting record lock */
-{
-  const lock_t* lock;
-  ulint   space;
-  ulint   page_no;
-  ulint   heap_no;
-  ulint   bit_mask;
-  ulint   bit_offset;
-
-  ut_ad(lock_mutex_own());
-  ut_ad(lock_get_wait(wait_lock));
-  ut_ad(lock_get_type_low(wait_lock) == LOCK_REC);
-
-  space = wait_lock->un_member.rec_lock.space;
-  page_no = wait_lock->un_member.rec_lock.page_no;
-  heap_no = lock_rec_find_set_bit(wait_lock);
-
-  bit_offset = heap_no / 8;
-  bit_mask = static_cast<ulint>(1 << (heap_no % 8));
-
-  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != wait_lock;
-       lock = lock_rec_get_next_on_page_const(lock)) {
-
-    const byte* p = (const byte*) &lock[1];
-
-    if (!lock_get_wait(lock)
-        && heap_no < lock_rec_get_n_bits(lock)
-        && (p[bit_offset] & bit_mask)
-        && lock_has_to_wait(wait_lock, lock)) {
-
-      return(lock);
-    }
-  }
-
-  return(NULL);
-}
-
-/*********************************************************************//**
-Checks if a waiting record lock request still has to wait in a queue.
-@return lock that is causing the wait */
-static
-const lock_t*
 lock_rec_has_to_wait_in_queue(
 /*==========================*/
   const lock_t* wait_lock)  /*!< in: waiting record lock */
@@ -2758,9 +2746,9 @@ locks_grant(
     for (ulint index = 0, size = locks_to_grant.size(); index < size; ++index)
     {
       lock_t *lock = locks_to_grant[index];
+      lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
       if (lock->trx != trx)
       {
-        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
         lock_grant(lock);
       }
       else
@@ -2779,7 +2767,7 @@ lock_next_to_grant(
   ulint heap_no,
   vector<lock_t *> &locks_to_grant)
 {
-  int smallest_ranking = INT_MAX;
+  int smallest_ranking = MAX_BATCH_SIZE + 10;
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   
@@ -2819,10 +2807,51 @@ lock_next_to_grant(
   /* No one is holding a lock on this record when we reach here */
   if (wait_locks.size() > 0) /* Queue is not empty */
   {
-    if (!HARD_BOUNDARY ||           /* Use soft boundary */
-        locks_to_grant.size() == 0) /* No batch in queue */
+    bool has_new_wait = wait_locks.size() > 0 && wait_locks.back()->ranking == -1;
+    if ((!HARD_BOUNDARY && has_new_wait) ||           /* Use soft boundary */
+        locks_to_grant.size() == 0)     /* No batch in queue */
     {
       LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+    }
+  }
+}
+
+
+static
+void
+rec_get_granted_locks(
+  /*============*/
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no,      /*!< in: heap number of the record */
+  vector<lock_t *> &granted_locks) /*!< out: list of granted locks */
+{
+  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
+       lock != NULL;
+       lock = lock_rec_get_next(heap_no, lock))
+  {
+    if (!lock_get_wait(lock))
+    {
+      granted_locks.push_back(lock);
+    }
+  }
+}
+static
+void
+rec_get_wait_locks(
+  /*============*/
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no,      /*!< in: heap number of the record */
+  vector<lock_t *> &wait_locks)  /*!< out: list of wait locks */
+{
+  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
+       lock != NULL;
+       lock = lock_rec_get_next(heap_no, lock))
+  {
+    if (lock_get_wait(lock))
+    {
+      wait_locks.push_back(lock);
     }
   }
 }
@@ -2896,9 +2925,44 @@ lock_rec_dequeue_from_page(
       continue;
     }
     
+    vector<lock_t *> wait_locks;
+    vector<lock_t *> granted_locks;
+    
+    ofstream &log = TraceTool::get_instance()->get_log();
+    bool do_monitor = space == 14 && page_no == 3 && heap_no == 13;
+    if (do_monitor)
+    {
+      rec_get_granted_locks(space, page_no, heap_no, granted_locks);
+      log << "Release:" << endl;
+      log << in_lock->trx->id << "," << lock_get_mode_str(in_lock) << endl;
+      log << "Granted:" << endl;
+      for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
+      {
+        lock_t *lock = granted_locks[index];
+        log << lock->trx->id << "," << lock_get_mode_str(lock) << endl;
+      }
+      log << endl;
+      rec_get_wait_locks(space, page_no, heap_no, wait_locks);
+      log << "Waiting:" << endl;
+      for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+      {
+        lock_t *lock = wait_locks[index];
+        log << lock->trx->id << "," << lock_get_mode_str(lock) << "," << lock->ranking << endl;
+      }
+      log << endl;
+    }
     
     vector<lock_t *> locks_to_grant;
     lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+    if (do_monitor && locks_to_grant.size() > 0)
+    {
+      log << "To Grant:" << endl;
+      for (ulint index = 0; index < locks_to_grant.size(); ++index)
+      {
+        lock_t *lock = locks_to_grant[index];
+        log << lock->trx->id << "," << lock_get_mode_str(lock) << "," << lock->ranking << endl;
+      }
+    }
     locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
     
     /* Find other locks that can also be granted. */
@@ -2913,9 +2977,18 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue(lock))
         {
+          if (do_monitor)
+          {
+            log << lock->trx->id << "," << lock_get_mode_str(lock) << "," << lock->ranking << endl;
+          }
           lock_grant(lock);
         }
       }
+    }
+    
+    if (do_monitor)
+    {
+      log << endl;
     }
   }
 }
