@@ -76,17 +76,17 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_tpcc", tpcc_work_wait,
+  read_isotonic("isotonics/tpcc", tpcc_work_wait,
                 tpcc_estimated, tpcc_length);
-  read_isotonic("isotonic_new_order", new_order_work_wait,
+  read_isotonic("isotonics/new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
-  read_isotonic("isotonic_payment", payment_work_wait,
+  read_isotonic("isotonics/payment", payment_work_wait,
                 payment_estimated, payment_length);
-  read_isotonic("isotonic_order_status", order_status_work_wait,
+  read_isotonic("isotonics/order_status", order_status_work_wait,
                 order_status_estimated, order_status_length);
-  read_isotonic("isotonic_delivery", delivery_work_wait,
+  read_isotonic("isotonics/delivery", delivery_work_wait,
                 delivery_estimated, delivery_length);
-  read_isotonic("isotonic_stock_level", stock_level_work_wait,
+  read_isotonic("isotonics/stock_level", stock_level_work_wait,
                 stock_level_estimated, stock_level_length);
 }
 
@@ -295,6 +295,73 @@ cumsum(
     }
     
     rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
+  }
+}
+
+/*************************************************************//**
+Calculate the cumulative sum of latency for the list of given locks. */
+static
+void
+cumsum(
+  vector<schedule_lock *> &locks,
+  vector<ulint> &rolling_sum)
+{
+  ulint sum_of_previous_process_time = 0;
+  int previous_ranking = 0;
+  ulint max_process = 0;
+  
+  for (ulint index = 0, size = locks.size(); index < size; ++index)
+  {
+    schedule_lock *lock = locks[index];
+    
+    if (lock->ranking == previous_ranking)
+    {
+      if (lock->process_time > max_process)
+      {
+        max_process = lock->process_time;
+      }
+    }
+    else
+    {
+      sum_of_previous_process_time += max_process;
+      max_process = lock->process_time;
+      previous_ranking = lock->ranking;
+    }
+    
+    rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
+  }
+}
+
+/*************************************************************//**
+Calculate the cumulative sum of latency for the list of given locks. */
+static
+void
+cumsum(
+  vector<schedule_lock *> &locks)
+{
+  ulint sum_of_previous_process_time = 0;
+  int previous_ranking = 0;
+  ulint max_process = 0;
+  
+  for (ulint index = 0, size = locks.size(); index < size; ++index)
+  {
+    schedule_lock *lock = locks[index];
+    
+    if (lock->ranking == previous_ranking)
+    {
+      if (lock->process_time > max_process)
+      {
+        max_process = lock->process_time;
+      }
+    }
+    else
+    {
+      sum_of_previous_process_time += max_process;
+      max_process = lock->process_time;
+      previous_ranking = lock->ranking;
+    }
+    
+    lock->process_time += sum_of_previous_process_time;
   }
 }
 
@@ -560,9 +627,74 @@ remove_invalid_ranking(
 
 static
 bool
+lock_has_to_wait(
+	schedule_lock *lock1,
+	schedule_lock *lock2)
+{
+	return lock2->mode == 'X' || lock1->mode == 'X';
+}
+
+static
+void
+remove_invalid_ranking(
+  vector<schedule_lock *> &waiting_locks,
+  vector<schedule_lock *> &granted_locks,
+  list<vector<int> > &ranking_enumerations)
+{
+  ulint size = waiting_locks.size();
+  
+  schedule_lock **previous_locks = new schedule_lock *[size + 1];
+  
+  for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
+       iterator != ranking_enumerations.end(); ++iterator)
+  {
+    vector<int> &enumeration = *iterator;
+    
+    if(granted_locks.size() > 0)
+    {
+      previous_locks[0] = granted_locks.back();
+    }
+    else
+    {
+      previous_locks[0] = NULL;
+    }
+    for (ulint index = 1; index <= size; ++index)
+    {
+      previous_locks[index] = NULL;
+    }
+    
+    for (ulint index = 0; index < size; ++index)
+    {
+      int ranking = enumeration[index];
+      schedule_lock *previous_lock = previous_locks[ranking];
+      previous_locks[ranking] = waiting_locks[index];
+      
+      if (previous_lock != NULL &&
+          lock_has_to_wait(waiting_locks[index], previous_lock))
+      {
+        iterator = --ranking_enumerations.erase(iterator);
+        break;
+      }
+    }
+  }
+  
+  delete[] previous_locks;
+}
+
+static
+bool
 compare(
   lock_t *lock1,
   lock_t *lock2)
+{
+  return lock1->ranking < lock2->ranking;
+}
+
+static
+bool
+compare_schedule_lock(
+  schedule_lock *lock1,
+  schedule_lock *lock2)
 {
   return lock1->ranking < lock2->ranking;
 }
@@ -587,7 +719,7 @@ LVM_schedule(
   ulint space_id = lock->un_member.rec_lock.space;
   ulint page_no = lock->un_member.rec_lock.page_no;
   ulint heap_no = lock_rec_find_set_bit(lock);
-  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
+  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13 && false;
   
   if (do_monitor)
     log << "Schedule Starts" << endl;
@@ -615,9 +747,8 @@ LVM_schedule(
   {
     lock_t *lock = all_locks[index];
     trx_t *trx = lock->trx;
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    TraceTool::get_instance()->add_actual_latency(trx->id, trx->transaction_id, lock->time_so_far);
+    lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    lock->process_time = estimate(lock->time_so_far, trx->type);
   }
   
   vector<int> rankings(wait_locks.size());
@@ -667,23 +798,20 @@ LVM_schedule(
   
   if (do_monitor)
   {
-    log << granted_locks.size() << "," << wait_locks.size() << endl;
-    ulint lock_index = 0;
-    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
+    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+    schedule *sche = new schedule;
+    sche->granted_size = granted_size;
+    for (ulint index = 0, size = all_locks.size(); index < size; ++index)
     {
-      lock_t *lock = granted_locks[index];
-      log << "lock_t lock" << lock_index++ << "=(" << lock->trx->id << ",'" << lock_get_mode_str(lock)
-      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time
-      << ",{rem" << lock->trx->id << "});" << endl;
-      
+      lock_t *lock = all_locks[index];
+      schedule_lock *sche_lock = new schedule_lock;
+      sche_lock->transaction_id = lock->trx->transaction_id;
+      sche_lock->mode = lock_get_mode_str(lock)[0];
+      sche_lock->ranking = lock->ranking;
+      sche_lock->time_so_far = lock->time_so_far;
+      sche->locks.push_back(sche_lock);
     }
-    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
-    {
-      lock_t *lock = wait_locks[index];
-      log << "lock_t lock" << lock_index++ << "=(" << lock->trx->id << ",'" << lock_get_mode_str(lock)
-      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time
-      << ",{rem" << lock->trx->id << "});" << endl;
-    }
+    TraceTool::get_instance()->add_schedule(sche);
   }
   
   if (granted_locks.size() > 0 &&
@@ -694,6 +822,71 @@ LVM_schedule(
   
   if (do_monitor)
     log << "Schedule Ends" << endl << endl;
+}
+
+
+/*************************************************************//**
+Find the lock that gives minimum CTV. */
+UNIV_INTERN
+void
+LVM_schedule(
+  ulint granted_size,
+  vector<schedule_lock *> &all_locks)
+{
+  vector<schedule_lock *> granted_locks(all_locks.begin(), all_locks.begin() + granted_size);
+  vector<schedule_lock *> wait_locks(all_locks.begin() + granted_size, all_locks.end());
+  
+  if (wait_locks.size() == 0)
+  {
+    return;
+  }
+  
+  if (wait_locks.size() == 1 &&
+      granted_size == 0)
+  {
+    return;
+  }
+  
+  for (ulint index = 0, size = granted_locks.size();
+       index < size; ++index)
+  {
+    granted_locks[index]->ranking = 0;
+  }
+  
+  vector<int> rankings(wait_locks.size());
+  list<vector<int> > ranking_enumerations;
+  enumerate_rankings(rankings, 0, wait_locks.size() - 1, ranking_enumerations);
+  remove_invalid_ranking(wait_locks, granted_locks, ranking_enumerations);
+  ut_a(ranking_enumerations.size() > 0);
+  
+  double min_variance = std::numeric_limits<double>::max();
+  vector<int> *min_enum = NULL;
+  for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
+       iterator != ranking_enumerations.end(); ++iterator)
+  {
+    vector<int> &enumeration = *iterator;
+    for (ulint index = 0, size = enumeration.size(); index < size; ++index)
+    {
+      wait_locks[index]->ranking = enumeration[index];
+    }
+    sort(all_locks.begin() + granted_size, all_locks.end(), compare_schedule_lock);
+    vector<ulint> rolling_sum;
+    cumsum(all_locks, rolling_sum);
+    double variance = var(rolling_sum);
+    if (variance < min_variance)
+    {
+      min_variance = variance;
+      min_enum = &enumeration;
+    }
+  }
+  
+  for (ulint index = 0, size = min_enum->size(); index < size; ++index)
+  {
+    schedule_lock *lock = wait_locks[index];
+    lock->ranking = (*min_enum)[index];
+  }
+  sort(all_locks.begin() + granted_size, all_locks.end(), compare_schedule_lock);
+  cumsum(all_locks);
 }
 
 /*************************************************************//**

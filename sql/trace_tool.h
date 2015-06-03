@@ -26,12 +26,20 @@ using std::endl;
 using std::unordered_map;
 using std::string;
 
-typedef struct trx_actual_latency
+typedef struct schedule_lock
 {
-    ulint trx_id;
     ulint transaction_id;
+    char  mode;
+    int   ranking;
     ulint time_so_far;
-} trx_actual_latency;
+    ulint process_time;
+} schedule_lock;
+
+typedef struct schedule
+{
+    ulint granted_size;
+    vector<schedule_lock *> locks;
+} schedule;
 
 /** The global transaction id counter */
 extern ulint transaction_id;
@@ -88,7 +96,8 @@ private:
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
-    vector<trx_actual_latency> actual_latencies;
+    
+    vector<schedule *> schedules;
     
     TraceTool();
     TraceTool(TraceTool const&){};
@@ -136,14 +145,16 @@ public:
         return log_file;
     }
     
-    void add_actual_latency(ulint trx_id, ulint transaction_id, ulint time_so_far)
+    void add_schedule(schedule *schedule)
     {
-        trx_actual_latency record;
-        record.trx_id = trx_id;
-        record.transaction_id = transaction_id;
-        record.time_so_far = time_so_far;
-        actual_latencies.push_back(record);
+        schedules.push_back(schedule);
     }
+    
+    void schedule_cleanup();
+    
+    void calc_actual_process();
+    
+    void calibrate_latency();
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
@@ -161,7 +172,7 @@ public:
     
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
-    void write_latency();
+    void write_latency(string prefix);
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();

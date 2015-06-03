@@ -54,9 +54,9 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-ulint MIN_BATCH_SIZE = 5;
+ulint MIN_BATCH_SIZE = 2;
 ulint MAX_BATCH_SIZE = 5;
-ibool HARD_BOUNDARY = false;
+ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
@@ -2055,7 +2055,7 @@ lock_rec_enqueue_waiting(
   ofstream &log = TraceTool::get_instance()->get_log();
   ulint space_id = lock->un_member.rec_lock.space;
   ulint page_no = lock->un_member.rec_lock.page_no;
-  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
+  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13 && false;
   if (do_monitor)
   {
     log << "Arrival: " << endl;
@@ -2929,7 +2929,7 @@ lock_rec_dequeue_from_page(
     vector<lock_t *> granted_locks;
     
     ofstream &log = TraceTool::get_instance()->get_log();
-    bool do_monitor = space == 14 && page_no == 3 && heap_no == 13;
+    bool do_monitor = space == 14 && page_no == 3 && heap_no == 13 && false;
     if (do_monitor)
     {
       rec_get_granted_locks(space, page_no, heap_no, granted_locks);

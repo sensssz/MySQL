@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <cassert>
 
+#include "../storage/innobase/include/lock0var.h"
+
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
@@ -146,6 +148,7 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
+  schedules.reserve(500000);
   
   srand(time(0));
 }
@@ -206,6 +209,24 @@ ulint TraceTool::now_micro()
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
+}
+
+void TraceTool::schedule_cleanup()
+{
+  for (ulint schedule_index = 0, schedule_size = schedules.size();
+       schedule_index < schedule_size; ++schedule_index)
+  {
+    schedule *schedule = schedules[schedule_index];
+    for (ulint lock_index = 0, lock_size = schedule->locks.size();
+         lock_index < lock_size; ++lock_index)
+    {
+      schedule_lock *lock = schedule->locks[lock_index];
+      delete lock;
+    }
+    schedule->locks.clear();
+    delete schedule;
+  }
+  schedules.clear();
 }
 
 /********************************************************************//**
@@ -299,23 +320,15 @@ void TraceTool::end_transaction()
   new_transaction = true;
   type = NONE;
 #ifdef LATENCY
-  if (commit_successful)
+  timespec now = get_time();
+  long latency = difftime(trans_start, now);
+  pthread_rwlock_rdlock(&data_lock);
+  function_times.back()[current_transaction_id] = latency;
+  if (!commit_successful)
   {
-    timespec now = get_time();
-    long latency = difftime(trans_start, now);
-    pthread_rwlock_rdlock(&data_lock);
-    function_times.back()[current_transaction_id] = latency;
-    pthread_rwlock_unlock(&data_lock);
-  }
-  else
-  {
-    /* Commit fails, we set its latency to 0 and ignore it. */
-    pthread_rwlock_rdlock(&data_lock);
-    // Reuse the last transaction
-    function_times.back()[current_transaction_id] = 0;
     transaction_start_times[current_transaction_id] = 0;
-    pthread_rwlock_unlock(&data_lock);
   }
+  pthread_rwlock_unlock(&data_lock);
 #endif
 }
 
@@ -330,7 +343,60 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::write_latency()
+void TraceTool::calc_actual_process()
+{
+  for (ulint schedule_index = 0, schedule_size = schedules.size();
+       schedule_index < schedule_size; ++schedule_index)
+  {
+    /* Rerun each schedule based on the actual remaining time. */
+    schedule *schedule = schedules[schedule_index];
+    
+    /* Calculate actual remaining time based on the actual latency. */
+    for (ulint lock_index = 0, lock_size = schedule->locks.size();
+         lock_index < lock_size; ++lock_index)
+    {
+      schedule_lock *lock = schedule->locks[lock_index];
+      ulint latency = function_times.back()[lock->transaction_id];
+      lock->process_time = latency - lock->time_so_far;
+    }
+    
+    /* We also need to consider the fact that the schedules cause
+       one transaction to wait for all those before it. We need to
+       take that time off the process time before we redo the schedule. */
+    for (ulint lock_index = 0, lock_size = schedule->locks.size();
+         lock_index < lock_size - 1; ++lock_index)
+    {
+      ulint current_remaining = schedule->locks[lock_index]->process_time;
+      for (ulint index = lock_index + 1; index < lock_size; ++index)
+      {
+        schedule->locks[index]->process_time -= current_remaining;
+        assert(current_remaining > 0);
+      }
+    }
+    
+    LVM_schedule(schedule->granted_size, schedule->locks);
+  }
+}
+
+void TraceTool::calibrate_latency()
+{
+  /* Now calculate the latency of the affected transactions using
+     time so far and remaining time. */
+  for (ulint schedule_index = 0, schedule_size = schedules.size();
+       schedule_index < schedule_size; ++schedule_index)
+  {
+    schedule *schedule = schedules[schedule_index];
+    for (ulint lock_index = 0, lock_size = schedule->locks.size();
+         lock_index < lock_size; ++lock_index)
+    {
+      schedule_lock *lock = schedule->locks[lock_index];
+      ulint latency = lock->time_so_far + lock->process_time;
+      function_times.back()[lock->transaction_id] = latency;
+    }
+  }
+}
+
+void TraceTool::write_latency(string prefix)
 {
   ofstream tpcc_log;
   ofstream new_order_log;
@@ -339,29 +405,12 @@ void TraceTool::write_latency()
   ofstream delivery_log;
   ofstream stock_level_log;
   
-  stringstream sstream;
-  sstream << "logs/tpcc";
-  tpcc_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/new_order";
-  new_order_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/payment";
-  payment_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/order_status";
-  order_status_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/delivery";
-  delivery_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/stock_level";
-  stock_level_log.open(sstream.str().c_str());
+  tpcc_log.open(prefix + "tpcc");
+  new_order_log.open(prefix + "new_order");
+  payment_log.open(prefix + "payment");
+  order_status_log.open(prefix + "order_status");
+  delivery_log.open(prefix + "delivery");
+  stock_level_log.open(prefix + "stock_level");
   
   pthread_rwlock_wrlock(&data_lock);
   for (ulint index = 0; index < transaction_start_times.size(); ++index)
@@ -399,7 +448,7 @@ void TraceTool::write_latency()
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)
     {
-      if (function_times.back()[index] > 0)
+      if (transaction_start_times[index] > 0)
       {
         ulint latency = (*iterator)[index];
         tpcc_log << function_index << ',' << latency << endl;
@@ -426,9 +475,7 @@ void TraceTool::write_latency()
       }
     }
     function_index++;
-    iterator->clear();
   }
-  function_times.clear();
   pthread_rwlock_unlock(&data_lock);
   tpcc_log.close();
   new_order_log.close();
@@ -440,14 +487,9 @@ void TraceTool::write_latency()
 
 void TraceTool::write_log()
 {
-  ofstream log_actual_latency("actual_latencies");
-  for (ulint index = 0; index < actual_latencies.size(); ++index)
-  {
-    trx_actual_latency &record = actual_latencies[index];
-    ulint actual_total = function_times.back()[record.transaction_id];
-    ulint actual_remaining = actual_total - record.time_so_far;
-    log_actual_latency << "rem" << record.trx_id << "=" << actual_remaining << ",";
-  }
-  log_actual_latency.close();
-  write_latency();
+  write_latency("latency/original/");
+  calc_actual_process();
+  calibrate_latency();
+  write_latency("latency/calibrate/");
+  schedule_cleanup();
 }
