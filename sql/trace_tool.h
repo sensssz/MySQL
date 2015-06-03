@@ -144,7 +144,7 @@ public:
     
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
-    void write_latency();
+    void write_latency(string dir);
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();

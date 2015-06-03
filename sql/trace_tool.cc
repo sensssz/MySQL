@@ -299,23 +299,15 @@ void TraceTool::end_transaction()
   new_transaction = true;
   type = NONE;
 #ifdef LATENCY
-  if (commit_successful)
+  timespec now = get_time();
+  long latency = difftime(trans_start, now);
+  pthread_rwlock_rdlock(&data_lock);
+  function_times.back()[current_transaction_id] = latency;
+  if (!commit_successful)
   {
-    timespec now = get_time();
-    long latency = difftime(trans_start, now);
-    pthread_rwlock_rdlock(&data_lock);
-    function_times.back()[current_transaction_id] = latency;
-    pthread_rwlock_unlock(&data_lock);
-  }
-  else
-  {
-    /* Commit fails, we set its latency to 0 and ignore it. */
-    pthread_rwlock_rdlock(&data_lock);
-    // Reuse the last transaction
-    function_times.back()[current_transaction_id] = 0;
     transaction_start_times[current_transaction_id] = 0;
-    pthread_rwlock_unlock(&data_lock);
   }
+  pthread_rwlock_unlock(&data_lock);
 #endif
 }
 
@@ -330,7 +322,7 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::write_latency()
+void TraceTool::write_latency(string dir)
 {
   ofstream tpcc_log;
   ofstream new_order_log;
@@ -339,29 +331,12 @@ void TraceTool::write_latency()
   ofstream delivery_log;
   ofstream stock_level_log;
   
-  stringstream sstream;
-  sstream << "logs/tpcc";
-  tpcc_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/new_order";
-  new_order_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/payment";
-  payment_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/order_status";
-  order_status_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/delivery";
-  delivery_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/stock_level";
-  stock_level_log.open(sstream.str().c_str());
+  tpcc_log.open(dir + "tpcc");
+  new_order_log.open(dir + "new_order");
+  payment_log.open(dir + "payment");
+  order_status_log.open(dir + "order_status");
+  delivery_log.open(dir + "delivery");
+  stock_level_log.open(dir + "stock_level");
   
   pthread_rwlock_wrlock(&data_lock);
   for (ulint index = 0; index < transaction_start_times.size(); ++index)
@@ -440,5 +415,5 @@ void TraceTool::write_latency()
 
 void TraceTool::write_log()
 {
-  write_latency();
+  write_latency("latency/original/");
 }
