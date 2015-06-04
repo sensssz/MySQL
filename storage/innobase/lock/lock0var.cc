@@ -719,15 +719,15 @@ LVM_schedule(
   ulint space_id = lock->un_member.rec_lock.space;
   ulint page_no = lock->un_member.rec_lock.page_no;
   ulint heap_no = lock_rec_find_set_bit(lock);
-  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13 && false;
+  bool do_monitor = space_id == 14 && page_no == 3 && (heap_no ==  5);
   
-  if (do_monitor)
-    log << "Schedule Starts" << endl;
+//  if (do_monitor)
+//    log << "Schedule Starts" << endl;
   if (wait_locks.size() == 1 &&
       granted_locks.size() == 0)
   {
-    if (do_monitor)
-      log << "Only one lock in queue" << endl;
+//    if (do_monitor)
+//      log << "Only one lock in queue" << endl;
     locks_to_grant.push_back(wait_locks[0]);
     return;
   }
@@ -820,8 +820,8 @@ LVM_schedule(
     locks_to_grant.clear();
   }
   
-  if (do_monitor)
-    log << "Schedule Ends" << endl << endl;
+//  if (do_monitor)
+//    log << "Schedule Ends" << endl << endl;
 }
 
 
@@ -847,11 +847,14 @@ LVM_schedule(
     return;
   }
   
-  for (ulint index = 0, size = granted_locks.size();
-       index < size; ++index)
-  {
-    granted_locks[index]->ranking = 0;
-  }
+//  ofstream &log = TraceTool::get_instance()->get_log();
+//  log << "Before: ";
+//  for (ulint index = 0, size = all_locks.size();
+//       index < size; ++index)
+//  {
+//    log << all_locks[index]->ranking << ",";
+//  }
+//  log << endl;
   
   vector<int> rankings(wait_locks.size());
   list<vector<int> > ranking_enumerations;
@@ -887,6 +890,18 @@ LVM_schedule(
   }
   sort(all_locks.begin() + granted_size, all_locks.end(), compare_schedule_lock);
   cumsum(all_locks);
+  
+//  log << "After: ";
+//  for (ulint index = 0; index < granted_size; ++index)
+//  {
+//    log << "0,";
+//  }
+//  for (ulint index = 0, size = min_enum->size();
+//       index < size; ++index)
+//  {
+//    log << (*min_enum)[index] << ",";
+//  }
+//  log << endl << endl;
 }
 
 /*************************************************************//**

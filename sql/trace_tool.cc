@@ -131,7 +131,7 @@ TraceTool *TraceTool::get_instance()
 TraceTool::TraceTool() : function_times()
 {
   /* Open the log file in append mode so that it won't be overwritten */
-  log_file.open("logs/trace.log");
+  log_file.open("logs/trace.log", std::ios::app);
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
@@ -350,6 +350,7 @@ void TraceTool::calc_actual_process()
   {
     /* Rerun each schedule based on the actual remaining time. */
     schedule *schedule = schedules[schedule_index];
+    bool fails = false;
     
     /* Calculate actual remaining time based on the actual latency. */
     for (ulint lock_index = 0, lock_size = schedule->locks.size();
@@ -357,6 +358,11 @@ void TraceTool::calc_actual_process()
     {
       schedule_lock *lock = schedule->locks[lock_index];
       ulint latency = function_times.back()[lock->transaction_id];
+      if (latency < lock->time_so_far)
+      {
+        fails = true;
+        break;
+      }
       lock->process_time = latency - lock->time_so_far;
     }
     
@@ -369,12 +375,29 @@ void TraceTool::calc_actual_process()
       ulint current_remaining = schedule->locks[lock_index]->process_time;
       for (ulint index = lock_index + 1; index < lock_size; ++index)
       {
+        ulint original = schedule->locks[index]->process_time;
         schedule->locks[index]->process_time -= current_remaining;
-        assert(current_remaining > 0);
+        if(original < schedule->locks[index]->process_time)
+        {
+          fails = true;
+          break;
+        }
       }
     }
     
-    LVM_schedule(schedule->granted_size, schedule->locks);
+    if (!fails)
+    {
+      LVM_schedule(schedule->granted_size, schedule->locks);
+    }
+    else
+    {
+      for (ulint lock_index = 0, lock_size = schedule->locks.size();
+           lock_index < lock_size; ++lock_index)
+      {
+        delete schedule->locks[lock_index];
+      }
+      schedule->locks.clear();
+    }
   }
 }
 
