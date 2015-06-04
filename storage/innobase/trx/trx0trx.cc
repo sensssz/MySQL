@@ -865,6 +865,7 @@ trx_start_low(
   trx->type = NONE;
   trx->transaction_id = TraceTool::current_transaction_id;
   trx->real_transaction_id = &TraceTool::current_transaction_id;
+  trx->num_of_waits = 0;
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -1411,7 +1412,7 @@ trx_commit_low(
   if (trx->real_transaction_id != NULL &&
       trx->transaction_id == *(trx->real_transaction_id))
   {
-//    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
+    TraceTool::get_instance()->add_record(1, trx->num_of_waits);
   }
   else
   {
