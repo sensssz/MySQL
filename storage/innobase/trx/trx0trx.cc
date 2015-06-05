@@ -123,6 +123,8 @@ trx_create(void)
 	trx->check_unique_secondary = TRUE;
 
 	trx->dict_operation = TRX_DICT_OP_NONE;
+  
+  trx->is_user_trx = false;
 
 	mutex_create(trx_undo_mutex_key, &trx->undo_mutex, SYNC_TRX_UNDO);
 
@@ -194,6 +196,7 @@ trx_allocate_for_mysql(void)
 
 	mutex_enter(&trx_sys->mutex);
 
+  trx->is_user_trx = true;
 	ut_d(trx->in_mysql_trx_list = TRUE);
 	UT_LIST_ADD_FIRST(mysql_trx_list, trx_sys->mysql_trx_list, trx);
 
@@ -1413,7 +1416,10 @@ trx_commit(
 	trx_t*	trx)	/*!< in/out: transaction */
 {
   /* This marks a transaction commit. */
-  TraceTool::is_commit = true;
+  if (trx->is_user_trx)
+  {
+    TraceTool::is_commit = true;
+  }
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 
