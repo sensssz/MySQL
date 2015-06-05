@@ -489,12 +489,6 @@ void TraceTool::write_work_wait()
       ut_a(total_wait > info.wait_time_so_far);
       ut_a(total_work > info.work_time_so_far);
       
-      if (total_wait < info.wait_time_so_far ||
-          total_work < info.work_time_so_far)
-      {
-        log_file << "Error!" << endl;
-        continue;
-      }
       line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
       info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_wait_locks << "," <<
       info.num_locks << "," << total_work <<  "," << total_wait << "," << total_wait_locks << "," <<
@@ -536,5 +530,5 @@ void TraceTool::write_work_wait()
 void TraceTool::write_log()
 {
   write_work_wait();
-  write_latency("latency/original");
+  write_latency("latency/original/");
 }
