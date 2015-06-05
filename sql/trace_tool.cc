@@ -469,7 +469,7 @@ void TraceTool::write_work_wait()
   ofstream tpcc_work_wait("work_wait/tpcc");
   ofstream new_order_work_wait("work_wait/new_order");
   ofstream payment_work_wait("work_wait/payment");
-  ofstream order_status_work_wait("work_wait/order");
+  ofstream order_status_work_wait("work_wait/order_status");
   ofstream delivery_work_wait("work_wait/delivery");
   ofstream stock_level_work_wait("work_wait/stock_level");
   stringstream line;

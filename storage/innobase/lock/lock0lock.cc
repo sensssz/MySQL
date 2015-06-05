@@ -2864,6 +2864,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  /*
   timespec now = TraceTool::get_time();
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
@@ -2889,46 +2890,47 @@ lock_rec_dequeue_from_page(
       lock_grant(lock);
     }
   }
+   */
   
   /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-//  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-//  if (first_lock_on_page == NULL)
-//  {
-//      return;
-//  }
-//  
-//  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-//  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-//       heap_no < n_bits; ++heap_no)
-//  {
-//    /* Not a lock on this record. */
-//    if (!lock_rec_get_nth_bit(in_lock, heap_no))
-//    {
-//      continue;
-//    }
-//    
-//    
-//    vector<lock_t *> locks_to_grant;
-//    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
-//    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
-//    
-//    /* Find other locks that can also be granted. */
-//    lock = lock_rec_get_first_on_page_addr(space, page_no);
-//    if (!lock_rec_get_nth_bit(lock, heap_no))
-//    {
-//      lock = lock_rec_get_next(heap_no, lock);
-//    }
-//    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-//    {
-//      if (lock_get_wait(lock))
-//      {
-//        if (!lock_rec_has_to_wait_in_queue(lock))
-//        {
-//          lock_grant(lock);
-//        }
-//      }
-//    }
-//  }
+  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+  if (first_lock_on_page == NULL)
+  {
+      return;
+  }
+  
+  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+       heap_no < n_bits; ++heap_no)
+  {
+    /* Not a lock on this record. */
+    if (!lock_rec_get_nth_bit(in_lock, heap_no))
+    {
+      continue;
+    }
+    
+    
+    vector<lock_t *> locks_to_grant;
+    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
+    
+    /* Find other locks that can also be granted. */
+    lock = lock_rec_get_first_on_page_addr(space, page_no);
+    if (!lock_rec_get_nth_bit(lock, heap_no))
+    {
+      lock = lock_rec_get_next(heap_no, lock);
+    }
+    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+    {
+      if (lock_get_wait(lock))
+      {
+        if (!lock_rec_has_to_wait_in_queue(lock))
+        {
+          lock_grant(lock);
+        }
+      }
+    }
+  }
 }
 
 /*************************************************************//**
