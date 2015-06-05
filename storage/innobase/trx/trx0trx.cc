@@ -125,7 +125,7 @@ trx_create(void)
 	trx->dict_operation = TRX_DICT_OP_NONE;
   
   trx->transaction_id = 0;
-  trx->real_transaction_id = NULL;
+  trx->is_user_trx = false;
 
 	mutex_create(trx_undo_mutex_key, &trx->undo_mutex, SYNC_TRX_UNDO);
 
@@ -197,6 +197,7 @@ trx_allocate_for_mysql(void)
 
 	mutex_enter(&trx_sys->mutex);
 
+  trx->is_user_trx = true;
 	ut_d(trx->in_mysql_trx_list = TRUE);
 	UT_LIST_ADD_FIRST(mysql_trx_list, trx_sys->mysql_trx_list, trx);
 
@@ -860,12 +861,14 @@ trx_start_low(
 			srv_undo_logs, srv_undo_tablespaces);
 	}
   
-  trx->trx_start_time = TraceTool::get_time();
-  trx->total_wait_time = 0;
-  trx->type = NONE;
-  trx->transaction_id = TraceTool::current_transaction_id;
-  trx->real_transaction_id = &TraceTool::current_transaction_id;
-  trx->num_of_waits = 0;
+  if (trx->is_user_trx)
+  {
+    trx->trx_start_time = TraceTool::get_time();
+    trx->total_wait_time = 0;
+    trx->type = NONE;
+    trx->transaction_id = TraceTool::current_transaction_id;
+    trx->num_of_waits = 0;
+  }
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -918,7 +921,7 @@ trx_start_low(
 
 	mutex_exit(&trx_sys->mutex);
 
-	trx->start_time = ut_time();
+  trx->start_time = ut_time();
 
 	MONITOR_INC(MONITOR_TRX_ACTIVE);
 }
@@ -1407,16 +1410,15 @@ trx_commit_low(
 		lsn = 0;
 	}
   
+  ulint total_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
   trx_commit_in_memory(trx, lsn);
   
-  if (trx->real_transaction_id != NULL &&
-      trx->transaction_id == *(trx->real_transaction_id))
+  if (trx->is_user_trx)
   {
+    timespec now = TraceTool::get_time();
+    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
     TraceTool::get_instance()->add_record(1, trx->num_of_waits);
-  }
-  else
-  {
-    TraceTool::get_instance()->remove(trx->id);
+    TraceTool::get_instance()->add_record(2, total_locks);
   }
 }
 
@@ -1429,7 +1431,10 @@ trx_commit(
 	trx_t*	trx)	/*!< in/out: transaction */
 {
   /* This marks a transaction commit. */
-  TraceTool::is_commit = true;
+  if (trx->is_user_trx)
+  {
+    TraceTool::is_commit = true;
+  }
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 

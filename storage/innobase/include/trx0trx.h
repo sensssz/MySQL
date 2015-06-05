@@ -746,8 +746,8 @@ struct trx_t{
     ulint       total_wait_time;
     transaction_type    type;
     ulint       transaction_id;
-    ulint       *real_transaction_id;
     ulint       num_of_waits;
+    ibool       is_user_trx;
 
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by

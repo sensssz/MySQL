@@ -134,7 +134,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 3;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 4;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -210,31 +210,11 @@ ulint TraceTool::now_micro()
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
 }
 
-void TraceTool::work_wait_info(ulint trans_id, ulint trx_id, ulint work_time, ulint wait_time, ulint num_locks)
+void TraceTool::work_wait_info(ulint trans_id, ulint work_time, ulint wait_time, ulint num_wait, ulint num_locks)
 {
-  work_wait_time info(trans_id, trx_id, work_time, wait_time, num_locks);
+  work_wait_time info(trans_id, work_time, wait_time, num_wait, num_locks);
   pthread_mutex_lock(&work_wait_mutex);
   work_wait_infos.push_back(info);
-  pthread_mutex_unlock(&work_wait_mutex);
-}
-
-void TraceTool::remove(ulint trx_id)
-{
-  pthread_mutex_lock(&work_wait_mutex);
-  for (list<work_wait_time>::iterator iterator = work_wait_infos.begin();
-       iterator != work_wait_infos.end();
-       )
-  {
-    if (iterator->trx_id == trx_id)
-    {
-      // automatically moves the iterator forward
-      iterator = work_wait_infos.erase(iterator);
-    }
-    else
-    {
-      ++iterator;
-    }
-  }
   pthread_mutex_unlock(&work_wait_mutex);
 }
 
@@ -374,7 +354,7 @@ void TraceTool::add_record_if_zero(int function_index, ulint duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::add_record(int function_index, ulint transaction_id, ulint duration)
+void TraceTool::add_record(int function_index, ulint duration, ulint transaction_id)
 {
   pthread_rwlock_rdlock(&data_lock);
   if (function_times[function_index][transaction_id] == 0)
@@ -393,38 +373,21 @@ ulint TraceTool::get_record(int function_index, ulint transaction_id)
   return result;
 }
 
-void TraceTool::write_latency()
+void TraceTool::write_latency(string dir)
 {
-  ofstream overall_log;
+  ofstream tpcc_log;
   ofstream new_order_log;
   ofstream payment_log;
   ofstream order_status_log;
   ofstream delivery_log;
   ofstream stock_level_log;
   
-  stringstream sstream;
-  sstream << "logs/tpcc";
-  overall_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/new_order";
-  new_order_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/payment";
-  payment_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/order_status";
-  order_status_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/delivery";
-  delivery_log.open(sstream.str().c_str());
-  
-  sstream.str("");
-  sstream << "logs/stock_level";
-  stock_level_log.open(sstream.str().c_str());
+  tpcc_log.open(dir + "tpcc");
+  new_order_log.open(dir + "new_order");
+  payment_log.open(dir + "payment");
+  order_status_log.open(dir + "order_status");
+  delivery_log.open(dir + "delivery");
+  stock_level_log.open(dir + "stock_level");
   
   int function_index = 0;
   pthread_rwlock_wrlock(&data_lock);
@@ -433,7 +396,7 @@ void TraceTool::write_latency()
     ulint start_time = transaction_start_times[index];
     if (start_time > 0)
     {
-      overall_log << start_time << endl;
+      tpcc_log << start_time << endl;
       switch (transaction_types[index])
       {
         case NEW_ORDER:
@@ -465,7 +428,7 @@ void TraceTool::write_latency()
       if (function_times.back()[index] > 0)
       {
         ulint latency = (*iterator)[index];
-        overall_log << function_index << ',' << latency << endl;
+        tpcc_log << function_index << ',' << latency << endl;
         switch (transaction_types[index])
         {
           case NEW_ORDER:
@@ -493,7 +456,7 @@ void TraceTool::write_latency()
   }
   function_times.clear();
   pthread_rwlock_unlock(&data_lock);
-  overall_log.close();
+  tpcc_log.close();
   new_order_log.close();
   payment_log.close();
   order_status_log.close();
@@ -503,17 +466,16 @@ void TraceTool::write_latency()
 
 void TraceTool::write_work_wait()
 {
-  ofstream tpcc_work_wait("logs/tpcc_work_wait");
-  ofstream new_order_work_wait("logs/new_order_work_wait");
-  ofstream payment_work_wait("logs/payment_work_wait");
-  ofstream order_status_work_wait("logs/order_status_work_wait");
-  ofstream delivery_work_wait("logs/delivery_work_wait");
-  ofstream stock_level_work_wait("logs/stock_level_work_wait");
+  ofstream tpcc_work_wait("work_wait/tpcc");
+  ofstream new_order_work_wait("work_wait/new_order");
+  ofstream payment_work_wait("work_wait/payment");
+  ofstream order_status_work_wait("work_wait/order");
+  ofstream delivery_work_wait("work_wait/delivery");
+  ofstream stock_level_work_wait("work_wait/stock_level");
   stringstream line;
   pthread_mutex_lock(&work_wait_mutex);
   for (list<work_wait_time>::iterator iterator = work_wait_infos.begin();
-       iterator != work_wait_infos.end();
-       ++iterator)
+       iterator != work_wait_infos.end(); ++iterator)
   {
     work_wait_time &info = *iterator;
     ulint latency = function_times.back()[info.transaction_id];
@@ -522,14 +484,21 @@ void TraceTool::write_work_wait()
     {
       ulint total_wait = function_times[0][info.transaction_id];
       ulint total_work = latency - total_wait;
+      ulint total_wait_locks = function_times[1][info.transaction_id];
+      ulint total_locks = function_times[2][info.transaction_id];
+      ut_a(total_wait > info.wait_time_so_far);
+      ut_a(total_work > info.work_time_so_far);
+      
       if (total_wait < info.wait_time_so_far ||
           total_work < info.work_time_so_far)
       {
+        log_file << "Error!" << endl;
         continue;
       }
       line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
-      info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_locks << "," <<
-      total_work <<  "," << total_wait;
+      info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_wait_locks << "," <<
+      info.num_locks << "," << total_work <<  "," << total_wait << "," << total_wait_locks << "," <<
+      total_locks;
       const char *work_wait_info = line.str().c_str();
       tpcc_work_wait << work_wait_info << endl;
       switch (transaction_types[info.transaction_id])
@@ -567,5 +536,5 @@ void TraceTool::write_work_wait()
 void TraceTool::write_log()
 {
   write_work_wait();
-  write_latency();
+  write_latency("latency/original");
 }

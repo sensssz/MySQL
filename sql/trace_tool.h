@@ -61,14 +61,14 @@ typedef enum transaction_type transaction_type;
 struct work_wait_time
 {
     ulint transaction_id;
-    ulint trx_id;
     ulint work_time_so_far;
     ulint wait_time_so_far;
+    ulint num_wait_locks;
     ulint num_locks;
     
-    work_wait_time(ulint trans_id, ulint tid, ulint work_time, ulint wait_time, ulint locks):
-    transaction_id(trans_id), trx_id(tid), work_time_so_far(work_time),
-    wait_time_so_far(wait_time), num_locks(locks)
+    work_wait_time(ulint trans_id, ulint work_time, ulint wait_time, ulint wait_locks, ulint locks):
+    transaction_id(trans_id), work_time_so_far(work_time),
+    wait_time_so_far(wait_time), num_wait_locks(wait_locks), num_locks(locks)
     {}
 };
 typedef struct work_wait_time work_wait_time;
@@ -146,9 +146,8 @@ public:
         return log_file;
     }
     
-    void work_wait_info(ulint trans_id, ulint trx_id, ulint work_time,
-                        ulint wait_time, ulint num_locks);
-    void remove(ulint trx_id);
+    void work_wait_info(ulint trans_id, ulint work_time,
+                        ulint wait_time, ulint num_wait, ulint num_locks);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
@@ -167,7 +166,7 @@ public:
     void write_work_wait();
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
-    void write_latency();
+    void write_latency(string dir);
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();
@@ -176,7 +175,7 @@ public:
     Record running time of a function. */
     void add_record(int function_index, ulint duration);
     void add_record_if_zero(int function_index, ulint duration);
-    void add_record(int function_index, ulint transaction_id, ulint duration);
+    void add_record(int function_index, ulint duration, ulint transaction_id);
     ulint get_record(int function_index, ulint transaction_id);
 };
 

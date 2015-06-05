@@ -595,37 +595,33 @@ LVM_schedule(
   }
   
 //  ofstream &log_file = TraceTool::get_instance()->get_log();
-//  log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
+  //  log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
+  
+  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
+  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
   
   timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
-    lock_t *lock = waiting_locks[index];
+    lock_t *lock = all_locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
     
     trx_t *trx = lock->trx;
     if (rand() % 100 < 50 &&
-        trx->real_transaction_id != NULL &&
-        trx->transaction_id != 0 &&
-        trx->transaction_id == *(trx->real_transaction_id) &&
-        trx->type != NONE)
+        trx->is_user_trx)
     {
       ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-      ulint wait_time_so_far = TraceTool::get_instance()->get_record(0, trx->transaction_id)
-              + TraceTool::difftime(lock->wait_start, now);
+      ulint wait_time_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
       ulint work_time = total_time_so_far - wait_time_so_far;
       ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
       TraceTool::get_instance()->work_wait_info(trx->transaction_id,
-                                                trx->id,
                                                 work_time,
                                                 wait_time_so_far,
+                                                lock->trx->num_of_waits,
                                                 num_locks);
     }
   }
-  
-  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
-  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
   
   vector<int> rankings(waiting_locks.size());
   list<vector<int> > ranking_enumerations;

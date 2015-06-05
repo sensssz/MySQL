@@ -54,8 +54,9 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-
-#define SEE_NEXT_K_LOCKS  2
+ulint MIN_BATCH_SIZE = 2;
+ulint MAX_BATCH_SIZE = 5;
+ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
 graph of transactions */
@@ -2041,38 +2042,24 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
-//  timespec now = TraceTool::get_time();
-//  if (rand() % 100 < 20 &&
-//      trx->real_transaction_id != NULL &&
-//      trx->transaction_id != 0 &&
-//      trx->transaction_id == *(trx->real_transaction_id))
+//  vector<lock_t *> wait_locks;
+//  vector<lock_t *> granted_locks;
+//  vector<lock_t *> locks_to_grant;
+//  bool has_batch = false;
+//  
+//  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+//  
+//  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+//      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
 //  {
-//    ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//    ulint work_time = total_time_so_far - trx->total_wait_time;
-//    TraceTool::get_instance()->work_wait_info(trx->transaction_id,
-//                                              trx->id,
-//                                              work_time,
-//                                              trx->total_wait_time);
+//    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+//    locks_grant(locks_to_grant, buf_block_get_space(block),
+//                buf_block_get_page_no(block), heap_no, trx);
+//    if (!lock_get_wait(lock))
+//    {
+//      return DB_SUCCESS_LOCKED_REC;
+//    }
 //  }
-  
-  vector<lock_t *> wait_locks;
-  vector<lock_t *> granted_locks;
-  vector<lock_t *> locks_to_grant;
-  bool has_batch = false;
-  
-  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
-  
-  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
-      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
-  {
-    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-    locks_grant(locks_to_grant, buf_block_get_space(block),
-                buf_block_get_page_no(block), heap_no, trx);
-    if (!lock_get_wait(lock))
-    {
-      return DB_SUCCESS_LOCKED_REC;
-    }
-  }
   
   
   /* Release the mutex to obey the latching order.
@@ -2111,7 +2098,7 @@ lock_rec_enqueue_waiting(
 
   trx->lock.was_chosen_as_deadlock_victim = FALSE;
   trx->lock.wait_started = ut_time();
-  ++trx->num_of_waits;
+  ++(trx->num_of_waits);
 
   ut_a(que_thr_stop(thr));
 
@@ -2556,11 +2543,6 @@ lock_grant(
   trx_t *trx = lock->trx;
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   trx->total_wait_time += wait_time;
-  if (trx->real_transaction_id != NULL &&
-      trx->transaction_id == *(trx->real_transaction_id))
-  {
-    TraceTool::get_instance()->add_record(0, trx->transaction_id, wait_time);
-  }
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2799,7 +2781,7 @@ lock_next_to_grant(
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   
-  int size = 0;
+  ulint size = 0;
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
        lock != NULL;
        lock = lock_rec_get_next(heap_no, lock))
@@ -2882,6 +2864,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  timespec now = TraceTool::get_time();
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2889,6 +2872,20 @@ lock_rec_dequeue_from_page(
     if (lock_get_wait(lock) &&
         !lock_rec_has_to_wait_in_queue(lock))
     {
+      trx_t *trx = lock->trx;
+      if (rand() % 100 < 50 &&
+          trx->is_user_trx)
+      {
+        ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+        ulint wait_time_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+        ulint work_time = total_time_so_far - wait_time_so_far;
+        ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
+        TraceTool::get_instance()->work_wait_info(trx->transaction_id,
+                                                  work_time,
+                                                  wait_time_so_far,
+                                                  lock->trx->num_of_waits,
+                                                  num_locks);
+      }
       lock_grant(lock);
     }
   }
