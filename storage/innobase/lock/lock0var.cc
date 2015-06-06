@@ -408,10 +408,13 @@ LVM_schedule(
   }
   
   
+  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
+  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
+  
   timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
-    lock_t *lock = waiting_locks[index];
+    lock_t *lock = all_locks[index];
     trx_t *trx = lock->trx;
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     ulint wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
@@ -427,9 +430,6 @@ LVM_schedule(
       TraceTool::get_instance()->add_estimate_record(estimation, lock->trx->transaction_id);
     }
   }
-  
-  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
-  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
   
   vector<int> rankings(waiting_locks.size());
   list<vector<int> > ranking_enumerations;

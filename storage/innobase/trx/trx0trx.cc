@@ -121,6 +121,7 @@ trx_create(void)
   
   trx->real_transaction_id = NULL;
   trx->transaction_id = 0;
+  trx->is_user_trx = FALSE;
 
 	trx->check_foreigns = TRUE;
 	trx->check_unique_secondary = TRUE;
@@ -197,6 +198,7 @@ trx_allocate_for_mysql(void)
 
 	mutex_enter(&trx_sys->mutex);
 
+  trx->is_user_trx = TRUE;
 	ut_d(trx->in_mysql_trx_list = TRUE);
 	UT_LIST_ADD_FIRST(mysql_trx_list, trx_sys->mysql_trx_list, trx);
 
@@ -1418,7 +1420,10 @@ trx_commit(
 	trx_t*	trx)	/*!< in/out: transaction */
 {
   /* This marks a transaction commit. */
-  TraceTool::is_commit = true;
+  if (trx->is_user_trx)
+  {
+    TraceTool::is_commit = true;
+  }
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 
