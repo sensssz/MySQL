@@ -2055,6 +2055,7 @@ lock_rec_enqueue_waiting(
   ofstream &log = TraceTool::get_instance()->get_log();
   ulint space_id = lock->un_member.rec_lock.space;
   ulint page_no = lock->un_member.rec_lock.page_no;
+  log << space_id << "," << page_no << "," << heap_no << endl;
   bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
   if (do_monitor)
   {

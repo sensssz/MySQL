@@ -196,6 +196,166 @@ estimate(
   return result - time_so_far;
 }
 
+static
+double
+tpcc_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -2976129.550262 * num_locks + 1.474113 * work + 0.845159 * wait + 179159173.216593;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+
+static
+double
+new_order_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -5152980.542941 * num_locks + 1.538377 * work + 0.797703 * wait + 240783215.910486;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+double
+payment_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -11575590.190602 * num_locks + 1.190319 * work + 0.833996 * wait + 172714956.024506;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+double
+delivery_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -5042302.489343 * num_locks + 1.134626 * work + 0.628491 * wait + 485844457.840212;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+double
+stock_level_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -475639.543715 * num_locks + 22.781991 * work + 1.191586 * wait + 27762623.428666;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+
+/*************************************************************//**
+Estimate remaining time given total time so far. */
+UNIV_INTERN
+ulint
+estimate(
+  ulint num_locks,
+  ulint work,
+  ulint wait,
+  transaction_type type)
+{
+  switch (type) {
+    case NEW_ORDER:
+      return new_order_estimate(num_locks, work, wait);
+      break;
+    case PAYMENT:
+      return payment_estimate(num_locks, work, wait);
+      break;
+    case DELIVERY:
+      return delivery_estimate(num_locks, work, wait);
+      break;
+    case STOCK_LEVEL:
+      return stock_level_estimate(num_locks, work, wait);
+      break;
+    default:
+      return tpcc_estimate(num_locks, work, wait);
+      break;
+  }
+}
+
+static
+double
+tpcc_estimate(ulint work, ulint wait)
+{
+  return 1.087953 * work + 0.871685 * wait + 155858803.591282;
+}
+static
+double
+new_order_estimate(ulint work, ulint wait)
+{
+  return 0.983699 * work + 0.899907 * wait + 164959303.581966;
+}
+static
+double
+payment_estimate(ulint work, ulint wait)
+{
+  return 0.437855 * work + 0.829758 * wait + 148211963.984209;
+}
+static
+double
+delivery_estimate(ulint work, ulint wait)
+{
+  return 0.762453 * work + 0.714653 * wait + 394290913.655502;
+}
+static
+double
+stock_level_estimate(ulint work, ulint wait)
+{
+  return 20.537997 * work + 1.250428 * wait + 734536.530398;
+}
+
+/*************************************************************//**
+Estimate remaining time given total time so far. */
+UNIV_INTERN
+ulint
+estimate(
+  ulint work,
+  ulint wait,
+  transaction_type type)
+{
+  switch (type) {
+    case NEW_ORDER:
+      return new_order_estimate(work, wait);
+      break;
+    case PAYMENT:
+      return payment_estimate(work, wait);
+      break;
+    case DELIVERY:
+      return delivery_estimate(work, wait);
+      break;
+    case STOCK_LEVEL:
+      return stock_level_estimate(work, wait);
+      break;
+    default:
+      return tpcc_estimate(work, wait);
+      break;
+  }
+}
+
 /*************************************************************//**
 Swap two elements in a vector. */
 static
@@ -567,6 +727,18 @@ compare(
   return lock1->ranking < lock2->ranking;
 }
 
+/*********************************************************************//**
+Gets the wait flag of a lock.
+@return LOCK_WAIT if waiting, 0 if not */
+UNIV_INLINE
+ulint
+lock_get_wait(
+/*==========*/
+  const lock_t* lock) /*!< in: lock */
+{
+  return(lock->type_mode & LOCK_WAIT);
+}
+
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
@@ -616,7 +788,23 @@ LVM_schedule(
     lock_t *lock = all_locks[index];
     trx_t *trx = lock->trx;
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    ulint wait_so_far = trx->total_wait_time;
+    if (lock_get_wait(lock))
+    {
+      wait_so_far += TraceTool::difftime(lock->wait_start, now);
+    }
+    ulint work_so_far = lock->time_so_far - wait_so_far;
+    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+    ulint latency = estimate(num_locks, work_so_far, wait_so_far, trx->type);
+    if (latency > lock->time_so_far)
+    {
+      lock->process_time = latency - lock->time_so_far;
+    }
+    else
+    {
+      lock->process_time = lock->time_so_far;
+    }
+//    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
     TraceTool::get_instance()->add_actual_latency(trx->id, trx->transaction_id, lock->time_so_far);
   }
   
