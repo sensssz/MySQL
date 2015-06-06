@@ -2052,11 +2052,7 @@ lock_rec_enqueue_waiting(
   if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
       !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
   {
-    TraceTool::path_count = 42;
-    TRACE_FUNCTION_START();
     LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-    TRACE_FUNCTION_END();
-    TraceTool::path_count = 0;
     locks_grant(locks_to_grant, buf_block_get_space(block),
                 buf_block_get_page_no(block), heap_no, trx);
     if (!lock_get_wait(lock))

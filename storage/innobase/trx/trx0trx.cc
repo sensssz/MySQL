@@ -860,9 +860,12 @@ trx_start_low(
 			srv_undo_logs, srv_undo_tablespaces);
 	}
   
-  trx->trx_start_time = TraceTool::get_time();
-  trx->total_wait_time = 0;
-  trx->type = NONE;
+  if (trx->is_user_trx)
+  {
+    trx->trx_start_time = TraceTool::get_time();
+    trx->total_wait_time = 0;
+    trx->type = NONE;
+  }
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
