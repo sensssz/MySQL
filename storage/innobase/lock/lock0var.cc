@@ -716,7 +716,15 @@ LVM_schedule(
     }
     ulint work_so_far = lock->time_so_far - wait_so_far;
     ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
-    lock->process_time = estimate(work_so_far, wait_so_far, num_locks, lock->trx->type);
+    ulint estimation = estimate(work_so_far, wait_so_far, num_locks, lock->trx->type);
+    if (estimation > lock->time_so_far)
+    {
+      lock->process_time = estimation - lock->time_so_far;
+    }
+    else
+    {
+      lock->process_time = lock->time_so_far;
+    }
     
     if (rand() % 100 < 50 &&
         trx->is_user_trx)
