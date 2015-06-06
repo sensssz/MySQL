@@ -119,6 +119,8 @@ trx_create(void)
 
 	trx->support_xa = TRUE;
 
+  trx->is_user_trx = false;
+  
 	trx->check_foreigns = TRUE;
 	trx->check_unique_secondary = TRUE;
 
@@ -194,6 +196,7 @@ trx_allocate_for_mysql(void)
 
 	mutex_enter(&trx_sys->mutex);
 
+  trx->is_user_trx = true;
 	ut_d(trx->in_mysql_trx_list = TRUE);
 	UT_LIST_ADD_FIRST(mysql_trx_list, trx_sys->mysql_trx_list, trx);
 
@@ -857,10 +860,13 @@ trx_start_low(
 			srv_undo_logs, srv_undo_tablespaces);
 	}
   
-  trx->trx_start_time = TraceTool::get_time();
-  trx->total_wait_time = 0;
-  trx->type = NONE;
-  trx->transaction_id = TraceTool::current_transaction_id;
+  if (trx->is_user_trx)
+  {
+    trx->trx_start_time = TraceTool::get_time();
+    trx->total_wait_time = 0;
+    trx->type = NONE;
+    trx->transaction_id = TraceTool::current_transaction_id;
+  }
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -1414,7 +1420,14 @@ trx_commit(
 	trx_t*	trx)	/*!< in/out: transaction */
 {
   /* This marks a transaction commit. */
-  TraceTool::is_commit = true;
+  if (trx->is_user_trx)
+  {
+    TraceTool::is_commit = true;
+  }
+  else
+  {
+    TraceTool::get_instance()->get_log() << "Non-user trx commits!" << endl;
+  }
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 
