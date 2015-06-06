@@ -2042,24 +2042,24 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
-//  vector<lock_t *> wait_locks;
-//  vector<lock_t *> granted_locks;
-//  vector<lock_t *> locks_to_grant;
-//  bool has_batch = false;
-//  
-//  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
-//  
-//  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
-//      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
-//  {
-//    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-//    locks_grant(locks_to_grant, buf_block_get_space(block),
-//                buf_block_get_page_no(block), heap_no, trx);
-//    if (!lock_get_wait(lock))
-//    {
-//      return DB_SUCCESS_LOCKED_REC;
-//    }
-//  }
+  vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
+  vector<lock_t *> locks_to_grant;
+  bool has_batch = false;
+  
+  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+  
+  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
+  {
+    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+    locks_grant(locks_to_grant, buf_block_get_space(block),
+                buf_block_get_page_no(block), heap_no, trx);
+    if (!lock_get_wait(lock))
+    {
+      return DB_SUCCESS_LOCKED_REC;
+    }
+  }
   
   
   /* Release the mutex to obey the latching order.
@@ -2536,6 +2536,7 @@ lock_grant(
 /*=======*/
   lock_t* lock) /*!< in/out: waiting lock request */
 {
+  ut_a(lock_get_wait(lock));
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
   
@@ -2863,7 +2864,7 @@ lock_rec_dequeue_from_page(
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
-  
+
   /*
   timespec now = TraceTool::get_time();
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);

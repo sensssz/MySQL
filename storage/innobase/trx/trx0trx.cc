@@ -1416,9 +1416,11 @@ trx_commit_low(
   if (trx->is_user_trx)
   {
     timespec now = TraceTool::get_time();
-    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
-    TraceTool::get_instance()->add_record(1, trx->num_of_waits);
-    TraceTool::get_instance()->add_record(2, total_locks);
+    ulint latency = TraceTool::difftime(trx->trx_start_time, now);
+    TraceTool::get_instance()->add_record(0, trx->total_wait_time, trx->transaction_id);
+    TraceTool::get_instance()->add_record(1, trx->num_of_waits, trx->transaction_id);
+    TraceTool::get_instance()->add_record(2, total_locks, trx->transaction_id);
+    TraceTool::get_instance()->add_record(2, latency, trx->transaction_id);
   }
 }
 

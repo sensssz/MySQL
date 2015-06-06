@@ -195,6 +195,109 @@ estimate(
   ulint result = estimate[y_index + 1];
   return result - time_so_far;
 }
+static
+ulint
+tpcc_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -47211.456283 * num_locks + 1.354516 * work + 1.042551 * wait + 32603637.683856;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+ulint
+new_order_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -4145219.173375 * num_locks + 1.386304 * work + 1.022414 * wait + 96812725.885488;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+ulint
+payment_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -1115259.933342 * num_locks + 1.151622 * work + 1.026085 * wait + 13079927.203964;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+ulint
+delivery_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -1531429.195427 * num_locks + 1.119154 * work + 1.018715 * wait + 147197116.024800;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+ulint
+stock_level_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = -40234.782495 * num_locks + 1.570678 * work + 1.007500 * wait + 6772774.606192;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+ulint
+lock_get_wait(
+/*==========*/
+  const lock_t* lock) /*!< in: lock */
+{
+  ut_ad(lock);
+
+  return(lock->type_mode & LOCK_WAIT);
+}
+/*************************************************************//**
+Estimate remaining time given total time so far. */
+UNIV_INTERN
+ulint
+estimate(
+  ulint work,
+  ulint wait,
+  ulint num_locks,
+  transaction_type type)
+{
+  switch (type) {
+    case NEW_ORDER:
+      return new_order_estimate(num_locks, work, wait);
+    case PAYMENT:
+      return payment_estimate(num_locks, work, wait);
+    case DELIVERY:
+      return delivery_estimate(num_locks, work, wait);
+    case STOCK_LEVEL:
+      return stock_level_estimate(num_locks, work, wait);
+    default:
+      return tpcc_estimate(num_locks, work, wait);
+  }
+}
 
 /*************************************************************//**
 Swap two elements in a vector. */
@@ -604,20 +707,23 @@ LVM_schedule(
   for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
     lock_t *lock = all_locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    
     trx_t *trx = lock->trx;
+    lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    ulint wait_so_far = trx->total_wait_time;
+    if (lock_get_wait(lock))
+    {
+      wait_so_far += TraceTool::difftime(lock->wait_start, now);
+    }
+    ulint work_so_far = lock->time_so_far - wait_so_far;
+    ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
+    lock->process_time = estimate(work_so_far, wait_so_far, num_locks, lock->trx->type);
+    
     if (rand() % 100 < 50 &&
         trx->is_user_trx)
     {
-      ulint total_time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-      ulint wait_time_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-      ulint work_time = total_time_so_far - wait_time_so_far;
-      ulint num_locks = UT_LIST_GET_LEN(lock->trx->lock.trx_locks);
       TraceTool::get_instance()->work_wait_info(trx->transaction_id,
-                                                work_time,
-                                                wait_time_so_far,
+                                                work_so_far,
+                                                wait_so_far,
                                                 lock->trx->num_of_waits,
                                                 num_locks);
     }

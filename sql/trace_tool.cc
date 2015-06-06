@@ -130,7 +130,7 @@ TraceTool *TraceTool::get_instance()
 TraceTool::TraceTool() : function_times()
 {
   /* Open the log file in append mode so that it won't be overwritten */
-  log_file.open("logs/trace.log");
+  log_file.open("logs/trace.log", std::ios::app);
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
@@ -311,11 +311,11 @@ void TraceTool::end_transaction()
 #ifdef LATENCY
   if (commit_successful)
   {
-    timespec now = get_time();
-    long latency = difftime(trans_start, now);
-    pthread_rwlock_rdlock(&data_lock);
-    function_times.back()[current_transaction_id] = latency;
-    pthread_rwlock_unlock(&data_lock);
+//    timespec now = get_time();
+//    long latency = difftime(trans_start, now);
+//    pthread_rwlock_rdlock(&data_lock);
+//    function_times.back()[current_transaction_id] = latency;
+//    pthread_rwlock_unlock(&data_lock);
   }
   else
   {
@@ -486,8 +486,18 @@ void TraceTool::write_work_wait()
       ulint total_work = latency - total_wait;
       ulint total_wait_locks = function_times[1][info.transaction_id];
       ulint total_locks = function_times[2][info.transaction_id];
-      ut_a(total_wait > info.wait_time_so_far);
-      ut_a(total_work > info.work_time_so_far);
+      
+      if (total_wait < info.wait_time_so_far)
+      {
+        log_file << total_wait << "," << info.wait_time_so_far << endl;
+      }
+      if (total_work < info.work_time_so_far)
+      {
+        log_file << total_work << "," << info.work_time_so_far << endl;
+      }
+      
+      ut_a(total_wait >= info.wait_time_so_far);
+      ut_a(total_work >= info.work_time_so_far);
       
       line << transaction_start_times[info.transaction_id] << "," << info.transaction_id << "," <<
       info.work_time_so_far << "," << info.wait_time_so_far << "," << info.num_wait_locks << "," <<
