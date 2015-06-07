@@ -110,25 +110,10 @@ binary_search(
 }
 
 static
-double
-tpcc_estimate(ulint num_locks, ulint work, ulint wait)
-{
-  double result = -2976129.550262 * num_locks + 1.474113 * work + 0.845159 * wait + 179159173.216593;
-  if (result < 0)
-  {
-    return work + wait;
-  }
-  else
-  {
-    return result;
-  }
-}
-
-static
-double
+ulint
 new_order_estimate(ulint num_locks, ulint work, ulint wait)
 {
-  double result = -5152980.542941 * num_locks + 1.538377 * work + 0.797703 * wait + 240783215.910486;
+  double result = -4145219.173375 * num_locks + 1.386304 * work + 1.022414 * wait + 96812725.885488;
   if (result < 0)
   {
     return work + wait;
@@ -142,7 +127,7 @@ static
 double
 payment_estimate(ulint num_locks, ulint work, ulint wait)
 {
-  double result = -11575590.190602 * num_locks + 1.190319 * work + 0.833996 * wait + 172714956.024506;
+  double result = 3685783.811362 * num_locks + -2.996459 * work + 1.072346 * wait;
   if (result < 0)
   {
     return work + wait;
@@ -154,9 +139,37 @@ payment_estimate(ulint num_locks, ulint work, ulint wait)
 }
 static
 double
+order_status_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = 4531620.310483 * num_locks + -1.373603 * work + 0.946209 * wait;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+double
+tpcc_estimate(ulint num_locks, ulint work, ulint wait)
+{
+  double result = 4157612.449583 * num_locks + -1.280790 * work + 0.981355 * wait;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+ulint
 delivery_estimate(ulint num_locks, ulint work, ulint wait)
 {
-  double result = -5042302.489343 * num_locks + 1.134626 * work + 0.628491 * wait + 485844457.840212;
+  double result = -1531429.195427 * num_locks + 1.119154 * work + 1.018715 * wait + 147197116.024800;
   if (result < 0)
   {
     return work + wait;
@@ -167,10 +180,10 @@ delivery_estimate(ulint num_locks, ulint work, ulint wait)
   }
 }
 static
-double
+ulint
 stock_level_estimate(ulint num_locks, ulint work, ulint wait)
 {
-  double result = -475639.543715 * num_locks + 22.781991 * work + 1.191586 * wait + 27762623.428666;
+  double result = -40234.782495 * num_locks + 1.570678 * work + 1.007500 * wait + 6772774.606192;
   if (result < 0)
   {
     return work + wait;
@@ -212,12 +225,6 @@ estimate(
 
 static
 double
-tpcc_estimate(ulint work, ulint wait)
-{
-  return 1.087953 * work + 0.871685 * wait + 155858803.591282;
-}
-static
-double
 new_order_estimate(ulint work, ulint wait)
 {
   return 0.983699 * work + 0.899907 * wait + 164959303.581966;
@@ -226,7 +233,43 @@ static
 double
 payment_estimate(ulint work, ulint wait)
 {
-  return 0.437855 * work + 0.829758 * wait + 148211963.984209;
+  double result = -2.996459 * work + 1.072346 * wait + 7371567.622724;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+double
+order_status_estimate(ulint work, ulint wait)
+{
+  double result = -1.373603 * work + 0.946209 * wait + 9063240.620966;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
+}
+static
+double
+tpcc_estimate(ulint work, ulint wait)
+{
+  double result = -1.280790 * work + 0.981355 * wait + 8315224.899166;
+  if (result < 0)
+  {
+    return work + wait;
+  }
+  else
+  {
+    return result;
+  }
 }
 static
 double
@@ -526,6 +569,7 @@ LVM_schedule(
       wait_so_far += TraceTool::difftime(lock->wait_start, now);
     }
     ulint work_so_far = lock->time_so_far - wait_so_far;
+    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
     ulint estimation = estimate(work_so_far, wait_so_far, lock->trx->type);
     if (estimation > lock->time_so_far)
     {

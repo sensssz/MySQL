@@ -14,8 +14,8 @@
 #define LATENCY
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
-#define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
-#define ORDER_STATUS_MARKER "SELECT C_FIRST, C_MIDDLE"
+#define PAYMENT_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
+#define ORDER_STATUS_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
 #define DELIVERY_MARKER "SELECT NO_O_ID FROM NEW_ORDER WHERE NO_D_ID ="
 #define STOCK_LEVEL_MARKER "SELECT D_NEXT_O_ID FROM DISTRICT WHERE D_W_ID ="
 
@@ -448,11 +448,11 @@ void TraceTool::write_latency()
 
 void TraceTool::write_isotonic_accuracy()
 {
-  ofstream new_order_accuracy("logs/new_order_accuracy");
-  ofstream payment_accuracy("logs/payment_accuracy");
-  ofstream order_status_accuracy("logs/order_status_accuracy");
-  ofstream delivery_accuracy("logs/delivery_accuracy");
-  ofstream stock_level_accuracy("logs/stock_level_accuracy");
+  ofstream new_order_accuracy("accuracy/new_order");
+  ofstream payment_accuracy("accuracy/payment");
+  ofstream order_status_accuracy("accuracy/order_status");
+  ofstream delivery_accuracy("accuracy/delivery");
+  ofstream stock_level_accuracy("accuracy/stock_level");
   for (ulint index = 0, size = estimated_latencies.size(); index < size; ++index)
   {
     transaction_type type = transaction_types[transaction_ids[index]];
