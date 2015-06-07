@@ -759,7 +759,7 @@ LVM_schedule(
   ulint space_id = lock->un_member.rec_lock.space;
   ulint page_no = lock->un_member.rec_lock.page_no;
   ulint heap_no = lock_rec_find_set_bit(lock);
-  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
+  bool do_monitor = space_id == 34 && page_no == 3 && heap_no == 17;
   
   if (do_monitor)
     log << "Schedule Starts" << endl;

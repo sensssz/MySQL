@@ -2055,8 +2055,7 @@ lock_rec_enqueue_waiting(
   ofstream &log = TraceTool::get_instance()->get_log();
   ulint space_id = lock->un_member.rec_lock.space;
   ulint page_no = lock->un_member.rec_lock.page_no;
-  log << space_id << "," << page_no << "," << heap_no << endl;
-  bool do_monitor = space_id == 14 && page_no == 3 && heap_no == 13;
+  bool do_monitor = space_id == 34 && page_no == 3 && heap_no == 17;
   if (do_monitor)
   {
     log << "Arrival: " << endl;
@@ -2930,7 +2929,7 @@ lock_rec_dequeue_from_page(
     vector<lock_t *> granted_locks;
     
     ofstream &log = TraceTool::get_instance()->get_log();
-    bool do_monitor = space == 14 && page_no == 3 && heap_no == 13;
+    bool do_monitor = space == 34 && page_no == 3 && heap_no == 17;
     if (do_monitor)
     {
       rec_get_granted_locks(space, page_no, heap_no, granted_locks);
