@@ -401,9 +401,7 @@ void TraceTool::write_latency(string dir)
       }
     }
     function_index++;
-    iterator->clear();
   }
-  function_times.clear();
   pthread_rwlock_unlock(&data_lock);
   tpcc_log.close();
   new_order_log.close();
