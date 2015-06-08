@@ -299,23 +299,15 @@ void TraceTool::end_transaction()
   new_transaction = true;
   type = NONE;
 #ifdef LATENCY
-  if (commit_successful)
+  timespec now = get_time();
+  long latency = difftime(trans_start, now);
+  pthread_rwlock_rdlock(&data_lock);
+  function_times.back()[current_transaction_id] = latency;
+  if (!commit_successful)
   {
-    timespec now = get_time();
-    long latency = difftime(trans_start, now);
-    pthread_rwlock_rdlock(&data_lock);
-    function_times.back()[current_transaction_id] = latency;
-    pthread_rwlock_unlock(&data_lock);
-  }
-  else
-  {
-    /* Commit fails, we set its latency to 0 and ignore it. */
-    pthread_rwlock_rdlock(&data_lock);
-    // Reuse the last transaction
-    function_times.back()[current_transaction_id] = 0;
     transaction_start_times[current_transaction_id] = 0;
-    pthread_rwlock_unlock(&data_lock);
   }
+  pthread_rwlock_unlock(&data_lock);
 #endif
 }
 
@@ -399,7 +391,7 @@ void TraceTool::write_latency()
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)
     {
-      if (function_times.back()[index] > 0)
+      if (transaction_start_times[index])
       {
         ulint latency = (*iterator)[index];
         tpcc_log << function_index << ',' << latency << endl;
