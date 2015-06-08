@@ -374,7 +374,7 @@ void TraceTool::write_latency(string dir)
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)
     {
-      if (function_times.back()[index] > 0)
+      if (transaction_start_times[index] > 0)
       {
         ulint latency = (*iterator)[index];
         tpcc_log << function_index << ',' << latency << endl;
