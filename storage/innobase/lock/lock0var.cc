@@ -10,10 +10,17 @@
 #include "trx0trx.h"
 #include "trace_tool.h"
 
+#include <algorithm>
 #include <fstream>
 #include <float.h>
+#include <list>
+#include <string>
 
+using std::list;
 using std::ifstream;
+using std::sort;
+using std::find;
+using std::string;
 
 static ulint *tpcc_work_wait = NULL;
 static ulint *tpcc_estimated = NULL;
@@ -64,17 +71,17 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_original", tpcc_work_wait,
+  read_isotonic("isotonics/tpcc", tpcc_work_wait,
                 tpcc_estimated, tpcc_length);
-  read_isotonic("isotonic_new_order", new_order_work_wait,
+  read_isotonic("isotonics/new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
-  read_isotonic("isotonic_payment", payment_work_wait,
+  read_isotonic("isotonics/payment", payment_work_wait,
                 payment_estimated, payment_length);
-  read_isotonic("isotonic_order_status", order_status_work_wait,
+  read_isotonic("isotonics/order_status", order_status_work_wait,
                 order_status_estimated, order_status_length);
-  read_isotonic("isotonic_delivery", delivery_work_wait,
+  read_isotonic("isotonics/delivery", delivery_work_wait,
                 delivery_estimated, delivery_length);
-  read_isotonic("isotonic_stock_level", stock_level_work_wait,
+  read_isotonic("isotonics/stock_level", stock_level_work_wait,
                 stock_level_estimated, stock_level_length);
 }
 
@@ -203,4 +210,3 @@ indi_cleanup()
   free(stock_level_work_wait);
   free(stock_level_estimated);
 }
-
