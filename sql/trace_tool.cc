@@ -44,6 +44,11 @@ __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
 
+ulint TraceTool::num_trans = 0;
+double TraceTool::mean_latency = 0;
+double TraceTool::var_latency = 0;
+pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
 static const size_t ORDER_STATUS_LENGTH = strlen(ORDER_STATUS_MARKER);
@@ -294,13 +299,35 @@ void TraceTool::end_query()
 #endif
 }
 
+/********************************************************************//**
+Sumbits the total wait time of a transaction. */
+void TraceTool::update_ctv(ulint latency)
+{
+  ++num_trans;
+  double old_mean = mean_latency;
+  double old_variance = var_latency;
+  mean_latency = old_mean + (latency - old_mean) / num_trans;
+  var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
+}
+
+/********************************************************************//**
+Sumbits the total wait time of a transaction. */
+void TraceTool::update_ctv(ulint latency, ulint &num_trans, double &mean, double &variance)
+{
+  ++num_trans;
+  double old_mean = mean;
+  double old_variance = variance;
+  mean = old_mean + (latency - old_mean) / num_trans;
+  variance = old_variance + (latency - old_mean) * (latency - mean);
+}
+
 void TraceTool::end_transaction()
 {
   new_transaction = true;
   type = NONE;
 #ifdef LATENCY
   timespec now = get_time();
-  long latency = difftime(trans_start, now);
+  ulint latency = difftime(trans_start, now);
   pthread_rwlock_rdlock(&data_lock);
   function_times.back()[current_transaction_id] = latency;
   if (!commit_successful)
@@ -308,6 +335,12 @@ void TraceTool::end_transaction()
     transaction_start_times[current_transaction_id] = 0;
   }
   pthread_rwlock_unlock(&data_lock);
+  if (commit_successful)
+  {
+    pthread_mutex_lock(&var_mutex);
+    update_ctv(latency);
+    pthread_mutex_unlock(&var_mutex);
+  }
 #endif
 }
 

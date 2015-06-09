@@ -16,6 +16,9 @@
     a function call which appears inside an if statement*/
 #define TRACE_S_E(function_call, index) (TRACE_START()|(function_call)|TRACE_END(index))
 
+#define var_mutex_enter() pthread_mutex_lock(&TraceTool::var_mutex)
+#define var_mutex_exit() pthread_mutex_unlock(&TraceTool::var_mutex)
+
 typedef unsigned long int ulint;
 typedef unsigned int uint;
 
@@ -96,6 +99,12 @@ public:
                                                  these two doesn't have to be true at the same time). */
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
+    static ulint num_trans;                 /*!< Number of successfully submitted transactions. */
+    static double mean_latency;             /*!< Mean of total wait time of successfully committed
+                                             transactions*/
+    static double var_latency;              /*!< Variance of total wait time of successfully committed
+                                             transactions*/
+    static pthread_mutex_t var_mutex;
     
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
@@ -127,6 +136,13 @@ public:
     {
         return log_file;
     }
+
+    /********************************************************************//**
+    Sumbits the total wait time of a transaction. */
+    void update_ctv(ulint latency);
+    /********************************************************************//**
+    Sumbits the total wait time of a transaction. */
+    void update_ctv(ulint latency, ulint &num_trans, double &mean, double &variance);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */

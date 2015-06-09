@@ -256,18 +256,13 @@ double
 var(
   vector<ulint> &numbers)
 {
-  double mean = 0;
-  for (ulint index = 0, size = numbers.size(); index < size; ++index)
-  {
-    mean += numbers[index];
-  }
-  mean /= numbers.size();
+  double mean = TraceTool::mean_latency;
+  double variance = TraceTool::var_latency;
+  ulint num_trans = TraceTool::num_trans;
   
-  double variance = 0;
   for (ulint index = 0, size = numbers.size(); index < size; ++index)
   {
-    double difference = numbers[index] - mean;
-    variance += difference * difference;
+    TraceTool::get_instance()->update_ctv(numbers[index], num_trans, mean, variance);
   }
   
   return variance;
@@ -585,8 +580,6 @@ LVM_schedule(
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
-//  bool do_monitor = rand() % 100 < 2;
-  
   if (waiting_locks.size() == 0)
   {
     return;
@@ -604,8 +597,6 @@ LVM_schedule(
     granted_locks[index]->ranking = 0;
     granted_locks[index]->in_batch = true;
   }
-  
-//  ofstream &log_file = TraceTool::get_instance()->get_log();
   
   vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
   all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
@@ -627,6 +618,7 @@ LVM_schedule(
   
   double min_variance = std::numeric_limits<double>::max();
   vector<int> *min_enum = NULL;
+  var_mutex_enter();
   for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
        iterator != ranking_enumerations.end(); ++iterator)
   {
@@ -645,6 +637,7 @@ LVM_schedule(
       min_enum = &enumeration;
     }
   }
+  var_mutex_exit();
   
   int smallest_ranking = INT_MAX;
   for (ulint index = 0, size = min_enum->size(); index < size; ++index)
@@ -662,27 +655,6 @@ LVM_schedule(
       locks_to_grant.push_back(lock);
     }
   }
-  
-//  if (do_monitor)
-//  {
-//    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-//    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-//    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
-//    {
-//      lock_t *lock = granted_locks[index];
-//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//      << lock_get_mode(granted_locks[index]) << "'};" << endl;
-//    }
-//    log_file << endl;
-//
-//    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
-//    {
-//      lock_t *lock = waiting_locks[index];
-//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-//      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
-//    }
-//    log_file << endl;
-//  }
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
