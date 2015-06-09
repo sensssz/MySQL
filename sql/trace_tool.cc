@@ -411,7 +411,30 @@ void TraceTool::write_latency(string dir)
   stock_level_log.close();
 }
 
+/********************************************************************//**
+Dump data about function running time and latency to log file. */
+void TraceTool::write_latency_remaining(string dir)
+{
+  ofstream latency_log(dir + "latency_so_far");
+  ofstream remaining_log(dir + "remaining_time_so_far");
+  for (ulint index = 0, size = latencies_so_far.size();
+       index < size; ++index)
+  {
+    latency_log << latencies_so_far[index] << endl;
+  }
+  for (ulint index = 0, size = remaining_times.size();
+       index < size; ++index)
+  {
+    ulint transaction_id = transaction_ids[index];
+    ulint latency = function_times.back()[transaction_id];
+    remaining_log << latency - remaining_times[index] << endl;
+  }
+  latency_log.close();
+  remaining_log.close();
+}
+
 void TraceTool::write_log()
 {
+  write_latency_remaining("latency_remaining/");
   write_latency("latency/original/");
 }

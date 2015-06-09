@@ -97,6 +97,10 @@ public:
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
     
+    vector<ulint> latencies_so_far;
+    vector<ulint> remaining_times;
+    vector<ulint> transaction_ids;
+    
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
     static TraceTool *get_instance();
@@ -145,6 +149,9 @@ public:
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency(string dir);
+    /********************************************************************//**
+    Dump data about function running time and latency to log file. */
+    void write_latency_remaining(string dir);
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();
