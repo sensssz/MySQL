@@ -2547,6 +2547,7 @@ find_previous(
   return previous;
 }
 
+
 static
 void
 hash_delete(
@@ -2573,6 +2574,71 @@ hash_delete(
     node->hash = lock->hash;
   }
 }
+
+static
+lock_t *
+lock_rec_get_first(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no)
+{
+  lock_t *lock = lock_rec_get_first_on_page_addr(space_id, page_no);
+  if (lock == NULL)
+  {
+    return NULL;
+  }
+  else
+  {
+    return lock_rec_get_next(heap_no, lock);
+  }
+}
+
+static
+lock_t *
+lock_rec_find_first_wait(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no)
+{
+  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
+       lock != NULL;
+       lock = lock_rec_get_next(heap_no, lock))
+  {
+    if (lock_get_wait(lock))
+    {
+      return lock;
+    }
+  }
+  
+  return NULL;
+}
+
+static
+void
+lock_rec_move_to_front(
+  lock_t *lock_to_move,
+  lock_t *first_wait_lock,
+  ulint rec_fold)
+{
+  if (first_wait_lock != lock_to_move)
+  {
+    // Move the target lock before the first wait lock.
+    hash_delete(lock_to_move, rec_fold);
+    lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
+    if (first_lock_previous != NULL)
+    {
+      first_lock_previous->hash = lock_to_move;
+    }
+    else
+    {
+      hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+                                            hash_calc_hash(rec_fold, lock_sys->rec_hash));
+      cell->node = lock_to_move;
+    }
+    lock_to_move->hash = first_wait_lock;
+  }
+}
+
 
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
@@ -2613,6 +2679,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  /*
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2626,8 +2693,8 @@ lock_rec_dequeue_from_page(
       }
     }
   }
+   */
   
-  /*
   lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
   if (first_lock_on_page == NULL)
   {
@@ -2637,7 +2704,7 @@ lock_rec_dequeue_from_page(
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
        heap_no < n_bits; ++heap_no)
   {
-    ulint max_heuristic = ULONG_MAX;
+    ulint max_heuristic = 0;
     timespec now = TraceTool::get_time();
     lock_t *lock_to_grant = NULL;
     
@@ -2659,11 +2726,11 @@ lock_rec_dequeue_from_page(
     {
       if (lock_get_wait(lock))
       {
-        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
+        if (!lock_rec_has_to_wait_in_queue(lock))
         {
           ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          ulint remaining_time = estimate(time_so_far, lock->trx->type);
-          double heuristic = remaining_time;
+          ulint latency = estimate(time_so_far, lock->trx->type) + time_so_far;
+          double heuristic = latency;
           if (heuristic < max_heuristic)
           {
             max_heuristic = time_so_far;
@@ -2679,42 +2746,20 @@ lock_rec_dequeue_from_page(
     
     if (lock_to_grant != NULL)
     {
-      if (first_wait_lock != lock_to_grant)
-      {
-        // Move the target lock before the first wait lock.
-        hash_delete(lock_to_grant, rec_fold);
-        lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
-        if (first_lock_previous != NULL)
-        {
-          first_lock_previous->hash = lock_to_grant;
-        }
-        else
-        {
-          hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
-                   hash_calc_hash(rec_fold, lock_sys->rec_hash));
-          cell->node = lock_to_grant;
-        }
-        lock_to_grant->hash = first_wait_lock;
-      }
+      lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
       
-      lock = lock_rec_get_first_on_page_addr(space, page_no);
-      if (!lock_rec_get_nth_bit(lock, heap_no))
+      for (lock = lock_rec_get_first(space, page_no, heap_no);
+           lock != NULL;
+           lock = lock_rec_get_next(heap_no, lock))
       {
-        lock = lock_rec_get_next(heap_no, lock);
-      }
-      for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
-      {
-        if (lock_get_wait(lock))
+        if (lock_get_wait(lock) &&
+            !lock_rec_has_to_wait_in_queue(lock))
         {
-          if (!lock_rec_has_to_wait_in_queue(lock))
-          {
-            lock_grant(lock);
-          }
+          lock_grant(lock);
         }
       }
     }
   }
-   */
 }
 
 /*************************************************************//**
