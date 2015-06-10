@@ -149,14 +149,14 @@ estimate(
   ulint time_so_far,
   transaction_type type)
 {
-  if (type == PAYMENT)
-  {
-    return 20000000;
-  }
-  else
-  {
-    return 40000000;
-  }
+//  if (type == PAYMENT)
+//  {
+//    return 20000000;
+//  }
+//  else
+//  {
+//    return 40000000;
+//  }
   
   ulint *so_far = NULL;
   ulint *estimate = NULL;
