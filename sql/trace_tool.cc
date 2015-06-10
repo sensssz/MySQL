@@ -52,6 +52,8 @@ double TraceTool::mean_latency = 0;
 double TraceTool::var_latency = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+pthread_mutex_t TraceTool::estimate_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
 static const size_t ORDER_STATUS_LENGTH = strlen(ORDER_STATUS_MARKER);
@@ -154,6 +156,9 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
+  times_so_far.reserve(500000);
+  estimated_remainings.reserve(500000);
+  transaction_ids.reserve(500000);
   
   srand(time(0));
 }
@@ -362,6 +367,15 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
+void TraceTool::add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id)
+{
+  pthread_mutex_lock(&estimate_mutex);
+  times_so_far.push_back(time_so_far);
+  estimated_remainings.push_back(estimated_remaining);
+  transaction_ids.push_back(transaction_id);
+  pthread_mutex_unlock(&estimate_mutex);
+}
+
 void TraceTool::write_latency(string dir)
 {
   ofstream tpcc_log;
@@ -453,7 +467,64 @@ void TraceTool::write_latency(string dir)
   stock_level_log.close();
 }
 
+void TraceTool::write_isotonic_accuracy()
+{
+  ofstream new_order_accuracy("accuracy/new_order");
+  ofstream payment_accuracy("accuracy/payment");
+  ofstream order_status_accuracy("accuracy/order_status");
+  ofstream delivery_accuracy("accuracy/delivery");
+  ofstream stock_level_accuracy("accuracy/stock_level");
+  for (ulint index = 0, size = estimated_remainings.size(); index < size; ++index)
+  {
+    ulint transaction_id = transaction_ids[index];
+    ulint time_so_far = times_so_far[index];
+    ulint estimated_remaining = estimated_remainings[index];
+    
+    transaction_type type = transaction_types[transaction_id];
+    ulint latency = function_times.back()[transaction_id];
+    
+    if (latency < time_so_far)
+    {
+      continue;
+    }
+    
+    ulint actual_remaining = latency - time_so_far;
+    
+    if (transaction_start_times[index])
+    {
+      switch (type)
+      {
+        case NEW_ORDER:
+          new_order_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case PAYMENT:
+          payment_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case DELIVERY:
+          delivery_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  estimated_remainings.clear();
+  transaction_ids.clear();
+  new_order_accuracy.close();
+  payment_accuracy.close();
+  order_status_accuracy.close();
+  delivery_accuracy.close();
+  stock_level_accuracy.close();
+}
+
 void TraceTool::write_log()
 {
+  write_isotonic_accuracy();
   write_latency("latency/original/");
 }

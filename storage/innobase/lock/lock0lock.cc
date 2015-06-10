@@ -1893,6 +1893,8 @@ lock_rec_create(
   lock->trx->type = TraceTool::type;
   lock->ranking = -1;
   lock->in_batch = false;
+  lock->time_so_far = 0;
+  lock->process_time = 0;
 
   /* Reset to zero the bitmap which resides immediately after the
   lock struct */
@@ -2539,8 +2541,16 @@ lock_grant(
   trx_mutex_enter(lock->trx);
   
   timespec now = TraceTool::get_time();
+  trx_t *trx = lock->trx;
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-  lock->trx->total_wait_time += wait_time;
+  trx->total_wait_time += wait_time;
+  
+  if (lock->process_time > 0 &&
+      trx->is_user_trx)
+  {
+    ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    TraceTool::get_instance()->add_estimate_record(time_so_far, lock->process_time, trx->transaction_id);
+  }
 
   lock_reset_lock_and_trx_wait(lock);
 
