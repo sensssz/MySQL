@@ -185,6 +185,10 @@ void *TraceTool::check_write_log(void *arg)
       /* Reset the global transaction ID. */
       transaction_id = 0;
       
+      num_trans = 0;
+      mean_latency = 0;
+      var_latency = 0;
+      
       /* Dump data in the old instance to log files and
          reclaim memory. */
       old_instace->write_log();
