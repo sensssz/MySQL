@@ -61,6 +61,14 @@ enum transaction_type
 };
 typedef enum transaction_type transaction_type;
 
+typedef struct work_wait
+{
+    ulint work_so_far;
+    ulint wait_so_far;
+    ulint num_locks_so_far;
+    ulint transaction_id;
+} work_wait;
+
 class TraceTool
 {
 private:
@@ -89,6 +97,9 @@ private:
     vector<ulint> estimated_remainings;     /*!< Estimated latency of an isotonic model. */
     vector<ulint> transaction_ids;          /*!< Corresponding transaction ID for time so far. */
     static pthread_mutex_t estimate_mutex;
+    
+    vector<work_wait> work_waits;
+    static pthread_mutex_t work_wait_mutex;
     
     TraceTool();
     TraceTool(TraceTool const&){};
@@ -163,11 +174,17 @@ public:
     Analysis the current query to find out the transaction type. */
     void set_query(const char *query);
     
+    /********************************************************************//**
+    Add a record about work time and wait time. */
+    void add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint transaction_id);
 
     /********************************************************************//**
     Add a record about estimating latency using isotonic models. */
     void add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id);
     
+    /********************************************************************//**
+    Dump data about work time and wait time to log file. */
+    void write_work_wait();
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_isotonic_accuracy();
