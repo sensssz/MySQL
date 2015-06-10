@@ -76,17 +76,17 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic/tpcc", tpcc_work_wait,
+  read_isotonic("isotonics/tpcc", tpcc_work_wait,
                 tpcc_estimated, tpcc_length);
-  read_isotonic("isotonic/new_order", new_order_work_wait,
+  read_isotonic("isotonics/new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
-  read_isotonic("isotonic/payment", payment_work_wait,
+  read_isotonic("isotonics/payment", payment_work_wait,
                 payment_estimated, payment_length);
-  read_isotonic("isotonic/order_status", order_status_work_wait,
+  read_isotonic("isotonics/order_status", order_status_work_wait,
                 order_status_estimated, order_status_length);
-  read_isotonic("isotonic/delivery", delivery_work_wait,
+  read_isotonic("isotonics/delivery", delivery_work_wait,
                 delivery_estimated, delivery_length);
-  read_isotonic("isotonic/stock_level", stock_level_work_wait,
+  read_isotonic("isotonics/stock_level", stock_level_work_wait,
                 stock_level_estimated, stock_level_length);
 }
 
@@ -576,7 +576,7 @@ LVM_schedule(
   vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
-  bool do_monitor = rand() % 100 < 1;
+//  bool do_monitor = rand() % 100 < 2;
   
   if (waiting_locks.size() == 0)
   {
@@ -596,7 +596,7 @@ LVM_schedule(
     granted_locks[index]->in_batch = true;
   }
   
-  ofstream &log_file = TraceTool::get_instance()->get_log();
+//  ofstream &log_file = TraceTool::get_instance()->get_log();
   
   vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
   all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
@@ -654,26 +654,26 @@ LVM_schedule(
     }
   }
   
-  if (do_monitor)
-  {
-    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
-    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
-    {
-      lock_t *lock = granted_locks[index];
-      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-      << lock_get_mode(granted_locks[index]) << "'};" << endl;
-    }
-    log_file << endl;
-
-    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
-    {
-      lock_t *lock = waiting_locks[index];
-      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
-      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
-    }
-    log_file << endl;
-  }
+//  if (do_monitor)
+//  {
+//    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
+//    log_file << granted_locks.size() << "," << waiting_locks.size() << endl;
+//    for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
+//    {
+//      lock_t *lock = granted_locks[index];
+//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+//      << lock_get_mode(granted_locks[index]) << "'};" << endl;
+//    }
+//    log_file << endl;
+//
+//    for (ulint index = 0, size = waiting_locks.size(); index < size; ++index)
+//    {
+//      lock_t *lock = waiting_locks[index];
+//      log_file << "lock_t lock" << index + 1 << "={" << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << ",'"
+//      << lock_get_mode(waiting_locks[index]) << "'};" << endl;
+//    }
+//    log_file << endl;
+//  }
   
   if (granted_locks.size() > 0 &&
       smallest_ranking != 0)
@@ -701,3 +701,4 @@ indi_cleanup()
   free(stock_level_work_wait);
   free(stock_level_estimated);
 }
+
