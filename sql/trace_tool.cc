@@ -146,7 +146,8 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
-  estimated_latencies.reserve(500000);
+  times_so_far.reserve(500000);
+  estimated_remainings.reserve(500000);
   transaction_ids.reserve(500000);
   
   srand(time(0));
@@ -249,9 +250,10 @@ void TraceTool::start_new_query()
 #endif
 }
 
-void TraceTool::add_estimate_record(ulint estimated_latency, ulint transasction_id)
+void TraceTool::add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id)
 {
-  estimated_latencies.push_back(estimated_latency);
+  times_so_far.push_back(time_so_far);
+  estimated_remainings.push_back(estimated_remaining);
   transaction_ids.push_back(transaction_id);
 }
 
@@ -445,37 +447,47 @@ void TraceTool::write_isotonic_accuracy()
   ofstream order_status_accuracy("logs/order_status_accuracy");
   ofstream delivery_accuracy("logs/delivery_accuracy");
   ofstream stock_level_accuracy("logs/stock_level_accuracy");
-  for (ulint index = 0, size = estimated_latencies.size(); index < size; ++index)
+  for (ulint index = 0, size = estimated_remainings.size(); index < size; ++index)
   {
-    transaction_type type = transaction_types[transaction_ids[index]];
-    ulint estimated_latency = estimated_latencies[index];
-    ulint latency = function_times.back()[transaction_ids[index]];
+    ulint transaction_id = transaction_ids[index];
+    ulint time_so_far = times_so_far[index];
+    ulint estimated_remaining = estimated_remainings[index];
+    
+    transaction_type type = transaction_types[transaction_id];
+    ulint latency = function_times.back()[transaction_id];
+    
+    if (latency < time_so_far)
+    {
+      continue;
+    }
+    
+    ulint actual_remaining = latency - times_so_far;
     
     if (transaction_start_times[index])
     {
       switch (type)
       {
         case NEW_ORDER:
-          new_order_accuracy << estimated_latency << ',' << latency << endl;
+          new_order_accuracy << estimated_remaining << ',' << actual_remaining << endl;
           break;
         case PAYMENT:
-          payment_accuracy << estimated_latency << ',' << latency << endl;
+          payment_accuracy << estimated_remaining << ',' << actual_remaining << endl;
           break;
         case ORDER_STATUS:
-          order_status_accuracy << estimated_latency << ',' << latency << endl;
+          order_status_accuracy << estimated_remaining << ',' << actual_remaining << endl;
           break;
         case DELIVERY:
-          delivery_accuracy << estimated_latency << ',' << latency << endl;
+          delivery_accuracy << estimated_remaining << ',' << actual_remaining << endl;
           break;
         case STOCK_LEVEL:
-          stock_level_accuracy << estimated_latency << ',' << latency << endl;
+          stock_level_accuracy << estimated_remaining << ',' << actual_remaining << endl;
           break;
         default:
           break;
       }
     }
   }
-  estimated_latencies.clear();
+  estimated_remainings.clear();
   transaction_ids.clear();
   new_order_accuracy.close();
   payment_accuracy.close();

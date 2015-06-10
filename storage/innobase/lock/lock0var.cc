@@ -76,17 +76,17 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonic_tpcc", tpcc_work_wait,
+  read_isotonic("isotonic/tpcc", tpcc_work_wait,
                 tpcc_estimated, tpcc_length);
-  read_isotonic("isotonic_new_order", new_order_work_wait,
+  read_isotonic("isotonic/new_order", new_order_work_wait,
                 new_order_estimated, new_order_length);
-  read_isotonic("isotonic_payment", payment_work_wait,
+  read_isotonic("isotonic/payment", payment_work_wait,
                 payment_estimated, payment_length);
-  read_isotonic("isotonic_order_status", order_status_work_wait,
+  read_isotonic("isotonic/order_status", order_status_work_wait,
                 order_status_estimated, order_status_length);
-  read_isotonic("isotonic_delivery", delivery_work_wait,
+  read_isotonic("isotonic/delivery", delivery_work_wait,
                 delivery_estimated, delivery_length);
-  read_isotonic("isotonic_stock_level", stock_level_work_wait,
+  read_isotonic("isotonic/stock_level", stock_level_work_wait,
                 stock_level_estimated, stock_level_length);
 }
 
@@ -607,15 +607,6 @@ LVM_schedule(
     lock_t *lock = all_locks[index];
     lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    
-    if (do_monitor &&
-        lock->trx->type != NONE &&
-        lock->trx->real_transaction_id != NULL &&
-        lock->trx->transaction_id == *(lock->trx->real_transaction_id))
-    {
-      TraceTool::get_instance()->add_estimate_record(lock->time_so_far + lock->process_time,
-                                                     lock->trx->transaction_id);
-    }
   }
   
   vector<int> rankings(waiting_locks.size());
