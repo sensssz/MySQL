@@ -116,6 +116,8 @@ trx_create(void)
 	trx->isolation_level = TRX_ISO_REPEATABLE_READ;
 
 	trx->no = TRX_ID_MAX;
+  
+  trx->is_user_trx = false;
 
 	trx->support_xa = TRUE;
 
@@ -194,6 +196,7 @@ trx_allocate_for_mysql(void)
 
 	mutex_enter(&trx_sys->mutex);
 
+  trx->is_user_trx = true;
 	ut_d(trx->in_mysql_trx_list = TRUE);
 	UT_LIST_ADD_FIRST(mysql_trx_list, trx_sys->mysql_trx_list, trx);
 
@@ -1412,7 +1415,11 @@ trx_commit(
 /*=======*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
-  TraceTool::is_commit = true;
+  if (trx->is_user_trx)
+  {
+    TraceTool::is_commit = true;
+  }
+  
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 

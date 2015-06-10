@@ -2726,20 +2726,20 @@ lock_rec_dequeue_from_page(
     {
       if (lock_get_wait(lock))
       {
+        if (first_wait_lock == NULL)
+        {
+          first_wait_lock = lock;
+        }
         if (!lock_rec_has_to_wait_in_queue(lock))
         {
           ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
           ulint latency = estimate(time_so_far, lock->trx->type);
           double heuristic = latency;
-          if (heuristic < max_heuristic)
+          if (heuristic > max_heuristic)
           {
-            max_heuristic = time_so_far;
+            max_heuristic = heuristic;
             lock_to_grant = lock;
           }
-        }
-        if (first_wait_lock == NULL)
-        {
-          first_wait_lock = lock;
         }
       }
     }
@@ -2747,6 +2747,7 @@ lock_rec_dequeue_from_page(
     if (lock_to_grant != NULL)
     {
       lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
+      lock_grant(lock_to_grant);
       
       for (lock = lock_rec_get_first(space, page_no, heap_no);
            lock != NULL;

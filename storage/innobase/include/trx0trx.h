@@ -745,7 +745,8 @@ struct trx_t{
     timespec    trx_start_time;
     ulint       total_wait_time;
     transaction_type    type;
-
+    ibool       is_user_trx;
+    
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by
 					trx->mutex or lock_sys->mutex
