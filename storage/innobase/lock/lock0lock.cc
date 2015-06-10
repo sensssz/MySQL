@@ -2730,17 +2730,20 @@ lock_rec_dequeue_from_page(
         {
           first_wait_lock = lock;
         }
-        if (!lock_rec_has_to_wait_in_queue(lock))
+        ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+        ulint latency = estimate(time_so_far, lock->trx->type);
+        double heuristic = latency;
+        if (heuristic > max_heuristic)
         {
-          ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          ulint latency = estimate(time_so_far, lock->trx->type);
-          double heuristic = latency;
-          if (heuristic > max_heuristic)
-          {
-            max_heuristic = heuristic;
-            lock_to_grant = lock;
-          }
+          max_heuristic = heuristic;
+          lock_to_grant = lock;
         }
+      }
+      else
+      {
+        // If this is still any lock on it, then stop.
+        lock_to_grant = NULL;
+        break;
       }
     }
     
