@@ -262,7 +262,12 @@ var(
   
   for (ulint index = 0, size = numbers.size(); index < size; ++index)
   {
-    TraceTool::get_instance()->update_ctv(numbers[index], num_trans, mean, variance);
+    double latency = (double) numbers[index];
+    ++num_trans;
+    double old_mean = mean;
+    double old_variance = variance;
+    mean = old_mean + (latency - old_mean) / num_trans;
+    variance = old_variance + (latency - old_mean) * (latency - mean);
   }
   
   return variance;
