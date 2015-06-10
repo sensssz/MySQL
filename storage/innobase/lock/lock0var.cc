@@ -205,48 +205,12 @@ estimate(
   return result - time_so_far;
 }
 
-/*************************************************************//**
-Swap two elements in a vector. */
 static
-void
-swap(
-  vector<lock_t *> &locks,
-  ulint index1,
-  ulint index2)
+double
+square(
+  double number)
 {
-  if (index1 != index2)
-  {
-    lock_t *temp = locks[index1];
-    locks[index1] = locks[index2];
-    locks[index2] = temp;
-  }
-}
-
-/*************************************************************//**
-Generate all possible permutations of the given vector. */
-static
-void
-permutate(
-  vector<lock_t *> &locks,
-  ulint start,
-  ulint end,
-  vector<vector<lock_t *> > &permutations)
-{
-  if (start == end)
-  {
-    vector<lock_t *> permutation(locks);
-    permutations.push_back(permutation);
-    return;
-  }
-  
-  for (ulint index = start; index <= end; ++index)
-  {
-    /* Swap these two elements. */
-    swap(locks, start, index);
-    permutate(locks, start + 1, end, permutations);
-    /* Swap them back. */
-    swap(locks, start, index);
-  }
+  return number * number;
 }
 
 /*************************************************************//**
@@ -256,16 +220,15 @@ double
 var(
   vector<ulint> &numbers)
 {
+  double heuristic = 0;
   double mean = TraceTool::mean_latency;
-  double variance = TraceTool::var_latency;
-  ulint num_trans = TraceTool::num_trans;
   
   for (ulint index = 0, size = numbers.size(); index < size; ++index)
   {
-    TraceTool::get_instance()->update_ctv(numbers[index], num_trans, mean, variance);
+    heuristic += square(numbers[index] - mean);
   }
   
-  return variance;
+  return heuristic;
 }
 
 /*************************************************************//**
@@ -301,93 +264,6 @@ cumsum(
     rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
   }
 }
-
-/*************************************************************//**
-Find the lock that gives minimum variance of estimated latency. */
-UNIV_INTERN
-lock_t *
-CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
-{
-  if (locks.size() == 0)
-  {
-    return NULL;
-  }
-  else if (locks.size() == 1)
-  {
-    return locks[0];
-  }
-  
-  int random = rand() % 100;
-  bool do_log = random < 42;
-  
-  ofstream &log_file = TraceTool::get_instance()->get_log();
-  
-  timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = locks.size(); index < size; ++index)
-  {
-    lock_t *lock = locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    
-    if (do_log)
-    {
-      log_file << lock->time_so_far << ",";
-    }
-  }
-  if (do_log)
-  {
-    log_file << endl;
-  
-    for (ulint index = 0, size = locks.size(); index < size; ++index)
-    {
-      log_file << locks[index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  vector<vector<lock_t *> > perms;
-  permutate(locks, 0, locks.size() - 1, perms);
-  
-  double min_variance = std::numeric_limits<double>::max();
-  int min_var_index = -1;
-  for (ulint index = 0, size = perms.size(); index < size; ++index)
-  {
-    vector<ulint> rolling_sum;
-    cumsum(perms[index], rolling_sum);
-    double variance = var(rolling_sum);
-    if (variance < min_variance)
-    {
-      min_variance = variance;
-      min_var_index = index;
-    }
-  }
-  
-  for (ulint index = 0, size = perms[min_var_index].size();
-       index < size; ++index)
-  {
-    perms[min_var_index][index]->ranking = index;
-    
-    if (do_log)
-    {
-      log_file << perms[min_var_index][index]->time_so_far << ",";
-    }
-  }
-  
-  if (do_log)
-  {
-    log_file << endl;
-    
-    for (ulint index = 0, size = perms[min_var_index].size();
-         index < size; ++index)
-    {
-      log_file << perms[min_var_index][index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  return perms[min_var_index][0];
-}
-
 
 static
 bool
