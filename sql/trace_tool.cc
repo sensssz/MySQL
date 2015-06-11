@@ -19,7 +19,7 @@
 #define DELIVERY_MARKER "SELECT NO_O_ID FROM NEW_ORDER WHERE NO_D_ID ="
 #define STOCK_LEVEL_MARKER "SELECT D_NEXT_O_ID FROM DISTRICT WHERE D_W_ID ="
 
-#define WRITER_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
+#define WRITE_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
 #define READ_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
@@ -273,11 +273,11 @@ void TraceTool::set_query(const char *new_query)
     {
       type = NEW_ORDER;
     }
-    else if (strncmp(new_query, PAYMENT_MARKER, PAYMENT_LENGTH) == 0)
+    else if (strncmp(new_query, WRITE_MARKER, PAYMENT_LENGTH) == 0)
     {
       type = PAYMENT;
     }
-    else if (strncmp(new_query, ORDER_STATUS_MARKER, ORDER_STATUS_LENGTH) == 0)
+    else if (strncmp(new_query, READ_MARKER, ORDER_STATUS_LENGTH) == 0)
     {
       type = ORDER_STATUS;
     }

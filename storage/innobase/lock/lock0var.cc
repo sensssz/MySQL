@@ -636,23 +636,24 @@ LVM_schedule(
   {
     lock_t *lock = all_locks[index];
     trx_t *trx = lock->trx;
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    ulint wait_so_far = trx->total_wait_time;
-    if (lock_get_wait(lock))
-    {
-      wait_so_far += TraceTool::difftime(lock->wait_start, now);
-    }
-    ulint work_so_far = lock->time_so_far - wait_so_far;
-    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    ulint latency = estimate(lock->time_so_far, trx->type);
-    if (latency > lock->time_so_far)
-    {
-      lock->process_time = latency - lock->time_so_far;
-    }
-    else
-    {
-      lock->process_time = lock->time_so_far;
-    }
+    lock->process_time = estimate(0, trx->type);
+//    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+//    ulint wait_so_far = trx->total_wait_time;
+//    if (lock_get_wait(lock))
+//    {
+//      wait_so_far += TraceTool::difftime(lock->wait_start, now);
+//    }
+//    ulint work_so_far = lock->time_so_far - wait_so_far;
+//    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+//    ulint latency = estimate(lock->time_so_far, trx->type);
+//    if (latency > lock->time_so_far)
+//    {
+//      lock->process_time = latency - lock->time_so_far;
+//    }
+//    else
+//    {
+//      lock->process_time = lock->time_so_far;
+//    }
 //    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
 //    TraceTool::get_instance()->add_actual_latency(trx->id, trx->transaction_id, lock->time_so_far);
   }
