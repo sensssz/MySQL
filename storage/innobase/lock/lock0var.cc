@@ -204,12 +204,13 @@ estimate(
   ulint result = estimate[y_index + 1];
   return result - time_so_far;
 }
+
 static
 double
 new_order_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = -20333566.732680 * num_locks + 0.955845 * work + 0.342595 * wait + 613647878.143576;
-  if (result > 0)
+  double result = -1133365.479234 * num_locks + 1.469173 * work + 1.134398 * wait + 79017557.178445;
+  if (result < 0)
   {
     return result;
   }
@@ -223,8 +224,8 @@ static
 double
 payment_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = 30568383.148834 * num_locks + 0.886245 * work + 0.869137 * wait + 0.000000;
-  if (result > 0)
+  double result = 35564600.564233 * num_locks + 1.249623 * work + 0.897469 * wait + 0.000000;
+  if (result < 0)
   {
     return result;
   }
@@ -233,12 +234,13 @@ payment_estimate(ulint work, ulint wait, ulint num_locks)
     return work + wait;
   }
 }
+
 static
 double
 tpcc_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = 11798750.419136 * num_locks + 1.030817 * work + 0.862551 * wait + 38439241.522663;
-  if (result > 0)
+  double result = 5493171.940862 * num_locks + 1.250694 * work + 0.904207 * wait + 59616588.589615;
+  if (result < 0)
   {
     return result;
   }
