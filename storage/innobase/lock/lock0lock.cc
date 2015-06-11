@@ -2545,12 +2545,12 @@ lock_grant(
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   trx->total_wait_time += wait_time;
   
-//  if (lock->process_time > 0 &&
-//      trx->is_user_trx)
-//  {
-//    ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//    TraceTool::get_instance()->add_estimate_record(time_so_far, lock->process_time, trx->transaction_id);
-//  }
+  if (lock->process_time > 0 &&
+      trx->is_user_trx)
+  {
+    ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    TraceTool::get_instance()->add_estimate_record(time_so_far, lock->process_time, trx->transaction_id);
+  }
 
   lock_reset_lock_and_trx_wait(lock);
 
