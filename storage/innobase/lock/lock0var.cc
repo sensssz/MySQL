@@ -149,14 +149,14 @@ estimate(
   ulint time_so_far,
   transaction_type type)
 {
-//  if (type == PAYMENT)
-//  {
-//    return 20000000;
-//  }
-//  else
-//  {
-//    return 40000000;
-//  }
+  if (type == PAYMENT)
+  {
+    return 20000000;
+  }
+  else
+  {
+    return 40000000;
+  }
   
   ulint *so_far = NULL;
   ulint *estimate = NULL;
@@ -654,7 +654,7 @@ LVM_schedule(
       lock->process_time = lock->time_so_far;
     }
 //    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
-    TraceTool::get_instance()->add_actual_latency(trx->id, trx->transaction_id, lock->time_so_far);
+//    TraceTool::get_instance()->add_actual_latency(trx->id, trx->transaction_id, lock->time_so_far);
   }
   
   vector<int> rankings(wait_locks.size());
@@ -711,17 +711,15 @@ LVM_schedule(
     for (ulint index = 0, size = granted_locks.size(); index < size; ++index)
     {
       lock_t *lock = granted_locks[index];
-      log << "lock_t lock" << lock_index++ << "=(" << lock->trx->id << ",'" << lock_get_mode_str(lock)
-      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time
-      << ",{rem" << lock->trx->id << "});" << endl;
+      log << "lock_t lock" << lock_index++ << "={" << lock->trx->id << ",'" << lock_get_mode_str(lock)
+      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "}" << endl;
       
     }
     for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
     {
       lock_t *lock = wait_locks[index];
-      log << "lock_t lock" << lock_index++ << "=(" << lock->trx->id << ",'" << lock_get_mode_str(lock)
-      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time
-      << ",{rem" << lock->trx->id << "});" << endl;
+      log << "lock_t lock" << lock_index++ << "={" << lock->trx->id << ",'" << lock_get_mode_str(lock)
+      << "'," << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "}" << endl;
     }
   }
   
