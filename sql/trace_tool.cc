@@ -144,7 +144,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
