@@ -14,10 +14,13 @@
 #define LATENCY
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
-#define PAYMENT_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
-#define ORDER_STATUS_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
+#define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
+#define ORDER_STATUS_MARKER "SELECT C_FIRST, C_MIDDLE"
 #define DELIVERY_MARKER "SELECT NO_O_ID FROM NEW_ORDER WHERE NO_D_ID ="
 #define STOCK_LEVEL_MARKER "SELECT D_NEXT_O_ID FROM DISTRICT WHERE D_W_ID ="
+
+#define WRITE_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
+#define READ_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
@@ -48,6 +51,7 @@ ulint TraceTool::num_trans = 0;
 double TraceTool::mean_latency = 0;
 double TraceTool::var_latency = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -138,7 +142,7 @@ TraceTool::TraceTool() : function_times()
 #ifdef MONITOR
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -348,6 +352,18 @@ void TraceTool::end_transaction()
 #endif
 }
 
+void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint transaction_id)
+{
+  work_wait record;
+  record.work_so_far = work_so_far;
+  record.wait_so_far = wait_so_far;
+  record.num_locks_so_far = num_locks;
+  record.transaction_id = transaction_id;
+  pthread_mutex_lock(&work_wait_mutex);
+  work_waits.push_back(record);
+  pthread_mutex_unlock(&work_wait_mutex);
+}
+
 void TraceTool::add_record(int function_index, long duration)
 {
   if (current_transaction_id > transaction_id)
@@ -450,7 +466,73 @@ void TraceTool::write_latency(string dir)
   stock_level_log.close();
 }
 
+void TraceTool::write_work_wait()
+{
+  ofstream tpcc("work_wait/tpcc");
+  ofstream new_order("work_wait/new_order");
+  ofstream payment("work_wait/payment");
+  ofstream order_status("work_wait/order_status");
+  ofstream delivery("work_wait/delivery");
+  ofstream stock_level("work_wait/stock_level");
+  
+  for (ulint index = 0, size = work_waits.size();
+       index < size; ++index)
+  {
+    work_wait &record = work_waits[index];
+    if (transaction_start_times[record.transaction_id] > 0)
+    {
+      transaction_type type = transaction_types[record.transaction_id];
+      ulint latency = function_times.back()[record.transaction_id];
+      ulint total_wait = function_times[0][record.transaction_id];
+      ulint total_work = latency - total_wait;
+      
+      if (latency <= total_wait ||
+          total_wait < record.wait_so_far ||
+          total_work < record.work_so_far)
+      {
+        continue;
+      }
+      
+      stringstream line;
+      
+      line << record.work_so_far << "," << record.wait_so_far << ","
+           << record.num_locks_so_far << "," << latency << endl;
+      tpcc << line.str().c_str();
+      switch (type)
+      {
+        case NEW_ORDER:
+          new_order << line.str().c_str();
+          break;
+        case PAYMENT:
+          payment << line.str().c_str();
+          break;
+        case ORDER_STATUS:
+          order_status << line.str().c_str();
+          break;
+        case DELIVERY:
+          delivery << line.str().c_str();
+          break;
+        case STOCK_LEVEL:
+          stock_level << line.str().c_str();
+          break;
+        default:
+          break;
+      }
+      
+      line.str("");
+    }
+  }
+  
+  tpcc.close();
+  new_order.close();
+  payment.close();
+  order_status.close();
+  delivery.close();
+  stock_level.close();
+}
+
 void TraceTool::write_log()
 {
+  write_work_wait();
   write_latency("latency/original/");
 }
