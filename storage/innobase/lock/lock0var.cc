@@ -204,6 +204,66 @@ estimate(
   ulint result = estimate[y_index + 1];
   return result - time_so_far;
 }
+static
+double
+new_order_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = -20333566.732680 * num_locks + 0.955845 * work + 0.342595 * wait + 613647878.143576;
+  if (result > 0)
+  {
+    return result;
+  }
+  else
+  {
+    return work + wait;
+  }
+}
+
+static
+double
+payment_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = 30568383.148834 * num_locks + 0.886245 * work + 0.869137 * wait + 0.000000;
+  if (result > 0)
+  {
+    return result;
+  }
+  else
+  {
+    return work + wait;
+  }
+}
+static
+double
+tpcc_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = 11798750.419136 * num_locks + 1.030817 * work + 0.862551 * wait + 38439241.522663;
+  if (result > 0)
+  {
+    return result;
+  }
+  else
+  {
+    return work + wait;
+  }
+}
+
+static
+double estimate(
+  ulint work_so_far,
+  ulint wait_so_far,
+  ulint num_locks,
+  transaction_type type)
+{
+  switch (type) {
+    case NEW_ORDER:
+      return new_order_estimate(work_so_far, wait_so_far, num_locks);
+    case PAYMENT:
+      return payment_estimate(work_so_far, wait_so_far, num_locks);
+    default:
+      return tpcc_estimate(work_so_far, wait_so_far, num_locks);
+  }
+}
 
 /*************************************************************//**
 Swap two elements in a vector. */
@@ -576,6 +636,18 @@ compare(
   return lock1->ranking < lock2->ranking;
 }
 
+/*********************************************************************//**
+Gets the wait flag of a lock.
+@return LOCK_WAIT if waiting, 0 if not */
+UNIV_INLINE
+ulint
+lock_get_wait(
+/*==========*/
+  const lock_t* lock) /*!< in: lock */
+{
+  return(lock->type_mode & LOCK_WAIT);
+}
+
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
@@ -610,8 +682,29 @@ LVM_schedule(
   for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
     lock_t *lock = all_locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    trx_t *trx = lock->trx;
+    lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    lock->process_time = lock->time_so_far;
+    ulint wait_so_far = trx->total_wait_time;
+    if (lock_get_wait(lock))
+    {
+      wait_so_far += TraceTool::difftime(lock->wait_start, now);
+    }
+    if (lock->time_so_far > wait_so_far)
+    {
+      ulint work_so_far = lock->time_so_far - wait_so_far;
+      ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+      ulint total = estimate(work_so_far, wait_so_far, num_locks, lock->trx->type);
+      if (total > lock->time_so_far)
+      {
+        lock->process_time = total - lock->time_so_far;
+      }
+      
+//      if (trx->is_user_trx)
+//      {
+//        TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks, trx->transaction_id);
+//      }
+    }
   }
   
   vector<int> rankings(waiting_locks.size());
