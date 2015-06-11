@@ -90,6 +90,8 @@ private:
     vector<ulint> transaction_ids;          /*!< Corresponding transaction ID for time so far. */
     static pthread_mutex_t estimate_mutex;
     
+    vector<trx_actual_latency> actual_latencies;
+    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
@@ -140,6 +142,15 @@ public:
     ofstream &get_log()
     {
         return log_file;
+    }
+    
+    void add_actual_latency(ulint trx_id, ulint transaction_id, ulint time_so_far)
+    {
+        trx_actual_latency record;
+        record.trx_id = trx_id;
+        record.transaction_id = transaction_id;
+        record.time_so_far = time_so_far;
+        actual_latencies.push_back(record);
     }
 
     /********************************************************************//**
