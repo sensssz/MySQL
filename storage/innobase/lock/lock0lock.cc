@@ -2731,8 +2731,7 @@ lock_rec_dequeue_from_page(
           first_wait_lock = lock;
         }
         ulint time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-        ulint latency = estimate(time_so_far, lock->trx->type);
-        double heuristic = latency;
+        double heuristic = time_so_far;
         if (heuristic > max_heuristic)
         {
           max_heuristic = heuristic;
