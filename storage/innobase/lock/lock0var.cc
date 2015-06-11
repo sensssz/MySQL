@@ -144,14 +144,14 @@ estimate(
   ulint time_so_far,
   transaction_type type)
 {
-//  if (type == PAYMENT)
-//  {
-//    return 2000000;
-//  }
-//  else
-//  {
-//    return 4000000;
-//  }
+  if (type == PAYMENT)
+  {
+    return 2000000;
+  }
+  else
+  {
+    return 4000000;
+  }
   
   ulint *so_far = NULL;
   ulint *estimate = NULL;
@@ -198,6 +198,35 @@ estimate(
   }
   ulint result = estimate[y_index + 1];
   return result;
+}
+
+static
+double
+new_order_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = -3206539.177093 * num_locks + 1.527795 * work + 0.860333 * wait + 141885419.682508;
+  return result > 0 ? result : work + wait;
+}
+static
+double
+payment_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = -15370143.843087 * num_locks + 1.142376 * work + 1.073499 * wait + 69680459.120597;
+  return result > 0 ? result : work + wait;
+}
+static
+double
+delivery_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = -16919546.478614 * num_locks + 2.336917 * work + 0.536372 * wait + 571114079.058559;
+  return result > 0 ? result : work + wait;
+}
+static
+double
+tpcc_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = 3629840.847620 * num_locks + 1.314721 * work + 0.960636 * wait + 37264572.264813;
+  return result > 0 ? result : work + wait;
 }
 
 /*************************************************************//**
