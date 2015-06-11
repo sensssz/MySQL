@@ -636,8 +636,8 @@ LVM_schedule(
   {
     lock_t *lock = all_locks[index];
     trx_t *trx = lock->trx;
+    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
     lock->process_time = estimate(0, trx->type);
-//    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
 //    ulint wait_so_far = trx->total_wait_time;
 //    if (lock_get_wait(lock))
 //    {
