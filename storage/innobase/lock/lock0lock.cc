@@ -54,7 +54,7 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
-ulint MIN_BATCH_SIZE = 3;
+ulint MIN_BATCH_SIZE = 5;
 ulint MAX_BATCH_SIZE = 5;
 ibool HARD_BOUNDARY = true;
 

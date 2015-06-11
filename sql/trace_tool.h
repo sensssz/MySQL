@@ -29,6 +29,13 @@ using std::endl;
 using std::unordered_map;
 using std::string;
 
+typedef struct trx_actual_latency
+{
+    ulint trx_id;
+    ulint transaction_id;
+    ulint time_so_far;
+} trx_actual_latency;
+
 /** The global transaction id counter */
 extern ulint transaction_id;
 
