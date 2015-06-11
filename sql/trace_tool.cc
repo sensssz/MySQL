@@ -364,6 +364,15 @@ void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_lo
   pthread_mutex_unlock(&work_wait_mutex);
 }
 
+void TraceTool::add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id)
+{
+  pthread_mutex_lock(&estimate_mutex);
+  times_so_far.push_back(time_so_far);
+  estimated_remainings.push_back(estimated_remaining);
+  transaction_ids.push_back(transaction_id);
+  pthread_mutex_unlock(&estimate_mutex);
+}
+
 void TraceTool::add_record(int function_index, long duration)
 {
   if (current_transaction_id > transaction_id)
@@ -529,6 +538,62 @@ void TraceTool::write_work_wait()
   order_status.close();
   delivery.close();
   stock_level.close();
+}
+
+void TraceTool::write_isotonic_accuracy()
+{
+  ofstream new_order_accuracy("accuracy/new_order");
+  ofstream payment_accuracy("accuracy/payment");
+  ofstream order_status_accuracy("accuracy/order_status");
+  ofstream delivery_accuracy("accuracy/delivery");
+  ofstream stock_level_accuracy("accuracy/stock_level");
+  for (ulint index = 0, size = estimated_remainings.size(); index < size; ++index)
+  {
+    ulint transaction_id = transaction_ids[index];
+    ulint time_so_far = times_so_far[index];
+    ulint estimated_remaining = estimated_remainings[index];
+    
+    transaction_type type = transaction_types[transaction_id];
+    ulint latency = function_times.back()[transaction_id];
+    
+    if (latency < time_so_far)
+    {
+      continue;
+    }
+    
+    ulint actual_remaining = latency - time_so_far;
+    
+    if (transaction_start_times[index])
+    {
+      switch (type)
+      {
+        case NEW_ORDER:
+          new_order_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case PAYMENT:
+          payment_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case DELIVERY:
+          delivery_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_accuracy << estimated_remaining << ',' << actual_remaining << endl;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  estimated_remainings.clear();
+  transaction_ids.clear();
+  new_order_accuracy.close();
+  payment_accuracy.close();
+  order_status_accuracy.close();
+  delivery_accuracy.close();
+  stock_level_accuracy.close();
 }
 
 void TraceTool::write_log()
