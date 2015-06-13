@@ -9,9 +9,11 @@
 #include <cstdlib>
 #include <cassert>
 
-#define TARGET_PATH_COUNT 42
+#define NUM_CORES 2
+#define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -25,10 +27,12 @@
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
 using std::endl;
+using std::ifstream;
 using std::ofstream;
 using std::vector;
 using std::stringstream;
 using std::sort;
+using std::getline;
 
 ulint transaction_id = 0;
 
@@ -50,10 +54,15 @@ __thread transaction_type TraceTool::type = NONE;
 ulint TraceTool::num_trans = 0;
 double TraceTool::mean_latency = 0;
 double TraceTool::var_latency = 0;
+double TraceTool::mean_work = 0;
+double TraceTool::mean_wait = 0;
+ulint TraceTool::total_wait_locks = 0;
+ulint TraceTool::total_granted_locks= 0;
+double TraceTool::cpu_usage = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 pthread_mutex_t TraceTool::estimate_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::last_second_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -139,9 +148,13 @@ TraceTool *TraceTool::get_instance()
 
 TraceTool::TraceTool() : function_times()
 {
+  previous_user = 0;
+  previous_nice = 0;
+  previous_system = 0;
+  previous_idle = 0;
   /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log");
-#ifdef MONITOR
+#if defined(MONITOR) || defined(WORK_WAIT)
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
@@ -160,6 +173,7 @@ TraceTool::TraceTool() : function_times()
   times_so_far.reserve(500000);
   estimated_remainings.reserve(500000);
   transaction_ids.reserve(500000);
+  work_waits.reserve(5000000);
   
   srand(time(0));
 }
@@ -169,6 +183,49 @@ bool TraceTool::should_monitor()
   return path_count == TARGET_PATH_COUNT;
 }
 
+double TraceTool::get_cpu_usage()
+{
+  ulint total_user = 0;
+  ulint total_nice = 0;
+  ulint total_system = 0;
+  ulint total_idle = 0;
+  ulint per_core_user = 0;
+  ulint per_core_nice = 0;
+  ulint per_core_system = 0;
+  ulint per_core_idle = 0;
+  double usage = 0;
+  ifstream stat("/proc/stat");
+  string garbage;
+  getline(stat, garbage);
+  for (ulint index = 0; index < NUM_CORES; ++index)
+  {
+    stat >> garbage >> per_core_user >> per_core_nice >> per_core_system >> per_core_idle;
+    getline(stat, garbage);
+    total_user += per_core_user;
+    total_nice += per_core_nice;
+    total_system += per_core_system;
+    total_idle += per_core_idle;
+  }
+  stat.close();
+  
+  if (previous_user > 0)
+  {
+    ulint user_delta = total_user - previous_user;
+    ulint nice_delta = total_nice - previous_nice;
+    ulint system_delta = total_system - previous_system;
+    ulint idle_delta = total_idle - previous_idle;
+    double sum = user_delta + nice_delta + system_delta + idle_delta;
+    usage = (sum - idle_delta) / sum;
+  }
+  
+  previous_user = total_user;
+  previous_nice = total_nice;
+  previous_system = total_system;
+  previous_idle = total_idle;
+  
+  return usage;
+}
+
 void *TraceTool::check_write_log(void *arg)
 {
   /* Runs in an infinite loop and for every 5 seconds,
@@ -176,7 +233,10 @@ void *TraceTool::check_write_log(void *arg)
      dump data to log files. */
   while (true)
   {
-    sleep(5);
+    sleep(1);
+#ifdef WORK_WAIT
+    cpu_usage = instance->get_cpu_usage();
+#endif
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
@@ -197,6 +257,11 @@ void *TraceTool::check_write_log(void *arg)
       num_trans = 0;
       mean_latency = 0;
       var_latency = 0;
+      mean_work = 0;
+      mean_wait = 0;
+      total_wait_locks = 0;
+      total_granted_locks= 0;
+      cpu_usage = 0;
       
       /* Dump data in the old instance to log files and
          reclaim memory. */
@@ -321,6 +386,13 @@ void TraceTool::update_ctv(ulint latency)
   double old_variance = var_latency;
   mean_latency = old_mean + (latency - old_mean) / num_trans;
   var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
+  
+#ifdef WORK_WAIT
+  ulint wait_time = function_times[0][current_transaction_id];
+  ulint work_time = latency - wait_time;
+  mean_work = mean_work + (work_time - mean_work) / num_trans;
+  mean_wait = mean_wait + (wait_time - mean_wait) / num_trans;
+#endif
 }
 
 /********************************************************************//**
@@ -353,6 +425,17 @@ void TraceTool::end_transaction()
     pthread_mutex_lock(&var_mutex);
     update_ctv(latency);
     pthread_mutex_unlock(&var_mutex);
+    pthread_mutex_lock(&last_second_mutex);
+    ulint now_in_micro = now_micro();
+    last_second_commit_times.push_back(now_micro());
+    last_second_transaction_ids.push_back(current_transaction_id);
+    while (last_second_commit_times.size() > 0 &&
+           now_in_micro - last_second_commit_times[0] > 2000000)
+    {
+      last_second_commit_times.pop_front();
+      last_second_transaction_ids.pop_front();
+    }
+    pthread_mutex_unlock(&last_second_mutex);
   }
 #endif
 }
@@ -368,13 +451,44 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint transaction_id)
+void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                              ulint num_of_wait_locks, ulint time_so_far, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
   record.wait_so_far = wait_so_far;
   record.num_locks_so_far = num_locks;
+  record.num_of_wait_locks = num_of_wait_locks;
+  record.total_wait_locks = total_wait_locks;
+  record.total_granted_locks = total_granted_locks;
+  record.mean_work = mean_work;
+  record.mean_wait = mean_wait;
+  record.cpu_usage = cpu_usage;
+  record.avg_latency_last_second = 0;
+  record.time_so_far = time_so_far;
   record.transaction_id = transaction_id;
+  
+  transaction_type type = transaction_types[transaction_id];
+  ulint num_of_trx = 0;
+  double sum_latency = 0;
+  
+  pthread_mutex_lock(&last_second_mutex);
+  for (ulint index = 0, size = last_second_commit_times.size();
+       index < size; ++index)
+  {
+    ulint trx_id = last_second_transaction_ids[index];
+    if (type == transaction_types[trx_id])
+    {
+      sum_latency += function_times.back()[trx_id];
+      ++num_of_trx;
+    }
+  }
+  pthread_mutex_unlock(&last_second_mutex);
+  if (num_of_trx > 0)
+  {
+    record.avg_latency_last_second = sum_latency / num_of_trx;
+  }
+  
   pthread_mutex_lock(&work_wait_mutex);
   work_waits.push_back(record);
   pthread_mutex_unlock(&work_wait_mutex);
@@ -555,14 +669,19 @@ void TraceTool::write_work_wait()
       ulint latency = function_times.back()[record.transaction_id];
       ulint total_wait = function_times[0][record.transaction_id];
       ulint total_work = latency - total_wait;
+      ulint actual_remaining = latency - record.time_so_far;
       ut_a(latency > total_wait);
       ut_a(total_wait > record.wait_so_far);
       ut_a(total_work > record.work_so_far);
       
       stringstream line;
       
-      line << record.work_so_far << "," << record.wait_so_far << ","
-           << record.num_locks_so_far << "," << latency << endl;
+      line << actual_remaining << "," << type + 1 << "," << record.work_so_far
+           << "," << record.wait_so_far << "," << record.num_locks_so_far
+           << "," << record.num_of_wait_locks << "," << record.total_wait_locks
+           << "," << record.total_granted_locks << "," << record.mean_work
+           << "," << record.mean_wait << "," << record.cpu_usage
+           << "," << record.avg_latency_last_second << endl;
       tpcc << line.str().c_str();
       switch (type)
       {
@@ -599,7 +718,9 @@ void TraceTool::write_work_wait()
 
 void TraceTool::write_log()
 {
+#ifdef WORK_WAIT
   write_isotonic_accuracy();
   write_work_wait();
+#endif
   write_latency("latency/original/");
 }

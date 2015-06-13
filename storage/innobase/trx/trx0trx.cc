@@ -1409,7 +1409,7 @@ trx_commit_low(
 	}
   
 	trx_commit_in_memory(trx, lsn);
-  
+
 //  if (trx->is_user_trx)
 //  {
 //    TraceTool::get_instance()->add_record(0, trx->total_wait_time);

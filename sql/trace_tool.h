@@ -6,6 +6,7 @@
 #include <fstream>
 #include <list>
 #include <vector>
+#include <deque>
 #include <pthread.h>
 #include <time.h>
 #include <unordered_map>
@@ -25,6 +26,7 @@ typedef unsigned int uint;
 using std::ofstream;
 using std::list;
 using std::vector;
+using std::deque;
 using std::endl;
 using std::unordered_map;
 using std::string;
@@ -66,6 +68,14 @@ typedef struct work_wait
     ulint work_so_far;
     ulint wait_so_far;
     ulint num_locks_so_far;
+    ulint num_of_wait_locks;
+    ulint total_wait_locks;
+    ulint total_granted_locks;
+    double mean_work;
+    double mean_wait;
+    double cpu_usage;
+    double avg_latency_last_second;
+    ulint time_so_far;
     ulint transaction_id;
 } work_wait;
 
@@ -98,8 +108,18 @@ private:
     vector<ulint> transaction_ids;          /*!< Corresponding transaction ID for time so far. */
     static pthread_mutex_t estimate_mutex;
     
+    deque<ulint> last_second_commit_times;  /*!< Stores the commit time of transactions. */
+    deque<ulint> last_second_transaction_ids;
+    static pthread_mutex_t last_second_mutex;
+    
     vector<work_wait> work_waits;
     static pthread_mutex_t work_wait_mutex;
+    
+    ulint previous_user;
+    ulint previous_nice;
+    ulint previous_system;
+    ulint previous_idle;
+    ulint previous_total;
     
     TraceTool();
     TraceTool(TraceTool const&){};
@@ -120,7 +140,13 @@ public:
                                              transactions*/
     static double var_latency;              /*!< Variance of total wait time of successfully committed
                                              transactions*/
+    static double mean_work;
+    static double mean_wait;
+    static ulint total_wait_locks;
+    static ulint total_granted_locks;
     static pthread_mutex_t var_mutex;
+    
+    static double cpu_usage;
     
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
@@ -133,6 +159,8 @@ public:
     /********************************************************************//**
     Calcualte time interval in nanoseconds. */
     static ulint difftime(timespec start, timespec end);
+    
+    double get_cpu_usage();
     
     /********************************************************************//**
     Periododically checks if any query comes in in the last 5 second.
@@ -176,7 +204,8 @@ public:
     
     /********************************************************************//**
     Add a record about work time and wait time. */
-    void add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint transaction_id);
+    void add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                       ulint num_of_wait_locks, ulint time_so_far, ulint transaction_id);
 
     /********************************************************************//**
     Add a record about estimating latency using isotonic models. */

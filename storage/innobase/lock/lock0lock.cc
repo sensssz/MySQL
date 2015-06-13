@@ -2113,6 +2113,8 @@ lock_rec_enqueue_waiting(
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
   
+  ++TraceTool::total_wait_locks;
+  
   return(DB_LOCK_WAIT);
 }
 
@@ -2427,8 +2429,10 @@ lock_rec_lock(
   common cases */
   switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr)) {
   case LOCK_REC_SUCCESS:
+      ++TraceTool::total_granted_locks;
     return(DB_SUCCESS);
   case LOCK_REC_SUCCESS_CREATED:
+      ++TraceTool::total_granted_locks;
     return(DB_SUCCESS_LOCKED_REC);
   case LOCK_REC_FAIL:
     return(lock_rec_lock_slow(impl, mode, block,
@@ -2540,11 +2544,13 @@ lock_grant(
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
   
-//  timespec now = TraceTool::get_time();
-//  trx_t *trx = lock->trx;
-//  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-//  trx->total_wait_time += wait_time;
-//  
+  timespec now = TraceTool::get_time();
+  trx_t *trx = lock->trx;
+  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
+  trx->total_wait_time += wait_time;
+  --TraceTool::total_wait_locks;
+  ++TraceTool::total_granted_locks;
+
 //  if (lock->process_time > 0 &&
 //      trx->is_user_trx)
 //  {
@@ -2864,6 +2870,8 @@ lock_rec_dequeue_from_page(
 	page_no = in_lock->un_member.rec_lock.page_no;
 
 	in_lock->index->table->n_rec_locks--;
+  
+  --TraceTool::total_granted_locks;
 
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), in_lock);
@@ -2901,23 +2909,41 @@ lock_rec_dequeue_from_page(
 //      continue;
 //    }
 //    
-//    
-//    vector<lock_t *> locks_to_grant;
-//    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
-//    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
-//    
-//    /* Find other locks that can also be granted. */
-//    lock = lock_rec_get_first_on_page_addr(space, page_no);
-//    if (!lock_rec_get_nth_bit(lock, heap_no))
+//    ulint num_of_wait_locks = 0;
+//    for (lock = lock_rec_get_first(space, page_no, heap_no);
+//         lock != NULL;
+//         lock = lock_rec_get_next(heap_no, lock))
 //    {
-//      lock = lock_rec_get_next(heap_no, lock);
+//      if (lock_get_wait(lock))
+//      {
+//        ++num_of_wait_locks;
+//      }
 //    }
-//    for (; lock != NULL; lock = lock_rec_get_next(heap_no, lock))
+//    
+////    vector<lock_t *> locks_to_grant;
+////    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+////    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
+//    
+//    timespec now = TraceTool::get_time();
+//    /* Find other locks that can also be granted. */
+//    for (lock = lock_rec_get_first(space, page_no, heap_no);
+//         lock != NULL;
+//         lock = lock_rec_get_next(heap_no, lock))
 //    {
 //      if (lock_get_wait(lock))
 //      {
 //        if (!lock_rec_has_to_wait_in_queue(lock))
 //        {
+//          if (rand() % 100 < 40)
+//          {
+//            trx_t *trx = lock->trx;
+//            ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+//            ulint wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+//            ulint work = time_so_far - wait;
+//            ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+//            TraceTool::get_instance()->add_work_wait(work, wait, num_locks, num_of_wait_locks,
+//                                                     time_so_far, trx->transaction_id);
+//          }
 //          lock_grant(lock);
 //        }
 //      }

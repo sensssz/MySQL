@@ -209,45 +209,29 @@ static
 double
 new_order_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = -1133365.479234 * num_locks + 1.469173 * work + 1.134398 * wait + 79017557.178445;
-  if (result < 0)
-  {
-    return result;
-  }
-  else
-  {
-    return work + wait;
-  }
+  double result = -3206539.177093 * num_locks + 1.527795 * work + 0.860333 * wait + 141885419.682508;
+  return result > 0 ? result : work + wait;
 }
-
 static
 double
 payment_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = 35564600.564233 * num_locks + 1.249623 * work + 0.897469 * wait + 0.000000;
-  if (result < 0)
-  {
-    return result;
-  }
-  else
-  {
-    return work + wait;
-  }
+  double result = -15370143.843087 * num_locks + 1.142376 * work + 1.073499 * wait + 69680459.120597;
+  return result > 0 ? result : work + wait;
 }
-
+static
+double
+delivery_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = -16919546.478614 * num_locks + 2.336917 * work + 0.536372 * wait + 571114079.058559;
+  return result > 0 ? result : work + wait;
+}
 static
 double
 tpcc_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = 5493171.940862 * num_locks + 1.250694 * work + 0.904207 * wait + 59616588.589615;
-  if (result < 0)
-  {
-    return result;
-  }
-  else
-  {
-    return work + wait;
-  }
+  double result = 3629840.847620 * num_locks + 1.314721 * work + 0.960636 * wait + 37264572.264813;
+  return result > 0 ? result : work + wait;
 }
 
 static
@@ -262,6 +246,8 @@ double estimate(
       return new_order_estimate(work_so_far, wait_so_far, num_locks);
     case PAYMENT:
       return payment_estimate(work_so_far, wait_so_far, num_locks);
+    case DELIVERY:
+      return delivery_estimate(work_so_far, wait_so_far, num_locks);
     default:
       return tpcc_estimate(work_so_far, wait_so_far, num_locks);
   }
@@ -706,6 +692,10 @@ LVM_schedule(
 //      {
 //        TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks, trx->transaction_id);
 //      }
+    }
+    else
+    {
+      TraceTool::get_instance()->get_log() << "!!!!!Error occurred!!!!!" << endl;
     }
   }
   
