@@ -12,6 +12,7 @@
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -141,7 +142,7 @@ TraceTool::TraceTool() : function_times()
 {
   /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log");
-#ifdef MONITOR
+#if defined(MONITOR) || defined(WORK_WAIT)
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
@@ -368,12 +369,13 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint transaction_id)
+void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint time_so_far, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
   record.wait_so_far = wait_so_far;
   record.num_locks_so_far = num_locks;
+  record.time_so_far = time_so_far;
   record.transaction_id = transaction_id;
   pthread_mutex_lock(&work_wait_mutex);
   work_waits.push_back(record);
@@ -558,11 +560,13 @@ void TraceTool::write_work_wait()
       ut_a(latency > total_wait);
       ut_a(total_wait > record.wait_so_far);
       ut_a(total_work > record.work_so_far);
+      ut_a(latency > record.time_so_far);
       
+      ulint actual_remaining = latency - record.time_so_far;
       stringstream line;
       
       line << record.work_so_far << "," << record.wait_so_far << ","
-           << record.num_locks_so_far << "," << latency << endl;
+           << record.num_locks_so_far << "," << actual_remaining << endl;
       tpcc << line.str().c_str();
       switch (type)
       {
@@ -600,6 +604,8 @@ void TraceTool::write_work_wait()
 void TraceTool::write_log()
 {
   write_isotonic_accuracy();
+#ifdef WORK_WAIT
   write_work_wait();
+#endif
   write_latency("latency/original/");
 }

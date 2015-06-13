@@ -2540,11 +2540,11 @@ lock_grant(
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
   
-//  timespec now = TraceTool::get_time();
-//  trx_t *trx = lock->trx;
-//  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-//  trx->total_wait_time += wait_time;
-//  
+  timespec now = TraceTool::get_time();
+  trx_t *trx = lock->trx;
+  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
+  trx->total_wait_time += wait_time;
+
 //  if (lock->process_time > 0 &&
 //      trx->is_user_trx)
 //  {
@@ -2873,6 +2873,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  timespec now = TraceTool::get_time();
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;
        lock = lock_rec_get_next_on_page(lock))
@@ -2880,6 +2881,18 @@ lock_rec_dequeue_from_page(
     if (lock_get_wait(lock) &&
         !lock_rec_has_to_wait_in_queue(lock))
     {
+      trx_t *trx = lock->trx;
+      if (trx->is_user_trx &&
+          ((rand() % 100 < 40) ||
+          trx->type == ORDER_STATUS))
+      {
+        ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+        ulint wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+        ulint work_so_far = time_so_far - wait_so_far;
+        ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+        TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks, time_so_far, trx->transaction_id);
+      }
+      
       lock_grant(lock);
     }
   }

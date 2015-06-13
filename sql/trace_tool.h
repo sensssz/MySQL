@@ -66,6 +66,7 @@ typedef struct work_wait
     ulint work_so_far;
     ulint wait_so_far;
     ulint num_locks_so_far;
+    ulint time_so_far;
     ulint transaction_id;
 } work_wait;
 
@@ -176,7 +177,7 @@ public:
     
     /********************************************************************//**
     Add a record about work time and wait time. */
-    void add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint transaction_id);
+    void add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks, ulint time_so_far, ulint transaction_id);
 
     /********************************************************************//**
     Add a record about estimating latency using isotonic models. */
