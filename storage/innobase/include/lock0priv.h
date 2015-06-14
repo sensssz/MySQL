@@ -77,6 +77,9 @@ struct lock_t {
     int             ranking;
     ulint           time_so_far;
     ulint           process_time;
+    ulint           original_time_so_far;
+    ulint           original_process;
+    bool            marked;
     timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {

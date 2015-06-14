@@ -139,7 +139,7 @@ TraceTool::TraceTool() : function_times()
 {
   /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log");
-#ifdef MONITOR
+#if defined(MONITOR) || defined(WORK_WAIT)
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
@@ -598,6 +598,8 @@ void TraceTool::write_isotonic_accuracy()
 
 void TraceTool::write_log()
 {
+#ifdef WORK_WAIT
   write_work_wait();
+#endif
   write_latency("latency/original/");
 }
