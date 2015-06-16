@@ -107,7 +107,7 @@ estimate(
     case PAYMENT:
 //      return 2000000;
       return payment_estimate(work, wait, num_locks);
-    case ORDER_STATUS:
+//    case ORDER_STATUS:
 //      return 4000000;
     case DELIVERY:
 //      return 3000000;
@@ -873,7 +873,7 @@ LVM_schedule(
     ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
     work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
-    lock->process_time = estimate(work_so_far, wait_so_far, num_locks, trx->type);
+    lock->process_time = estimate(parameters, trx->type);
     
     if ((rand() % 100 < 20 ||
          trx->type == ORDER_STATUS) &&
