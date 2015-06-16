@@ -55,6 +55,7 @@ __thread transaction_type TraceTool::type = NONE;
 
 ulint TraceTool::num_trans = 0;
 double TraceTool::mean_latency = 0;
+double TraceTool::var_latency = 0;
 double TraceTool::mean_work_of_all = 0;
 double TraceTool::mean_wait_of_all = 0;
 ulint TraceTool::total_wait_locks = 0;
@@ -260,6 +261,7 @@ void *TraceTool::check_write_log(void *arg)
       
       num_trans = 0;
       mean_latency = 0;
+      var_latency = 0;
       mean_work_of_all = 0;
       mean_wait_of_all = 0;
       total_wait_locks = 0;
@@ -389,7 +391,10 @@ void TraceTool::update_ctv(ulint latency)
 {
   ++num_trans;
   double old_mean = mean_latency;
+  double old_variance = var_latency;
   mean_latency = old_mean + (latency - old_mean) / num_trans;
+  var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
+
   
 #ifdef WORK_WAIT
   ulint wait_time = function_times[0][current_transaction_id];

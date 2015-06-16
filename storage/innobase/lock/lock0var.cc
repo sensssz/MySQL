@@ -107,7 +107,7 @@ estimate(
     case PAYMENT:
 //      return 2000000;
       return payment_estimate(work, wait, num_locks);
-    case ORDER_STATUS:
+//    case ORDER_STATUS:
 //      return 4000000;
     case DELIVERY:
 //      return 3000000;
@@ -547,6 +547,7 @@ LVM_schedule(
   all_locks.insert(all_locks.end(), wait_locks.begin(), wait_locks.end());
   
   timespec now = TraceTool::get_time();
+  estimate_mutex_enter();
   for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
     lock_t *lock = all_locks[index];
@@ -571,6 +572,7 @@ LVM_schedule(
                                                                      wait_locks.size(), trx->transaction_id);
     }
   }
+  estimate_mutex_exit();
   
   vector<int> rankings(wait_locks.size());
   list<vector<int> > ranking_enumerations;

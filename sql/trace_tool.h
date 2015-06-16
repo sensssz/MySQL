@@ -145,6 +145,8 @@ public:
     static ulint num_trans;                 /*!< Number of successfully submitted transactions. */
     static double mean_latency;             /*!< Mean of total wait time of successfully committed
                                              transactions*/
+    static double var_latency;              /*!< Mean of total wait time of successfully committed
+                                             transactions*/
     static double mean_work_of_all;
     static double mean_wait_of_all;
     static ulint total_wait_locks;

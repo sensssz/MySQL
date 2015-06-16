@@ -2784,6 +2784,7 @@ lock_next_to_grant(
 {
   int smallest_ranking = INT_MAX;
   vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
   
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
        lock != NULL;
@@ -2824,7 +2825,7 @@ lock_next_to_grant(
       {
         TraceTool::max_num_locks = wait_locks.size();
       }
-      LVM_schedule(wait_locks, locks_to_grant);
+      LVM_schedule(wait_locks, granted_locks, locks_to_grant);
     }
   }
 }
