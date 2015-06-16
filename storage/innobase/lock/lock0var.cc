@@ -15,39 +15,17 @@
 #include <float.h>
 #include <list>
 #include <string>
+#include <utility>
 
 using std::list;
 using std::ifstream;
 using std::sort;
 using std::find;
 using std::string;
+using std::pair;
 
-static ulint *tpcc_work_wait = NULL;
-static ulint *tpcc_estimated = NULL;
-static ulint *new_order_work_wait = NULL;
-static ulint *new_order_estimated = NULL;
-static ulint *payment_work_wait = NULL;
-static ulint *payment_estimated = NULL;
-static ulint *order_status_work_wait = NULL;
-static ulint *order_status_estimated = NULL;
-static ulint *delivery_work_wait = NULL;
-static ulint *delivery_estimated = NULL;
-static ulint *stock_level_work_wait = NULL;
-static ulint *stock_level_estimated = NULL;
+typedef pair<lock_t *, lock_t *> pair_t;
 
-static ulint tpcc_length = 0;
-static ulint new_order_length = 0;
-static ulint payment_length = 0;
-static ulint order_status_length = 0;
-static ulint delivery_length = 0;
-static ulint stock_level_length = 0;
-
-static
-string
-lock_get_mode(
-  lock_t *lock);
-
-static
 void
 read_isotonic(
   const char *name,
@@ -76,225 +54,230 @@ UNIV_INTERN
 void
 indi_init()
 {
-  read_isotonic("isotonics/tpcc", tpcc_work_wait,
-                tpcc_estimated, tpcc_length);
-  read_isotonic("isotonics/new_order", new_order_work_wait,
-                new_order_estimated, new_order_length);
-  read_isotonic("isotonics/payment", payment_work_wait,
-                payment_estimated, payment_length);
-  read_isotonic("isotonics/order_status", order_status_work_wait,
-                order_status_estimated, order_status_length);
-  read_isotonic("isotonics/delivery", delivery_work_wait,
-                delivery_estimated, delivery_length);
-  read_isotonic("isotonics/stock_level", stock_level_work_wait,
-                stock_level_estimated, stock_level_length);
-}
-
-/*************************************************************//**
-Do a binary search in the separators to find the bucket for the specific
-remaining time. */
-ulint
-binary_search(
-  ulint *array,
-  ulint length,
-  double target)  /*!< estiamted remaining time */
-{
-  int left = 0;
-  int right = length - 1;
-  int middle = -1;
-  
-  if (target <= array[0])
-  {
-    return 0;
-  }
-  else if (target >= array[length - 1])
-  {
-    return length - 1;
-  }
-  
-  while (left <= right)
-  {
-    int new_middle = (left + right) / 2;
-    if (new_middle == middle)
-    {
-      break;
-    }
-    else
-    {
-      middle = new_middle;
-    }
-    if (target < array[middle])
-    {
-      right = middle;
-    }
-    else if (target >= array[middle + 1])
-    {
-      left = middle + 1;
-    }
-    else
-    {
-      // array[middle] <= target < array[middle + 1]
-      return middle;
-    }
-  }
-  
-  return length - 1;
-}
-
-/*************************************************************//**
-Estimate remaining time given total time so far. */
-UNIV_INTERN
-ulint
-estimate(
-  ulint time_so_far,
-  transaction_type type)
-{
-//  if (type == PAYMENT)
-//  {
-//    return 20000000;
-//  }
-//  else
-//  {
-//    return 40000000;
-//  }
-  
-  ulint *so_far = NULL;
-  ulint *estimate = NULL;
-  ulint length = 0;
-  
-  switch (type) {
-    case NONE:
-      so_far = tpcc_work_wait;
-      estimate = tpcc_estimated;
-      length = tpcc_length;
-    case NEW_ORDER:
-      so_far = new_order_work_wait;
-      estimate = new_order_estimated;
-      length = new_order_length;
-      break;
-    case PAYMENT:
-      so_far = payment_work_wait;
-      estimate = payment_estimated;
-      length = payment_length;
-      break;
-    case ORDER_STATUS:
-      so_far = order_status_work_wait;
-      estimate = order_status_estimated;
-      length = order_status_length;
-      break;
-    case DELIVERY:
-      so_far = delivery_work_wait;
-      estimate = delivery_estimated;
-      length = delivery_length;
-      break;
-    case STOCK_LEVEL:
-      so_far = stock_level_work_wait;
-      estimate = stock_level_estimated;
-      length = stock_level_length;
-      break;
-    default:
-      break;
-  }
-  
-  ulint y_index = binary_search(so_far, length, time_so_far);
-  if (y_index == length - 1)
-  {
-    y_index = length - 2;
-  }
-  ulint result = estimate[y_index + 1];
-  return result - time_so_far;
 }
 
 static
 double
 new_order_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = -3206539.177093 * num_locks + 1.527795 * work + 0.860333 * wait + 141885419.682508;
+  double result = 0.391422 * work + -0.035204 * wait + -5778412.679344 * num_locks + 151676562.841838;
   return result > 0 ? result : work + wait;
 }
 static
 double
 payment_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = -15370143.843087 * num_locks + 1.142376 * work + 1.073499 * wait + 69680459.120597;
+  double result = 0.167429 * work + 0.018503 * wait + 484540.671643 * num_locks + 14373517.557892;
   return result > 0 ? result : work + wait;
 }
 static
 double
 delivery_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = -16919546.478614 * num_locks + 2.336917 * work + 0.536372 * wait + 571114079.058559;
+  double result = 0.335207 * work + 0.012636 * wait + -3567320.906844 * num_locks + 215839241.070575;
+  return result > 0 ? result : work + wait;
+}
+static
+double
+stock_level_estimate(ulint work, ulint wait, ulint num_locks)
+{
+  double result = 0.254872 * work + -0.030642 * wait + -101840.123786 * num_locks + 22112874.484210;
   return result > 0 ? result : work + wait;
 }
 static
 double
 tpcc_estimate(ulint work, ulint wait, ulint num_locks)
 {
-  double result = 3629840.847620 * num_locks + 1.314721 * work + 0.960636 * wait + 37264572.264813;
+  double result = 0.327740 * work + 0.008922 * wait + -50320.149374 * num_locks + 56625490.273089;
   return result > 0 ? result : work + wait;
 }
 
 static
-double estimate(
-  ulint work_so_far,
-  ulint wait_so_far,
+double
+estimate(
+  ulint work,
+  ulint wait,
   ulint num_locks,
   transaction_type type)
 {
   switch (type) {
     case NEW_ORDER:
-      return new_order_estimate(work_so_far, wait_so_far, num_locks);
+//      return 1000000;
+      return new_order_estimate(work, wait, num_locks);
     case PAYMENT:
-      return payment_estimate(work_so_far, wait_so_far, num_locks);
+//      return 2000000;
+      return payment_estimate(work, wait, num_locks);
+    case ORDER_STATUS:
+//      return 4000000;
     case DELIVERY:
-      return delivery_estimate(work_so_far, wait_so_far, num_locks);
+//      return 3000000;
+      return delivery_estimate(work, wait, num_locks);
+    case STOCK_LEVEL:
+      return stock_level_estimate(work, wait, num_locks);
     default:
-      return tpcc_estimate(work_so_far, wait_so_far, num_locks);
+      return tpcc_estimate(work, wait, num_locks);
   }
 }
 
-/*************************************************************//**
-Swap two elements in a vector. */
 static
-void
-swap(
-  vector<lock_t *> &locks,
-  ulint index1,
-  ulint index2)
+double
+new_order_estimate(work_wait parameters)
 {
-  if (index1 != index2)
-  {
-    lock_t *temp = locks[index1];
-    locks[index1] = locks[index2];
-    locks[index2] = temp;
+  double actual_remaining =
+  
+  -0.1718 * parameters.wait_so_far +
+  -3515449.3126 * parameters.num_locks_so_far +
+  -8113069.9766 * parameters.num_of_wait_locks +
+  927879.467  * parameters.total_wait_locks +
+  15.4909 * parameters.total_granted_locks +
+  11.546  * parameters.mean_work_of_all +
+  -6.8445 * parameters.mean_wait_of_all +
+  -62837249.5448 * parameters.cpu_usage +
+  -1.2347 * parameters.avg_work_of_same_past_second +
+  -0.7138 * parameters.avg_wait_of_same_past_second +
+  0.2338 * parameters.avg_latency_of_all_past_second +
+  0.0079 * parameters.avg_latency_of_same_last_20 +
+  -144493838.0803;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+static
+double
+payment_estimate(work_wait parameters)
+{
+  double actual_remaining =
+  
+  0.034  * parameters.work_so_far +
+  -0.0067 * parameters.wait_so_far +
+  601360.9809 * parameters.total_wait_locks +
+  3.5904 * parameters.total_granted_locks +
+  0.924  * parameters.mean_work_of_all +
+  -0.3044 * parameters.mean_wait_of_all +
+  18804021.8813 * parameters.cpu_usage +
+  -0.6037 * parameters.avg_work_of_same_past_second +
+  -0.34   * parameters.avg_wait_of_same_past_second +
+  0.0922 * parameters.avg_latency_of_all_past_second +
+  0.002  * parameters.avg_latency_of_same_last_20 +
+  -0.0016 * parameters.max_latency_of_same_last_50 +
+  -37071100.254;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+static
+double
+delivery_estimate(work_wait parameters)
+{
+  double actual_remaining =
+  
+  -0.2101 * parameters.wait_so_far +
+  -4462218.3167 * parameters.num_locks_so_far +
+  1177409.6617 * parameters.total_wait_locks +
+  8.8985 * parameters.mean_work_of_all +
+  -5.4654 * parameters.mean_wait_of_all +
+  -0.6426 * parameters.avg_work_of_same_past_second +
+  0.2559 * parameters.avg_latency_of_all_past_second +
+  0.0195 * parameters.avg_latency_of_same_last_20 +
+  -77180897.0136;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+static
+double
+stock_level_estimate(work_wait parameters)
+{
+  double actual_remaining =
+  
+  -0.0461 * parameters.wait_so_far +
+  -49910.1443 * parameters.num_locks_so_far +
+  162710.9069 * parameters.total_wait_locks +
+  1.9122 * parameters.mean_work_of_all +
+  -1.2411 * parameters.mean_wait_of_all +
+  0.0257 * parameters.avg_latency_of_all_past_second +
+  0.002  * parameters.avg_latency_of_same_last_20 +
+  -0.0127 * parameters.max_latency_of_same_last_50 +
+  -33916087.2486;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+static
+double
+tpcc_estimate(work_wait parameters)
+{
+  double actual_remaining =
+  
+  -0.0684 * parameters.work_so_far +
+  -0.1069 * parameters.wait_so_far +
+  -438806.1265 * parameters.num_locks_so_far +
+  415445.1861 * parameters.total_wait_locks +
+  3.3466 * parameters.mean_wait_of_all +
+  -2.5997 * parameters.mean_wait_of_all +
+  -29194031.5745 * parameters.cpu_usage +
+  1.8191 * parameters.avg_work_of_same_past_second +
+  -1.5608 * parameters.avg_wait_of_same_past_second +
+  0.0459 * parameters.avg_latency_of_all_past_second +
+  0.0002 * parameters.avg_latency_of_same_past_second +
+  0.006  * parameters.avg_latency_of_same_last_20 +
+  -35548172.0052;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+
+static
+double
+estimate(
+  work_wait parameters,
+  transaction_type type)
+{
+  switch (type) {
+    case NEW_ORDER:
+//      return 1000000;
+      return new_order_estimate(parameters);
+    case PAYMENT:
+//      return 2000000;
+      return payment_estimate(parameters);
+//    case ORDER_STATUS:
+//      return 4000000;
+    case DELIVERY:
+//      return 3000000;
+      return delivery_estimate(parameters);
+    case STOCK_LEVEL:
+      return stock_level_estimate(parameters);
+    default:
+      return tpcc_estimate(parameters);
   }
 }
 
-/*************************************************************//**
-Generate all possible permutations of the given vector. */
-static
-void
-permutate(
-  vector<lock_t *> &locks,
-  ulint start,
-  ulint end,
-  vector<vector<lock_t *> > &permutations)
+/*********************************************************************//**
+Gets the mode of a lock.
+@return mode */
+UNIV_INLINE
+enum lock_mode
+lock_get_mode(
+/*==========*/
+  const lock_t* lock) /*!< in: lock */
 {
-  if (start == end)
+  return(static_cast<enum lock_mode>(lock->type_mode & LOCK_MODE_MASK));
+}
+
+static
+double
+square(
+  double number)
+{
+  return number * number;
+}
+
+
+/*************************************************************//**
+Calculat the mean of a list of numbers. */
+static
+double
+mean(
+  vector<ulint> &numbers)
+{
+  double total = 0;
+  
+  for (ulint index = 0, size = numbers.size(); index < size; ++index)
   {
-    vector<lock_t *> permutation(locks);
-    permutations.push_back(permutation);
-    return;
+    total += numbers[index];
   }
   
-  for (ulint index = start; index <= end; ++index)
-  {
-    /* Swap these two elements. */
-    swap(locks, start, index);
-    permutate(locks, start + 1, end, permutations);
-    /* Swap them back. */
-    swap(locks, start, index);
-  }
+  return total / numbers.size();
 }
 
 /*************************************************************//**
@@ -304,21 +287,15 @@ double
 var(
   vector<ulint> &numbers)
 {
+  double heuristic = 0;
   double mean = TraceTool::mean_latency;
-  double variance = TraceTool::var_latency;
-  ulint num_trans = TraceTool::num_trans;
   
   for (ulint index = 0, size = numbers.size(); index < size; ++index)
   {
-    double latency = (double) numbers[index];
-    ++num_trans;
-    double old_mean = mean;
-    double old_variance = variance;
-    mean = old_mean + (latency - old_mean) / num_trans;
-    variance = old_variance + (latency - old_mean) * (latency - mean);
+    heuristic += square(numbers[index] - mean);
   }
   
-  return variance;
+  return heuristic;
 }
 
 /*************************************************************//**
@@ -356,114 +333,465 @@ cumsum(
 }
 
 /*************************************************************//**
-Find the lock that gives minimum variance of estimated latency. */
-UNIV_INTERN
-lock_t *
-CTV_schedule(vector<lock_t *> &locks) /*!< candidate locks */
+Calculate the cumulative sum of latency for the list of given locks. */
+static
+void
+cumsum(
+  list<lock_t *> &locks,
+  vector<ulint> &rolling_sum)
 {
-  if (locks.size() == 0)
-  {
-    return NULL;
-  }
-  else if (locks.size() == 1)
-  {
-    return locks[0];
-  }
+  ulint sum_of_previous_process_time = 0;
+  int previous_ranking = 0;
+  ulint max_process = 0;
   
-  int random = rand() % 100;
-  bool do_log = random < 42;
-  
-  ofstream &log_file = TraceTool::get_instance()->get_log();
-  
-  timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = locks.size(); index < size; ++index)
+  for (list<lock_t *>::iterator iter = locks.begin(); iter != locks.end(); ++iter)
   {
-    lock_t *lock = locks[index];
-    lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-    lock->process_time = estimate(lock->time_so_far, lock->trx->type);
+    lock_t *lock = *iter;
     
-    if (do_log)
+    if (lock->ranking == previous_ranking)
     {
-      log_file << lock->time_so_far << ",";
+      if (lock->process_time > max_process)
+      {
+        max_process = lock->process_time;
+      }
     }
-  }
-  if (do_log)
-  {
-    log_file << endl;
-  
-    for (ulint index = 0, size = locks.size(); index < size; ++index)
+    else
     {
-      log_file << locks[index]->process_time << ",";
+      sum_of_previous_process_time += max_process;
+      max_process = lock->process_time;
+      previous_ranking = lock->ranking;
     }
-    log_file << endl;
-  }
-  
-  vector<vector<lock_t *> > perms;
-  permutate(locks, 0, locks.size() - 1, perms);
-  
-  double min_variance = std::numeric_limits<double>::max();
-  int min_var_index = -1;
-  for (ulint index = 0, size = perms.size(); index < size; ++index)
-  {
-    vector<ulint> rolling_sum;
-    cumsum(perms[index], rolling_sum);
-    double variance = var(rolling_sum);
-    if (variance < min_variance)
-    {
-      min_variance = variance;
-      min_var_index = index;
-    }
-  }
-  
-  for (ulint index = 0, size = perms[min_var_index].size();
-       index < size; ++index)
-  {
-    perms[min_var_index][index]->ranking = index;
     
-    if (do_log)
-    {
-      log_file << perms[min_var_index][index]->time_so_far << ",";
-    }
+    rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
   }
-  
-  if (do_log)
-  {
-    log_file << endl;
-    
-    for (ulint index = 0, size = perms[min_var_index].size();
-         index < size; ++index)
-    {
-      log_file << perms[min_var_index][index]->process_time << ",";
-    }
-    log_file << endl;
-  }
-  
-  return perms[min_var_index][0];
 }
-
 
 static
 bool
-is_redundant(
-  vector<int> &rankings,
-  ulint num_of_ranking)
+compare_by_process(
+  lock_t *lock1,
+  lock_t *lock2)
 {
-  vector<bool> rank_exists(num_of_ranking, false);
-  int max_rank = 0;
-  for (ulint index = 0, size = rankings.size(); index < size; ++index)
+  return lock1->process_time > lock2->process_time;
+}
+
+static
+bool
+compare_by_ranking(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  return lock1->ranking < lock2->ranking;
+}
+
+static
+double
+heuristic(
+  list<lock_t *> &candidates,
+  vector<lock_t *> &locks,
+  vector<lock_t *> &read_locks)
+{
+  int index = 0;
+  for (list<lock_t *>::iterator iter = candidates.begin(); iter != candidates.end(); ++iter)
   {
-    int ranking = rankings[index];
-    rank_exists[ranking] = true;
-    
-    if (ranking > max_rank)
+    lock_t *lock = *iter;
+    lock->ranking = index;
+    if (lock_get_mode(lock) == LOCK_S)
     {
-      max_rank = ranking;
+      for (ulint read_index = 0, read_size = read_locks.size();
+           read_index < read_size; ++read_index)
+      {
+        read_locks[read_index]->ranking = index;
+      }
+    }
+    ++index;
+  }
+  sort(locks.begin(), locks.end(), compare_by_ranking);
+  vector<ulint> rolling_sum;
+  cumsum(locks, rolling_sum);
+  return var(rolling_sum);
+}
+
+static
+double
+heuristic(
+  vector<lock_t *> candidates,
+  vector<lock_t *> &locks,
+  vector<lock_t *> &read_locks)
+{
+  int index = 0;
+  for (vector<lock_t *>::iterator iter = candidates.begin(); iter != candidates.end(); ++iter)
+  {
+    lock_t *lock = *iter;
+    lock->ranking = index;
+    if (lock_get_mode(lock) == LOCK_S)
+    {
+      for (ulint read_index = 0, read_size = read_locks.size();
+           read_index < read_size; ++read_index)
+      {
+        read_locks[read_index]->ranking = index;
+      }
+    }
+    ++index;
+  }
+  sort(locks.begin(), locks.end(), compare_by_ranking);
+  vector<ulint> rolling_sum;
+  cumsum(locks, rolling_sum);
+  return var(rolling_sum);
+}
+
+static
+double
+heuristic(
+  vector<lock_t *> &locks)
+{
+  sort(locks.begin(), locks.end(), compare_by_ranking);
+  vector<ulint> rolling_sum;
+  cumsum(locks, rolling_sum);
+  return var(rolling_sum);
+}
+
+static
+void
+merge_read_locks(
+  vector<lock_t *> &wait_locks,
+  vector<lock_t *> &merged_locks,
+  vector<lock_t *> &read_locks)
+{
+  ulint longest_time_so_far = 0;
+  ulint longest_process = 0;
+  for (ulint index = 0, size = wait_locks.size();
+       index < size; ++index)
+  {
+    lock_t *lock = wait_locks[index];
+    if (lock_get_mode(lock) == LOCK_S)
+    {
+      read_locks.push_back(lock);
+      if (lock->time_so_far > longest_time_so_far)
+      {
+        longest_time_so_far = lock->time_so_far;
+      }
+      if (lock->process_time > longest_process)
+      {
+        longest_process = lock->process_time;
+      }
+    }
+    else
+    {
+      merged_locks.push_back(lock);
+    }
+  }
+  if (read_locks.size() > 0)
+  {
+    lock_t *lock = read_locks[0];
+    lock->original_time_so_far = lock->time_so_far;
+    lock->original_process = lock->process_time;
+    lock->time_so_far = longest_time_so_far;
+    lock->process_time = longest_process;
+    merged_locks.push_back(lock);
+  }
+}
+
+static
+bool
+even(
+  ulint number)
+{
+  return number % 2 == 0;
+}
+
+static
+ulint
+last_odd(
+  ulint size)
+{
+  ulint max_index = size - 2;
+  return !even(max_index) ? max_index : max_index - 1;
+}
+
+static
+ulint
+last_even(
+  ulint size)
+{
+  ulint max_index = size - 2;
+  return even(max_index) ? max_index : max_index - 1;
+}
+
+static
+void
+rearrange(
+  vector<lock_t *> &locks,
+  vector<lock_t *> &reordered,
+  bool odd_after)
+{
+  ulint size = locks.size();
+  
+  reordered.push_back(locks[0]);
+  // If odd, pick evens. If even, pick odds
+  ulint start = odd_after ? 2 : 1;
+  for (ulint index = start; index < size - 1; index += 2)
+  {
+    reordered.push_back(locks[index]);
+  }
+  reordered.push_back(locks[size - 1]);
+  
+  start = odd_after ? last_odd(size) : last_even(size);
+  for (int index = start; index > 0; index -= 2)
+  {
+    reordered.push_back(locks[index]);
+  }
+}
+
+static
+list<lock_t *>::iterator
+min_iter(
+  list<lock_t *> &locks)
+{
+  ulint min_process = ULONG_MAX;
+  list<lock_t *>::iterator min_iter;
+  
+  for (list<lock_t *>::iterator iter = locks.begin(); iter != locks.end(); ++iter)
+  {
+    ulint process = (*iter)->process_time;
+    if (process < min_process)
+    {
+      min_process = process;
+      min_iter = iter;
     }
   }
   
-  for (int ranking = 1; ranking < max_rank; ++ranking)
+  return min_iter;
+}
+
+static
+list<lock_t *>::iterator
+insert_descending(
+  list<lock_t *> &candidates,
+  list<lock_t *>::iterator min_iter,
+  lock_t *lock_to_insert)
+{
+  list<lock_t *>::iterator iter = candidates.begin();
+  while (iter != min_iter &&
+         lock_to_insert->process_time < (*iter)->process_time)
   {
-    if (!rank_exists[ranking])
+    ++iter;
+  }
+  iter = candidates.insert(iter, lock_to_insert);
+  return iter;
+}
+
+static
+list<lock_t *>::iterator
+insert_ascending(
+  list<lock_t *> &candidates,
+  list<lock_t *>::iterator iter,
+  lock_t *lock_to_insert)
+{
+  while (iter != candidates.end() &&
+         lock_to_insert->process_time > (*iter)->process_time)
+  {
+    ++iter;
+  }
+  iter = candidates.insert(iter, lock_to_insert);
+  return iter;
+}
+
+static
+list<lock_t *>::iterator
+find_left_most_unmarked(
+  list<lock_t *> &locks)
+{
+  list<lock_t *>::iterator iter = locks.begin();
+  while ((*iter)->marked)
+  {
+    ++iter;
+  }
+  
+  return iter;
+}
+
+static
+list<lock_t *>::iterator
+find_right_most_unmarked(
+  list<lock_t *> &locks)
+{
+  list<lock_t *>::iterator iter = locks.end();
+  --iter;
+  while ((*iter)->marked)
+  {
+    --iter;
+  }
+  
+  return iter;
+}
+
+static
+double
+try_move_left(
+  list<lock_t *> &candidate_as_list,
+  list<lock_t *>::iterator min_process_iter,
+  list<lock_t *>::iterator iter,
+  vector<lock_t *> &locks,
+  vector<lock_t *> &read_locks,
+  double min_heuristic)
+{
+  lock_t *lock = *iter;
+  lock->marked = true;
+  iter = candidate_as_list.erase(iter);
+  list<lock_t *>::iterator insert_iter = insert_descending(candidate_as_list, min_process_iter, lock);
+  double heu = heuristic(candidate_as_list, locks, read_locks);
+  if (heu < min_heuristic)
+  {
+    min_heuristic = heu;
+  }
+  else
+  {
+    candidate_as_list.erase(insert_iter);
+    candidate_as_list.insert(iter, lock);
+  }
+  
+  return min_heuristic;
+}
+
+static
+double
+try_move_right(
+  list<lock_t *> &candidate_as_list,
+  list<lock_t *>::iterator min_process_iter,
+  list<lock_t *>::iterator iter,
+  vector<lock_t *> &locks,
+  vector<lock_t *> &read_locks,
+  double min_heuristic)
+{
+  lock_t *lock = *iter;
+  lock->marked = true;
+  iter = candidate_as_list.erase(iter);
+  list<lock_t *>::iterator insert_iter = insert_ascending(candidate_as_list, min_process_iter, lock);
+  double heu = heuristic(candidate_as_list, locks, read_locks);
+  if (heu < min_heuristic)
+  {
+    min_heuristic = heu;
+  }
+  else
+  {
+    // Put the lock back to its original position
+    candidate_as_list.erase(insert_iter);
+    candidate_as_list.insert(iter, lock);
+  }
+  
+  return min_heuristic;
+}
+
+static
+double
+find_min_heuristic_on_process(
+  vector<lock_t *> &candidates,
+  vector<lock_t *> &locks,
+  vector<lock_t *> &read_locks)
+{
+  int ranking = 0;
+  for (vector<lock_t *>::iterator iter = candidates.begin(); iter != candidates.end(); ++iter)
+  {
+    lock_t *lock = *iter;
+    lock->ranking = ranking;
+    if (lock_get_mode(lock) == LOCK_S)
+    {
+      for (ulint read_index = 0, read_size = read_locks.size();
+           read_index < read_size; ++read_index)
+      {
+        read_locks[read_index]->ranking = ranking;
+      }
+    }
+    ++ranking;
+  }
+  sort(locks.begin(), locks.end(), compare_by_ranking);
+  vector<ulint> rolling_sum;
+  cumsum(locks, rolling_sum);
+  double min_heuristic = var(rolling_sum);
+  double average = mean(rolling_sum);
+  
+  list<lock_t *> candidate_as_list(candidates.begin(), candidates.end());
+  list<lock_t *>::iterator min_process_iter = min_iter(candidate_as_list);
+  
+  while (true)
+  {
+    if (average < TraceTool::mean_latency)
+    {
+      list<lock_t *>::iterator iter = find_right_most_unmarked(candidate_as_list);
+      if (iter == min_process_iter)
+      {
+        break;
+      }
+      min_heuristic = try_move_left(candidate_as_list, min_process_iter,
+                                    iter, locks, read_locks, min_heuristic);
+    }
+    else if (average > TraceTool::mean_latency)
+    {
+      list<lock_t *>::iterator iter = find_left_most_unmarked(candidate_as_list);
+      if (iter == min_process_iter)
+      {
+        break;
+      }
+      min_heuristic = try_move_right(candidate_as_list, min_process_iter,
+                                     iter, locks, read_locks, min_heuristic);
+    }
+    
+    rolling_sum.clear();
+    cumsum(candidates, rolling_sum);
+    average = mean(rolling_sum);
+  }
+  
+  ulint index = 0;
+  for (list<lock_t *>::iterator iter = candidate_as_list.begin(); iter != candidate_as_list.end(); ++iter)
+  {
+    candidates[index++] = *iter;
+  }
+  
+  return min_heuristic;
+}
+
+static
+bool
+try_swap(
+  vector<lock_t *> &candidates,
+  vector<lock_t *> &locks,
+  vector<lock_t *> &read_locks,
+  ulint index,
+  double &min_heuristic)
+{
+  lock_t *temp = candidates[index];
+  candidates[index] = candidates[index + 1];
+  candidates[index + 1] = temp;
+  
+  double heu = heuristic(candidates, locks, read_locks);
+  
+  if (heu < min_heuristic)
+  {
+    min_heuristic = heu;
+    return true;
+  }
+  else
+  {
+    temp = candidates[index];
+    candidates[index] = candidates[index + 1];
+    candidates[index + 1] = temp;
+    return false;
+  }
+}
+
+static
+bool
+contains(
+  vector<pair_t> &pairs,
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  for (ulint index = 0, size = pairs.size(); index < size; ++index)
+  {
+    pair_t swapped_pair = pairs[index];
+    if (swapped_pair.first == lock1 &&
+        swapped_pair.second == lock2)
     {
       return true;
     }
@@ -472,284 +800,159 @@ is_redundant(
 }
 
 static
-void
-enumerate_rankings(
-  vector<int> &rankings,
-  int start,
-  int end,
-  list<vector<int> > &ranking_enumerations)
-{
-  for (int ranking = 0; ranking <= end + 1; ++ranking)
-  {
-    rankings[start] = ranking;
-    if (start == end)
-    {
-      if (!is_redundant(rankings, end + 2))
-      {
-        ranking_enumerations.push_back(rankings);
-      }
-    }
-    else
-    {
-      enumerate_rankings(rankings, start + 1, end, ranking_enumerations);
-    }
-  }
-}
-
-static
-bool
-lock_compatible(
+double
+min_var_order(
+  vector<lock_t *> &candidates,
   vector<lock_t *> &locks,
-  lock_t *lock)
+  vector<lock_t *> &read_locks)
 {
-  for (ulint index = 0, size = locks.size(); index < size; ++index)
+  double min_heuristic = find_min_heuristic_on_process(candidates, locks, read_locks);
+  vector<pair_t> swapped_pairs;
+  bool swap = true;
+  while (swap)
   {
-    if (lock_has_to_wait(lock, locks[index]))
+    swap = false;
+    ulint min_difference = ULONG_MAX;
+    ulint min_index = candidates.size();
+    for (ulint index = 0, size = candidates.size(); index < size - 1; ++index)
     {
-      return false;
-    }
-  }
-  return true;
-}
-
-static
-string
-lock_get_mode(
-  lock_t *lock)
-{
-  string mode;
-  if ((LOCK_MODE_MASK & lock->type_mode) == LOCK_X)
-  {
-    mode.append("X");
-  }
-  else
-  {
-    mode.append("R");
-  }
-  if (lock->type_mode & LOCK_INSERT_INTENTION)
-  {
-    mode.append("I");
-  }
-  else if (lock->type_mode & LOCK_GAP)
-  {
-    mode.append("G");
-  }
-  else if (lock->type_mode & LOCK_ORDINARY)
-  {
-    mode.append("N");
-  }
-  else if (lock->type_mode & LOCK_REC_NOT_GAP)
-  {
-    mode.append("R");
-  }
-  
-  switch (lock->trx->type)
-  {
-    case NEW_ORDER:
-      mode.append("O");
-      break;
-    case PAYMENT:
-      mode.append("P");
-      break;
-    case ORDER_STATUS:
-      mode.append("S");
-      break;
-    case DELIVERY:
-      mode.append("D");
-      break;
-    case STOCK_LEVEL:
-      mode.append("L");
-      break;
-    default:
-      mode.append("N");
-      break;
-  }
-  
-  return mode;
-}
-
-static
-void
-remove_invalid_ranking(
-  vector<lock_t *> &waiting_locks,
-  vector<lock_t *> &granted_locks,
-  list<vector<int> > &ranking_enumerations)
-{
-  ulint size = waiting_locks.size();
-  
-  lock_t **previous_locks = new lock_t *[size + 1];
-  
-  for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
-       iterator != ranking_enumerations.end(); ++iterator)
-  {
-    vector<int> &enumeration = *iterator;
-    
-    if(granted_locks.size() > 0)
-    {
-      previous_locks[0] = granted_locks.back();
-    }
-    else
-    {
-      previous_locks[0] = NULL;
-    }
-    for (ulint index = 1; index <= size; ++index)
-    {
-      previous_locks[index] = NULL;
-    }
-    
-    for (ulint index = 0; index < size; ++index)
-    {
-      int ranking = enumeration[index];
-      lock_t *previous_lock = previous_locks[ranking];
-      previous_locks[ranking] = waiting_locks[index];
-      
-      if (previous_lock != NULL &&
-          lock_has_to_wait(waiting_locks[index], previous_lock))
+      lock_t *lock1 = candidates[index];
+      lock_t *lock2 = candidates[index + 1];
+      if (lock1->time_so_far < lock2->time_so_far &&
+          !contains(swapped_pairs, lock1, lock2))
       {
-        iterator = --ranking_enumerations.erase(iterator);
-        break;
+        ulint difference = lock1->time_so_far - lock2->time_so_far;
+        if (difference < min_difference)
+        {
+          min_difference = difference;
+          min_index = index;
+        }
       }
     }
+    if (min_index < candidates.size())
+    {
+      // We can do a swap
+      try_swap(candidates, locks, read_locks, min_index, min_heuristic);
+      pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
+      swapped_pairs.push_back(pair);
+      swap = true;
+    }
   }
   
-  delete[] previous_locks;
+  return min_heuristic;
 }
 
-static
-bool
-compare(
-  lock_t *lock1,
-  lock_t *lock2)
-{
-  return lock1->ranking < lock2->ranking;
-}
-
-/*********************************************************************//**
-Gets the wait flag of a lock.
-@return LOCK_WAIT if waiting, 0 if not */
-UNIV_INLINE
-ulint
-lock_get_wait(
-/*==========*/
-  const lock_t* lock) /*!< in: lock */
-{
-  return(lock->type_mode & LOCK_WAIT);
-}
 
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
 void
 LVM_schedule(
-  vector<lock_t *> &waiting_locks,  /*!< waiting locks */
-  vector<lock_t *> &granted_locks,  /*!< granted locks */
+  vector<lock_t *> &wait_locks,  /*!< waiting locks */
   vector<lock_t *> &locks_to_grant) /*!< locks to grant */
 {
-  if (waiting_locks.size() == 0)
+  if (wait_locks.size() == 0)
   {
     return;
   }
-  if (waiting_locks.size() == 1 &&
-      granted_locks.size() == 0)
+  if (wait_locks.size() == 1)
   {
-    locks_to_grant.push_back(waiting_locks[0]);
+    locks_to_grant.push_back(wait_locks[0]);
     return;
   }
-  
-  for (ulint index = 0, size = granted_locks.size();
-       index < size; ++index)
-  {
-    granted_locks[index]->ranking = 0;
-    granted_locks[index]->in_batch = true;
-  }
-  
-  vector<lock_t *> all_locks(granted_locks.begin(), granted_locks.end());
-  all_locks.insert(all_locks.end(), waiting_locks.begin(), waiting_locks.end());
   
   timespec now = TraceTool::get_time();
-  for (ulint index = 0, size = all_locks.size(); index < size; ++index)
+  estimate_mutex_enter();
+  for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
-    lock_t *lock = all_locks[index];
+    lock_t *lock = wait_locks[index];
     trx_t *trx = lock->trx;
     lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-    lock->process_time = lock->time_so_far;
-    ulint wait_so_far = trx->total_wait_time;
-    if (lock_get_wait(lock))
+    ulint wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+    ulint work_so_far = lock->time_so_far - wait_so_far;
+    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
+                                                                 wait_locks.size(), trx->transaction_id);
+    lock->process_time = estimate(work_so_far, wait_so_far, num_locks, trx->type);
+    
+    if ((rand() % 100 < 20 ||
+         trx->type == ORDER_STATUS) &&
+        trx->is_user_trx)
     {
-      wait_so_far += TraceTool::difftime(lock->wait_start, now);
+      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+                                                                     wait_locks.size(), trx->transaction_id);
     }
-    if (lock->time_so_far > wait_so_far)
+  }
+  estimate_mutex_exit();
+  
+  vector<lock_t *> merged_locks;
+  vector<lock_t *> read_locks;
+  vector<lock_t *> *min_order = NULL;
+  
+  merge_read_locks(wait_locks, merged_locks, read_locks);
+  sort(merged_locks.begin(), merged_locks.end(), compare_by_process);
+  vector<lock_t *> odd_after;
+  vector<lock_t *> even_after;
+  double mean_latency = TraceTool::mean_latency;
+  
+  if (merged_locks.size() > 2)
+  {
+    var_mutex_enter();
+    rearrange(merged_locks, odd_after, true);
+    rearrange(merged_locks, even_after, false);
+    double min_heu1 = min_var_order(odd_after, wait_locks, read_locks);
+    double min_heu2 = min_var_order(even_after, wait_locks, read_locks);
+    min_order = min_heu1 < min_heu2 ? &odd_after : &even_after;
+    var_mutex_exit();
+  }
+  else
+  {
+    min_order = &merged_locks;
+  }
+  
+  
+  for (ulint index = 0, size = min_order->size(); index < size; ++index)
+  {
+    lock_t *lock = (*min_order)[index];
+    lock->ranking = index;
+    if (lock_get_mode(lock) == LOCK_S)
     {
-      ulint work_so_far = lock->time_so_far - wait_so_far;
-      ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-      ulint total = estimate(work_so_far, wait_so_far, num_locks, lock->trx->type);
-      if (total > lock->time_so_far)
+      lock->time_so_far = lock->original_time_so_far;
+      lock->process_time = lock->original_time_so_far;
+      for (ulint read_index = 0, read_size = read_locks.size();
+           read_index < read_size; ++read_index)
       {
-        lock->process_time = total - lock->time_so_far;
+        read_locks[read_index]->ranking = index;
       }
-      
-//      if (trx->is_user_trx)
-//      {
-//        TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks, trx->transaction_id);
-//      }
-    }
-    else
-    {
-      TraceTool::get_instance()->get_log() << "!!!!!Error occurred!!!!!" << endl;
     }
   }
   
-  vector<int> rankings(waiting_locks.size());
-  list<vector<int> > ranking_enumerations;
-  enumerate_rankings(rankings, 0, waiting_locks.size() - 1, ranking_enumerations);
-  remove_invalid_ranking(waiting_locks, granted_locks, ranking_enumerations);
-  ut_a(ranking_enumerations.size() > 0);
-  int granted_size = granted_locks.size();
-  
-  double min_variance = std::numeric_limits<double>::max();
-  vector<int> *min_enum = NULL;
-  var_mutex_enter();
-  for (list<vector<int> >::iterator iterator = ranking_enumerations.begin();
-       iterator != ranking_enumerations.end(); ++iterator)
+  lock_t *lock = wait_locks[0];
+  bool do_monitor = lock->un_member.rec_lock.space == 34 &&
+                    lock->un_member.rec_lock.page_no == 3 &&
+                    lock_rec_find_set_bit(lock) == 30 && false;
+  if (do_monitor)
   {
-    vector<int> &enumeration = *iterator;
-    for (ulint index = 0, size = enumeration.size(); index < size; ++index)
+    ofstream &log = TraceTool::get_instance()->get_log();
+    log << min_order->size() << "," << read_locks.size() << endl;
+    log << "  mean_latency = " << mean_latency << ";" << endl;
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
     {
-      waiting_locks[index]->ranking = enumeration[index];
+      lock_t *lock = wait_locks[index];
+      trx_t *trx = lock->trx;
+      log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
+          << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
     }
-    sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-    vector<ulint> rolling_sum;
-    cumsum(all_locks, rolling_sum);
-    double variance = var(rolling_sum);
-    if (variance < min_variance)
-    {
-      min_variance = variance;
-      min_enum = &enumeration;
-    }
-  }
-  var_mutex_exit();
-  
-  int smallest_ranking = INT_MAX;
-  for (ulint index = 0, size = min_enum->size(); index < size; ++index)
-  {
-    lock_t *lock = waiting_locks[index];
-    lock->ranking = (*min_enum)[index];
-    if (lock->ranking < smallest_ranking)
-    {
-      smallest_ranking = lock->ranking;
-      locks_to_grant.clear();
-      locks_to_grant.push_back(lock);
-    }
-    else if (lock->ranking == smallest_ranking)
-    {
-      locks_to_grant.push_back(lock);
-    }
+    log << endl;
   }
   
-  if (granted_locks.size() > 0 &&
-      smallest_ranking != 0)
+  
+  for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
-    locks_to_grant.clear();
+    if (wait_locks[index]->ranking == 0)
+    {
+      locks_to_grant.push_back(wait_locks[index]);
+    }
   }
 }
 
@@ -759,17 +962,5 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
-  free(tpcc_work_wait);
-  free(tpcc_estimated);
-  free(new_order_work_wait);
-  free(new_order_estimated);
-  free(payment_work_wait);
-  free(payment_estimated);
-  free(order_status_work_wait);
-  free(order_status_estimated);
-  free(delivery_work_wait);
-  free(delivery_estimated);
-  free(stock_level_work_wait);
-  free(stock_level_estimated);
 }
 

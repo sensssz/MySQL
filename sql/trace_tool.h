@@ -19,6 +19,8 @@
 
 #define var_mutex_enter() pthread_mutex_lock(&TraceTool::var_mutex)
 #define var_mutex_exit() pthread_mutex_unlock(&TraceTool::var_mutex)
+#define estimate_mutex_enter() pthread_mutex_lock(&TraceTool::last_second_mutex); pthread_rwlock_rdlock(&TraceTool::data_lock);
+#define estimate_mutex_exit() pthread_mutex_unlock(&TraceTool::last_second_mutex); pthread_rwlock_unlock(&TraceTool::data_lock)
 
 typedef unsigned long int ulint;
 typedef unsigned int uint;
@@ -26,7 +28,6 @@ typedef unsigned int uint;
 using std::ofstream;
 using std::list;
 using std::vector;
-using std::deque;
 using std::endl;
 using std::unordered_map;
 using std::string;
@@ -71,10 +72,17 @@ typedef struct work_wait
     ulint num_of_wait_locks;
     ulint total_wait_locks;
     ulint total_granted_locks;
-    double mean_work;
-    double mean_wait;
+    double mean_work_of_all;
+    double mean_wait_of_all;
     double cpu_usage;
-    double avg_latency_last_second;
+    double avg_latency_of_same_past_second;
+    double avg_work_of_same_past_second;
+    double avg_wait_of_same_past_second;
+    double avg_latency_of_all_past_second;
+    double avg_latency_of_same_past_5_seconds;
+    double avg_latency_of_same_last_20;
+    double max_latency_of_same_last_50;
+    double avg_latency_of_trx_hold_locks;
     ulint time_so_far;
     ulint transaction_id;
 } work_wait;
@@ -97,7 +105,6 @@ private:
     
     ofstream log_file;                      /*!< An log file for outputing debug messages. */
     
-    static pthread_rwlock_t data_lock;      /*!< A read-write lock for protecting function_times. */
     vector<vector<ulint> > function_times;  /*!< Stores the running time of the child functions
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
@@ -108,9 +115,8 @@ private:
     vector<ulint> transaction_ids;          /*!< Corresponding transaction ID for time so far. */
     static pthread_mutex_t estimate_mutex;
     
-    deque<ulint> last_second_commit_times;  /*!< Stores the commit time of transactions. */
-    deque<ulint> last_second_transaction_ids;
-    static pthread_mutex_t last_second_mutex;
+    vector<ulint> last_second_commit_times;  /*!< Stores the commit time of transactions. */
+    vector<ulint> last_second_transaction_ids;
     
     vector<work_wait> work_waits;
     static pthread_mutex_t work_wait_mutex;
@@ -124,6 +130,7 @@ private:
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
+    static pthread_rwlock_t data_lock;      /*!< A read-write lock for protecting function_times. */
     static __thread ulint current_transaction_id;   /*!< Each thread can execute only one transaction at
                                                          a time. This is the ID of the current transactions. */
     
@@ -138,13 +145,13 @@ public:
     static ulint num_trans;                 /*!< Number of successfully submitted transactions. */
     static double mean_latency;             /*!< Mean of total wait time of successfully committed
                                              transactions*/
-    static double var_latency;              /*!< Variance of total wait time of successfully committed
-                                             transactions*/
-    static double mean_work;
-    static double mean_wait;
+    static double mean_work_of_all;
+    static double mean_wait_of_all;
     static ulint total_wait_locks;
     static ulint total_granted_locks;
+    static ulint max_num_locks;
     static pthread_mutex_t var_mutex;
+    static pthread_mutex_t last_second_mutex;
     
     static double cpu_usage;
     
@@ -184,9 +191,6 @@ public:
     /********************************************************************//**
     Sumbits the total wait time of a transaction. */
     void update_ctv(ulint latency);
-    /********************************************************************//**
-    Sumbits the total wait time of a transaction. */
-    void update_ctv(ulint latency, ulint &num_trans, double &mean, double &variance);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
@@ -204,8 +208,11 @@ public:
     
     /********************************************************************//**
     Add a record about work time and wait time. */
-    void add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                       ulint num_of_wait_locks, ulint time_so_far, ulint transaction_id);
+    ulint *add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                       ulint num_of_wait_locks, ulint transaction_id);
+    
+    work_wait parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                       ulint num_of_wait_locks, ulint transaction_id);
 
     /********************************************************************//**
     Add a record about estimating latency using isotonic models. */

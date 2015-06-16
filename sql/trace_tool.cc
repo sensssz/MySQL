@@ -13,7 +13,7 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define MONITOR
+#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -21,8 +21,10 @@
 #define DELIVERY_MARKER "SELECT NO_O_ID FROM NEW_ORDER WHERE NO_D_ID ="
 #define STOCK_LEVEL_MARKER "SELECT D_NEXT_O_ID FROM DISTRICT WHERE D_W_ID ="
 
-#define WRITER_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
-#define READ_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
+#define WRITE1_MARKER "UPDATE Snape SET NAME='Marvin' WHERE ID = 1"
+#define WRITE2_MARKER "UPDATE Snape SET NAME='Severus' WHERE ID = 1"
+#define READ1_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
+#define READ2_MARKER "SELECT NAME FROM Snape WHERE ID = 1"
 
 #define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
 
@@ -53,12 +55,12 @@ __thread transaction_type TraceTool::type = NONE;
 
 ulint TraceTool::num_trans = 0;
 double TraceTool::mean_latency = 0;
-double TraceTool::var_latency = 0;
-double TraceTool::mean_work = 0;
-double TraceTool::mean_wait = 0;
+double TraceTool::mean_work_of_all = 0;
+double TraceTool::mean_wait_of_all = 0;
 ulint TraceTool::total_wait_locks = 0;
 ulint TraceTool::total_granted_locks= 0;
 double TraceTool::cpu_usage = 0;
+ulint TraceTool::max_num_locks = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::estimate_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -173,7 +175,9 @@ TraceTool::TraceTool() : function_times()
   times_so_far.reserve(500000);
   estimated_remainings.reserve(500000);
   transaction_ids.reserve(500000);
+#ifdef WORK_WAIT
   work_waits.reserve(5000000);
+#endif
   
   srand(time(0));
 }
@@ -256,12 +260,12 @@ void *TraceTool::check_write_log(void *arg)
       
       num_trans = 0;
       mean_latency = 0;
-      var_latency = 0;
-      mean_work = 0;
-      mean_wait = 0;
+      mean_work_of_all = 0;
+      mean_wait_of_all = 0;
       total_wait_locks = 0;
       total_granted_locks= 0;
       cpu_usage = 0;
+      max_num_locks = 0;
       
       /* Dump data in the old instance to log files and
          reclaim memory. */
@@ -361,7 +365,9 @@ void TraceTool::set_query(const char *new_query)
       commit_successful = false;
     }
     
+    pthread_rwlock_rdlock(&data_lock);
     transaction_types[current_transaction_id] = type;
+    pthread_rwlock_unlock(&data_lock);
     /* Reset the value of new_transaction. */
     new_transaction = false;
   }
@@ -383,27 +389,14 @@ void TraceTool::update_ctv(ulint latency)
 {
   ++num_trans;
   double old_mean = mean_latency;
-  double old_variance = var_latency;
   mean_latency = old_mean + (latency - old_mean) / num_trans;
-  var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
   
 #ifdef WORK_WAIT
   ulint wait_time = function_times[0][current_transaction_id];
   ulint work_time = latency - wait_time;
-  mean_work = mean_work + (work_time - mean_work) / num_trans;
-  mean_wait = mean_wait + (wait_time - mean_wait) / num_trans;
+  mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans;
+  mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans;
 #endif
-}
-
-/********************************************************************//**
-Sumbits the total wait time of a transaction. */
-void TraceTool::update_ctv(ulint latency, ulint &num_trans, double &mean, double &variance)
-{
-  ++num_trans;
-  double old_mean = mean;
-  double old_variance = variance;
-  mean = old_mean + (latency - old_mean) / num_trans;
-  variance = old_variance + (latency - old_mean) * (latency - mean);
 }
 
 void TraceTool::end_transaction()
@@ -425,16 +418,11 @@ void TraceTool::end_transaction()
     pthread_mutex_lock(&var_mutex);
     update_ctv(latency);
     pthread_mutex_unlock(&var_mutex);
+    
     pthread_mutex_lock(&last_second_mutex);
-    ulint now_in_micro = now_micro();
-    last_second_commit_times.push_back(now_micro());
+    ulint now_in_seconds = time(NULL);
+    last_second_commit_times.push_back(now_in_seconds);
     last_second_transaction_ids.push_back(current_transaction_id);
-    while (last_second_commit_times.size() > 0 &&
-           now_in_micro - last_second_commit_times[0] > 2000000)
-    {
-      last_second_commit_times.pop_front();
-      last_second_transaction_ids.pop_front();
-    }
     pthread_mutex_unlock(&last_second_mutex);
   }
 #endif
@@ -451,8 +439,8 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                              ulint num_of_wait_locks, ulint time_so_far, ulint transaction_id)
+ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                              ulint num_of_wait_locks, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
@@ -461,37 +449,201 @@ void TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_lo
   record.num_of_wait_locks = num_of_wait_locks;
   record.total_wait_locks = total_wait_locks;
   record.total_granted_locks = total_granted_locks;
-  record.mean_work = mean_work;
-  record.mean_wait = mean_wait;
+  record.mean_work_of_all = mean_work_of_all;
+  record.mean_wait_of_all = mean_wait_of_all;
   record.cpu_usage = cpu_usage;
-  record.avg_latency_last_second = 0;
-  record.time_so_far = time_so_far;
+  record.avg_latency_of_same_past_second = 0;
+  record.avg_work_of_same_past_second = 0;
+  record.avg_wait_of_same_past_second = 0;
+  record.avg_latency_of_all_past_second = 0;
+  record.avg_latency_of_same_past_5_seconds = 0;
+  record.avg_latency_of_same_last_20 = 0;
+  record.max_latency_of_same_last_50 = 0;
+  record.avg_latency_of_trx_hold_locks = 0;
   record.transaction_id = transaction_id;
   
   transaction_type type = transaction_types[transaction_id];
-  ulint num_of_trx = 0;
-  double sum_latency = 0;
+  ulint num_trx_of_all_past_second = 0;
+  ulint num_trx_of_same_past_second = 0;
+  ulint num_trx_of_same_past_5_seconds = 0;
+  ulint num_trx_of_same_last_20 = 0;
+  ulint now = time(NULL);
+  bool past_second = true;
+  bool past_5_seconds = true;
   
   pthread_mutex_lock(&last_second_mutex);
-  for (ulint index = 0, size = last_second_commit_times.size();
-       index < size; ++index)
+  ulint size = last_second_commit_times.size();
+  pthread_rwlock_rdlock(&data_lock);
+  for (int index = size - 1; index >= 0; --index)
   {
+    ulint commit_time = last_second_commit_times[index];
+    past_second = now - commit_time <= 2;
+    past_5_seconds = now - commit_time <= 6;
+    
     ulint trx_id = last_second_transaction_ids[index];
-    if (type == transaction_types[trx_id])
+    ulint latency = function_times.back()[trx_id];
+    transaction_type trx_type = transaction_types[trx_id];
+    
+    if (past_second)
     {
-      sum_latency += function_times.back()[trx_id];
-      ++num_of_trx;
+      record.avg_latency_of_all_past_second += latency;
+      ++num_trx_of_all_past_second;
+      if (type == trx_type)
+      {
+        ulint wait_time = function_times[0][trx_id];
+        ulint work_time = latency - wait_time;
+        record.avg_latency_of_same_past_second += latency;
+        record.avg_work_of_same_past_second += work_time;
+        record.avg_wait_of_same_past_second += wait_time;
+        ++num_trx_of_same_past_second;
+      }
+    }
+    if (past_5_seconds &&
+        type == trx_type)
+    {
+      record.avg_latency_of_same_past_5_seconds += latency;
+      ++num_trx_of_same_past_second;
+    }
+    if (size - index < 21)
+    {
+      record.avg_latency_of_same_last_20 += latency;
+      ++num_trx_of_same_last_20;
+    }
+    if (size - index < 51 &&
+        latency > record.max_latency_of_same_last_50)
+    {
+      record.max_latency_of_same_last_50 = latency;
+    }
+    
+    if (!past_5_seconds && !(size - index < 51))
+    {
+      break;
     }
   }
+  pthread_rwlock_unlock(&data_lock);
   pthread_mutex_unlock(&last_second_mutex);
-  if (num_of_trx > 0)
+  
+  if (num_trx_of_all_past_second > 0)
   {
-    record.avg_latency_last_second = sum_latency / num_of_trx;
+    record.avg_latency_of_all_past_second /= num_trx_of_all_past_second;
+  }
+  if (num_trx_of_same_past_second > 0)
+  {
+    record.avg_latency_of_same_past_second /= num_trx_of_same_past_second;
+    record.avg_work_of_same_past_second /= num_trx_of_same_past_second;
+    record.avg_wait_of_same_past_second /= num_trx_of_same_past_second;
+  }
+  if (num_trx_of_same_past_5_seconds > 0)
+  {
+    record.avg_latency_of_same_past_5_seconds /= num_trx_of_same_past_5_seconds;
   }
   
+  ulint *time_so_far = NULL;
   pthread_mutex_lock(&work_wait_mutex);
   work_waits.push_back(record);
+  time_so_far = &(work_waits.back().time_so_far);
   pthread_mutex_unlock(&work_wait_mutex);
+  
+  return time_so_far;
+}
+
+
+work_wait TraceTool::parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                              ulint num_of_wait_locks, ulint transaction_id)
+{
+  work_wait record;
+  record.work_so_far = work_so_far;
+  record.wait_so_far = wait_so_far;
+  record.num_locks_so_far = num_locks;
+  record.num_of_wait_locks = num_of_wait_locks;
+  record.total_wait_locks = total_wait_locks;
+  record.total_granted_locks = total_granted_locks;
+  record.mean_work_of_all = mean_work_of_all;
+  record.mean_wait_of_all = mean_wait_of_all;
+  record.cpu_usage = cpu_usage;
+  record.avg_latency_of_same_past_second = 0;
+  record.avg_work_of_same_past_second = 0;
+  record.avg_wait_of_same_past_second = 0;
+  record.avg_latency_of_all_past_second = 0;
+  record.avg_latency_of_same_past_5_seconds = 0;
+  record.avg_latency_of_same_last_20 = 0;
+  record.max_latency_of_same_last_50 = 0;
+  record.avg_latency_of_trx_hold_locks = 0;
+  record.transaction_id = transaction_id;
+  
+  transaction_type type = transaction_types[transaction_id];
+  ulint num_trx_of_all_past_second = 0;
+  ulint num_trx_of_same_past_second = 0;
+  ulint num_trx_of_same_past_5_seconds = 0;
+  ulint num_trx_of_same_last_20 = 0;
+  ulint now = time(NULL);
+  bool past_second = true;
+  bool past_5_seconds = true;
+  
+  ulint size = last_second_commit_times.size();
+  for (int index = size - 1; index >= 0; --index)
+  {
+    ulint commit_time = last_second_commit_times[index];
+    past_second = now - commit_time <= 2;
+    past_5_seconds = now - commit_time <= 6;
+    
+    ulint trx_id = last_second_transaction_ids[index];
+    ulint latency = function_times.back()[trx_id];
+    transaction_type trx_type = transaction_types[trx_id];
+    
+    if (past_second)
+    {
+      record.avg_latency_of_all_past_second += latency;
+      ++num_trx_of_all_past_second;
+      if (type == trx_type)
+      {
+        ulint wait_time = function_times[0][trx_id];
+        ulint work_time = latency - wait_time;
+        record.avg_latency_of_same_past_second += latency;
+        record.avg_work_of_same_past_second += work_time;
+        record.avg_wait_of_same_past_second += wait_time;
+        ++num_trx_of_same_past_second;
+      }
+    }
+    if (past_5_seconds &&
+        type == trx_type)
+    {
+      record.avg_latency_of_same_past_5_seconds += latency;
+      ++num_trx_of_same_past_second;
+    }
+    if (size - index < 21)
+    {
+      record.avg_latency_of_same_last_20 += latency;
+      ++num_trx_of_same_last_20;
+    }
+    if (size - index < 51 &&
+        latency > record.max_latency_of_same_last_50)
+    {
+      record.max_latency_of_same_last_50 = latency;
+    }
+    
+    if (!past_5_seconds && !(size - index < 51))
+    {
+      break;
+    }
+  }
+  
+  if (num_trx_of_all_past_second > 0)
+  {
+    record.avg_latency_of_all_past_second /= num_trx_of_all_past_second;
+  }
+  if (num_trx_of_same_past_second > 0)
+  {
+    record.avg_latency_of_same_past_second /= num_trx_of_same_past_second;
+    record.avg_work_of_same_past_second /= num_trx_of_same_past_second;
+    record.avg_wait_of_same_past_second /= num_trx_of_same_past_second;
+  }
+  if (num_trx_of_same_past_5_seconds > 0)
+  {
+    record.avg_latency_of_same_past_5_seconds /= num_trx_of_same_past_5_seconds;
+  }
+  
+  return record;
 }
 
 void TraceTool::add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id)
@@ -652,12 +804,31 @@ void TraceTool::write_isotonic_accuracy()
 
 void TraceTool::write_work_wait()
 {
-  ofstream tpcc("work_wait/tpcc");
-  ofstream new_order("work_wait/new_order");
-  ofstream payment("work_wait/payment");
-  ofstream order_status("work_wait/order_status");
-  ofstream delivery("work_wait/delivery");
-  ofstream stock_level("work_wait/stock_level");
+  ofstream tpcc("work_wait/tpcc.csv");
+  ofstream new_order("work_wait/new_order.csv");
+  ofstream payment("work_wait/payment.csv");
+  ofstream order_status("work_wait/order_status.csv");
+  ofstream delivery("work_wait/delivery.csv");
+  ofstream stock_level("work_wait/stock_level.csv");
+  
+  string attributes("type,work_so_far,wait_so_far,"
+                    "number_of_locks_so_far,number_of_wait_locks_in_current_queue,"
+                    "number_of_all_wait_locks,number_of_all_granted_locks,"
+                    "mean_work_time_of_all_trx,mean_wait_time_of_all_trx,"
+                    "cpu_usage,mean_latency_of_trx_of_this_type_over_the_past_second,"
+                    "mean_work_time_of_trx_of_this_type_over_the_past_second,"
+                    "mean_wait_time_of_trx_of_this_type_over_the_past_second,"
+                    "mean_latency_of_all_transactions_over_the_past_second,"
+                    "mean_latency_of_other_transactions_of_this_type_over_the_past_5_seconds,"
+                    "mean_latency_of_the_last_20_transactions_of_this_type,"
+                    "max_latency_of_the_last_50_transactions_of_this_type,"
+                    "actual_remaining");
+  tpcc << attributes << endl;
+  new_order << attributes << endl;
+  payment << attributes << endl;
+  order_status << attributes << endl;
+  delivery << attributes << endl;
+  stock_level << attributes << endl;
   
   for (ulint index = 0, size = work_waits.size();
        index < size; ++index)
@@ -676,12 +847,19 @@ void TraceTool::write_work_wait()
       
       stringstream line;
       
-      line << actual_remaining << "," << type + 1 << "," << record.work_so_far
+      line << "," << type + 1 << "," << record.work_so_far
            << "," << record.wait_so_far << "," << record.num_locks_so_far
            << "," << record.num_of_wait_locks << "," << record.total_wait_locks
-           << "," << record.total_granted_locks << "," << record.mean_work
-           << "," << record.mean_wait << "," << record.cpu_usage
-           << "," << record.avg_latency_last_second << endl;
+           << "," << record.total_granted_locks << "," << record.mean_work_of_all
+           << "," << record.mean_wait_of_all << "," << record.cpu_usage
+           << "," << record.avg_latency_of_same_past_second
+           << "," << record.avg_work_of_same_past_second
+           << "," << record.avg_wait_of_same_past_second
+           << "," << record.avg_latency_of_all_past_second
+           << "," << record.avg_latency_of_same_past_5_seconds
+           << "," << record.avg_latency_of_same_last_20
+           << "," << record.max_latency_of_same_last_50
+           << "," << actual_remaining << endl;
       tpcc << line.str().c_str();
       switch (type)
       {
@@ -718,9 +896,14 @@ void TraceTool::write_work_wait()
 
 void TraceTool::write_log()
 {
-#ifdef WORK_WAIT
+#ifdef ACCURACY
   write_isotonic_accuracy();
+#endif
+#ifdef WORK_WAIT
   write_work_wait();
 #endif
+  ofstream max_lock("max_lock");
+  max_lock << max_num_locks << endl;
+  max_lock.close();
   write_latency("latency/original/");
 }

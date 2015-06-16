@@ -40,7 +40,6 @@ UNIV_INTERN
 void
 LVM_schedule(
   vector<lock_t *> &waiting_locks,  /*!< waiting locks */
-  vector<lock_t *> &granted_locks,  /*!< granted locks */
   vector<lock_t *> &locks_to_grant);/*!< locks to grant */
 
 /*************************************************************//**
