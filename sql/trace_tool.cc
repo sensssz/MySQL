@@ -471,9 +471,7 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
   bool past_second = true;
   bool past_5_seconds = true;
   
-  pthread_mutex_lock(&last_second_mutex);
   ulint size = last_second_commit_times.size();
-  pthread_rwlock_rdlock(&data_lock);
   for (int index = size - 1; index >= 0; --index)
   {
     ulint commit_time = last_second_commit_times[index];
@@ -520,8 +518,6 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
       break;
     }
   }
-  pthread_rwlock_unlock(&data_lock);
-  pthread_mutex_unlock(&last_second_mutex);
   
   if (num_trx_of_all_past_second > 0)
   {
