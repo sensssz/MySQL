@@ -2048,6 +2048,25 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
+  vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
+  vector<lock_t *> locks_to_grant;
+  bool has_batch = false;
+  
+  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+  
+  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
+  {
+    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+    locks_grant(locks_to_grant, buf_block_get_space(block),
+                buf_block_get_page_no(block), heap_no, trx);
+    if (!lock_get_wait(lock))
+    {
+      return DB_SUCCESS_LOCKED_REC;
+    }
+  }
+  
   
   /* Release the mutex to obey the latching order.
   This is safe, because lock_deadlock_check_and_resolve()
@@ -2786,6 +2805,7 @@ lock_next_to_grant(
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   
+  ulint size = 0;
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
        lock != NULL;
        lock = lock_rec_get_next(heap_no, lock))
@@ -2810,7 +2830,11 @@ lock_next_to_grant(
       {
         locks_to_grant.push_back(lock);
       }
-      wait_locks.push_back(lock);
+      if (size < MAX_BATCH_SIZE)
+      {
+        wait_locks.push_back(lock);
+        ++size;
+      }
     }
   }
   
@@ -2821,10 +2845,6 @@ lock_next_to_grant(
     if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
         locks_to_grant.size() == 0) /* No batch in queue */
     {
-      if (wait_locks.size() > TraceTool::max_num_locks)
-      {
-        TraceTool::max_num_locks = wait_locks.size();
-      }
       LVM_schedule(wait_locks, granted_locks, locks_to_grant);
     }
   }
@@ -2915,7 +2935,7 @@ lock_rec_dequeue_from_page(
     lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
     locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
     
-//    timespec now = TraceTool::get_time();
+    timespec now = TraceTool::get_time();
     /* Find other locks that can also be granted. */
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;

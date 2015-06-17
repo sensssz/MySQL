@@ -610,7 +610,7 @@ work_wait TraceTool::parameters(ulint work_so_far, ulint wait_so_far, ulint num_
         type == trx_type)
     {
       record.avg_latency_of_same_past_5_seconds += latency;
-      ++num_trx_of_same_past_second;
+      ++num_trx_of_same_past_5_seconds;
     }
     if (size - index < 21)
     {
@@ -642,6 +642,10 @@ work_wait TraceTool::parameters(ulint work_so_far, ulint wait_so_far, ulint num_
   if (num_trx_of_same_past_5_seconds > 0)
   {
     record.avg_latency_of_same_past_5_seconds /= num_trx_of_same_past_5_seconds;
+  }
+  if (num_trx_of_same_last_20 > 0)
+  {
+    record.avg_latency_of_same_last_20 /= num_trx_of_same_last_20;
   }
   
   return record;
@@ -842,13 +846,20 @@ void TraceTool::write_work_wait()
       ulint total_wait = function_times[0][record.transaction_id];
       ulint total_work = latency - total_wait;
       ulint actual_remaining = latency - record.time_so_far;
+      
+      if (latency < total_wait ||
+          total_wait < record.wait_so_far ||
+          total_work < record.work_so_far)
+      {
+        continue;
+      }
       ut_a(latency > total_wait);
-      ut_a(total_wait > record.wait_so_far);
+      ut_a(total_wait >= record.wait_so_far);
       ut_a(total_work > record.work_so_far);
       
       stringstream line;
       
-      line << "," << type + 1 << "," << record.work_so_far
+      line << type + 1 << "," << record.work_so_far
            << "," << record.wait_so_far << "," << record.num_locks_so_far
            << "," << record.num_of_wait_locks << "," << record.total_wait_locks
            << "," << record.total_granted_locks << "," << record.mean_work_of_all
