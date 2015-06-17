@@ -847,7 +847,7 @@ void TraceTool::write_work_wait()
       
       stringstream line;
       
-      line << "," << type + 1 << "," << record.work_so_far
+      line << type + 1 << "," << record.work_so_far
            << "," << record.wait_so_far << "," << record.num_locks_so_far
            << "," << record.num_of_wait_locks << "," << record.total_wait_locks
            << "," << record.total_granted_locks << "," << record.mean_work_of_all
