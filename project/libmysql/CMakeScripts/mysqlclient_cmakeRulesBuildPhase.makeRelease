@@ -15,4 +15,4 @@ all: \
 /Users/sens/Developer/mysql-5.6.23/project/zlib/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/libzlib.a\
 /Users/sens/Developer/mysql-5.6.23/project/extra/yassl/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/libyassl.a\
 /Users/sens/Developer/mysql-5.6.23/project/extra/yassl/taocrypt/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/libtaocrypt.a
-	/usr/local/Cellar/cmake/3.0.1/bin/cmake -E touch /Users/sens/Developer/mysql-5.6.23/project/libmysql/mysqlclient_depends.c
+	/usr/local/Cellar/cmake/3.2.2/bin/cmake -E touch /Users/sens/Developer/mysql-5.6.23/project/libmysql/mysqlclient_depends.c

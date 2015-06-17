@@ -7,5 +7,5 @@ all: \
 
 /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/libmysqlclient_r.a: \
 /Users/sens/Developer/mysql-5.6.23/project/libmysql/MinSizeRel/libmysqlclient.a
-	cd /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME) && /usr/local/Cellar/cmake/3.0.1/bin/cmake -E remove -f /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/libmysqlclient_r.a
-	cd /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME) && /usr/local/Cellar/cmake/3.0.1/bin/cmake -E create_symlink libmysqlclient.a libmysqlclient_r.a
+	cd /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME) && /usr/local/Cellar/cmake/3.2.2/bin/cmake -E remove -f /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/libmysqlclient_r.a
+	cd /Users/sens/Developer/mysql-5.6.23/project/libmysql/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME) && /usr/local/Cellar/cmake/3.2.2/bin/cmake -E create_symlink libmysqlclient.a libmysqlclient_r.a

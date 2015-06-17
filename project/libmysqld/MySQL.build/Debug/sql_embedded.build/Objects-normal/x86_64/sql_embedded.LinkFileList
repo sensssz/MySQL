@@ -48,6 +48,7 @@
 /Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/lock.o
 /Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/log.o
 /Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/log_event.o
+/Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/m5p.o
 /Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/mdl.o
 /Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/mf_iocache.o
 /Users/sens/Developer/mysql-5.6.23/project/libmysqld/MySQL.build/Debug/sql_embedded.build/Objects-normal/x86_64/my_decimal.o

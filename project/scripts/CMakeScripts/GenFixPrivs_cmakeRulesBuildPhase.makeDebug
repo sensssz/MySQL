@@ -9,5 +9,5 @@ all: \
 /Users/sens/Developer/mysql-5.6.23/project/scripts/Debug/comp_sql\
 /Users/sens/Developer/mysql-5.6.23/scripts/mysql_system_tables.sql\
 /Users/sens/Developer/mysql-5.6.23/scripts/mysql_system_tables_fix.sql
-	cd /Users/sens/Developer/mysql-5.6.23/project/scripts && /usr/local/Cellar/cmake/3.0.1/bin/cmake -E chdir /Users/sens/Developer/mysql-5.6.23/scripts /bin/cat mysql_system_tables.sql mysql_system_tables_fix.sql > /Users/sens/Developer/mysql-5.6.23/project/scripts/mysql_fix_privilege_tables.sql
+	cd /Users/sens/Developer/mysql-5.6.23/project/scripts && /usr/local/Cellar/cmake/3.2.2/bin/cmake -E chdir /Users/sens/Developer/mysql-5.6.23/scripts /bin/cat mysql_system_tables.sql mysql_system_tables_fix.sql > /Users/sens/Developer/mysql-5.6.23/project/scripts/mysql_fix_privilege_tables.sql
 	cd /Users/sens/Developer/mysql-5.6.23/project/scripts && /Users/sens/Developer/mysql-5.6.23/project/scripts/Debug/comp_sql mysql_fix_privilege_tables mysql_fix_privilege_tables.sql mysql_fix_privilege_tables_sql.c

@@ -71,7 +71,7 @@ if(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "SharedL
         )
       if(EXISTS "${file}" AND
          NOT IS_SYMLINK "${file}")
-        execute_process(COMMAND "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/install_name_tool"
+        execute_process(COMMAND "/usr/bin/install_name_tool"
           -id "libmysqlclient.18.dylib"
           "${file}")
         if(CMAKE_INSTALL_DO_STRIP)
@@ -90,7 +90,7 @@ if(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "SharedL
         )
       if(EXISTS "${file}" AND
          NOT IS_SYMLINK "${file}")
-        execute_process(COMMAND "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/install_name_tool"
+        execute_process(COMMAND "/usr/bin/install_name_tool"
           -id "libmysqlclient.18.dylib"
           "${file}")
         if(CMAKE_INSTALL_DO_STRIP)
@@ -109,7 +109,7 @@ if(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "SharedL
         )
       if(EXISTS "${file}" AND
          NOT IS_SYMLINK "${file}")
-        execute_process(COMMAND "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/install_name_tool"
+        execute_process(COMMAND "/usr/bin/install_name_tool"
           -id "libmysqlclient.18.dylib"
           "${file}")
         if(CMAKE_INSTALL_DO_STRIP)
@@ -128,7 +128,7 @@ if(NOT CMAKE_INSTALL_COMPONENT OR "${CMAKE_INSTALL_COMPONENT}" STREQUAL "SharedL
         )
       if(EXISTS "${file}" AND
          NOT IS_SYMLINK "${file}")
-        execute_process(COMMAND "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/install_name_tool"
+        execute_process(COMMAND "/usr/bin/install_name_tool"
           -id "libmysqlclient.18.dylib"
           "${file}")
         if(CMAKE_INSTALL_DO_STRIP)

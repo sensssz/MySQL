@@ -6,4 +6,4 @@ all: \
 
 
 RUN_TESTS_buildpart_0: 
-	/usr/local/Cellar/cmake/3.0.1/bin/ctest --force-new-ctest-process -C $(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)
+	/usr/local/Cellar/cmake/3.2.2/bin/ctest --force-new-ctest-process -C $(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)
