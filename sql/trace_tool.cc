@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <cassert>
 
+#include "m5p.cc"
+
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
