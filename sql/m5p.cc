@@ -1244,7 +1244,7 @@ new_order_LM78(work_wait &parameters) {
 	+ 479426915.4123;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
-static
+
 double
 new_order_estimate(work_wait &parameters){
 
@@ -1254,11 +1254,11 @@ new_order_estimate(work_wait &parameters){
 
       if (parameters.work_so_far <= 23465.5) {
         return new_order_LM1(parameters);
-      } else if (parameters.work_so_far >  23465.5) {
+      } else {
 
         if (parameters.num_of_wait_locks <= 1.5) {
           return new_order_LM2(parameters);
-        } else if (parameters.num_of_wait_locks >  1.5) {
+        } else {
 
           if (parameters.num_locks_so_far <= 23.5) {
 
@@ -1266,46 +1266,46 @@ new_order_estimate(work_wait &parameters){
 
               if (parameters.total_wait_locks <= 47.5) {
                 return new_order_LM3(parameters);
-              } else if (parameters.total_wait_locks >  47.5) {
+              } else {
 
                 if (parameters.avg_latency_of_same_past_second <= 78297850) {
                   return new_order_LM4(parameters);
-                } else if (parameters.avg_latency_of_same_past_second >  78297850) {
+                } else {
                   return new_order_LM5(parameters);
                 }
               }
-            } else if (parameters.work_so_far >  36651.5) {
+            } else {
               return new_order_LM6(parameters);
             }
-          } else if (parameters.num_locks_so_far >  23.5) {
+          } else {
             return new_order_LM7(parameters);
           }
         }
       }
-    } else if (parameters.work_so_far >  28374913.5) {
+    } else {
 
       if (parameters.work_so_far <= 85944195.5) {
 
         if (parameters.mean_wait_of_all <= 27427500) {
           return new_order_LM8(parameters);
-        } else if (parameters.mean_wait_of_all >  27427500) {
+        } else {
 
           if (parameters.work_so_far <= 39877780) {
             return new_order_LM9(parameters);
-          } else if (parameters.work_so_far >  39877780) {
+          } else {
 
             if (parameters.total_wait_locks <= 74.5) {
               return new_order_LM10(parameters);
-            } else if (parameters.total_wait_locks >  74.5) {
+            } else {
               return new_order_LM11(parameters);
             }
           }
         }
-      } else if (parameters.work_so_far >  85944195.5) {
+      } else {
         return new_order_LM12(parameters);
       }
     }
-  } else if (parameters.total_wait_locks >  94.5) {
+  } else {
 
     if (parameters.work_so_far <= 4559141.5) {
 
@@ -1313,44 +1313,44 @@ new_order_estimate(work_wait &parameters){
 
         if (parameters.total_wait_locks <= 146.5) {
           return new_order_LM13(parameters);
-        } else if (parameters.total_wait_locks >  146.5) {
+        } else {
 
           if (parameters.wait_so_far <= 100907872.5) {
 
             if (parameters.work_so_far <= 51193.5) {
               return new_order_LM14(parameters);
-            } else if (parameters.work_so_far >  51193.5) {
+            } else {
 
               if (parameters.avg_latency_of_same_past_second <= 203300500) {
 
                 if (parameters.total_wait_locks <= 172.5) {
                   return new_order_LM15(parameters);
-                } else if (parameters.total_wait_locks >  172.5) {
+                } else {
 
                   if (parameters.mean_wait_of_all <= 28758500) {
                     return new_order_LM16(parameters);
-                  } else if (parameters.mean_wait_of_all >  28758500) {
+                  } else {
                     return new_order_LM17(parameters);
                   }
                 }
-              } else if (parameters.avg_latency_of_same_past_second >  203300500) {
+              } else {
                 return new_order_LM18(parameters);
               }
             }
-          } else if (parameters.wait_so_far >  100907872.5) {
+          } else {
 
             if (parameters.work_so_far <= 102363.5) {
               return new_order_LM19(parameters);
-            } else if (parameters.work_so_far >  102363.5) {
+            } else {
 
               if (parameters.num_of_wait_locks <= 1.5) {
 
                 if (parameters.work_so_far <= 2726024) {
                   return new_order_LM20(parameters);
-                } else if (parameters.work_so_far >  2726024) {
+                } else {
                   return new_order_LM21(parameters);
                 }
-              } else if (parameters.num_of_wait_locks >  1.5) {
+              } else {
 
                 if (parameters.num_locks_so_far <= 4.5) {
 
@@ -1358,20 +1358,20 @@ new_order_estimate(work_wait &parameters){
 
                     if (parameters.avg_latency_of_same_past_second <= 143684000) {
                       return new_order_LM22(parameters);
-                    } else if (parameters.avg_latency_of_same_past_second >  143684000) {
+                    } else {
                       return new_order_LM23(parameters);
                     }
-                  } else if (parameters.total_wait_locks >  170.5) {
+                  } else {
                     return new_order_LM24(parameters);
                   }
-                } else if (parameters.num_locks_so_far >  4.5) {
+                } else {
                   return new_order_LM25(parameters);
                 }
               }
             }
           }
         }
-      } else if (parameters.total_wait_locks >  223.5) {
+      } else {
 
         if (parameters.wait_so_far <= 153778519) {
 
@@ -1387,42 +1387,42 @@ new_order_estimate(work_wait &parameters){
 
                     if (parameters.work_so_far <= 49029) {
                       return new_order_LM26(parameters);
-                    } else if (parameters.work_so_far >  49029) {
+                    } else {
 
                       if (parameters.wait_so_far <= 10778) {
 
                         if (parameters.mean_wait_of_all <= 56548650) {
                           return new_order_LM27(parameters);
-                        } else if (parameters.mean_wait_of_all >  56548650) {
+                        } else {
                           return new_order_LM28(parameters);
                         }
-                      } else if (parameters.wait_so_far >  10778) {
+                      } else {
                         return new_order_LM29(parameters);
                       }
                     }
-                  } else if (parameters.work_so_far >  51047.5) {
+                  } else {
 
                     if (parameters.wait_so_far <= 11566) {
                       return new_order_LM30(parameters);
-                    } else if (parameters.wait_so_far >  11566) {
+                    } else {
                       return new_order_LM31(parameters);
                     }
                   }
-                } else if (parameters.mean_wait_of_all >  62393150) {
+                } else {
                   return new_order_LM32(parameters);
                 }
-              } else if (parameters.mean_wait_of_all >  67463300) {
+              } else {
                 return new_order_LM33(parameters);
               }
-            } else if (parameters.wait_so_far >  1683907) {
+            } else {
 
               if (parameters.work_so_far <= 48330) {
                 return new_order_LM34(parameters);
-              } else if (parameters.work_so_far >  48330) {
+              } else {
                 return new_order_LM35(parameters);
               }
             }
-          } else if (parameters.mean_wait_of_all >  75469900) {
+          } else {
 
             if (parameters.work_so_far <= 100394) {
 
@@ -1430,22 +1430,22 @@ new_order_estimate(work_wait &parameters){
 
                 if (parameters.avg_latency_of_same_past_second <= 404048000) {
                   return new_order_LM36(parameters);
-                } else if (parameters.avg_latency_of_same_past_second >  404048000) {
+                } else {
 
                   if (parameters.avg_latency_of_same_past_second <= 408707000) {
                     return new_order_LM37(parameters);
-                  } else if (parameters.avg_latency_of_same_past_second >  408707000) {
+                  } else {
                     return new_order_LM38(parameters);
                   }
                 }
-              } else if (parameters.avg_latency_of_same_past_second >  449432500) {
+              } else {
                 return new_order_LM39(parameters);
               }
-            } else if (parameters.work_so_far >  100394) {
+            } else {
 
               if (parameters.work_so_far <= 223628.5) {
                 return new_order_LM40(parameters);
-              } else if (parameters.work_so_far >  223628.5) {
+              } else {
 
                 if (parameters.work_so_far <= 679122.5) {
 
@@ -1453,48 +1453,48 @@ new_order_estimate(work_wait &parameters){
 
                     if (parameters.work_so_far <= 479866) {
                       return new_order_LM41(parameters);
-                    } else if (parameters.work_so_far >  479866) {
+                    } else {
 
                       if (parameters.avg_latency_of_same_past_second <= 505609000) {
                         return new_order_LM42(parameters);
-                      } else if (parameters.avg_latency_of_same_past_second >  505609000) {
+                      } else {
 
                         if (parameters.avg_latency_of_same_past_second <= 544915000) {
                           return new_order_LM43(parameters);
-                        } else if (parameters.avg_latency_of_same_past_second >  544915000) {
+                        } else {
                           return new_order_LM44(parameters);
                         }
                       }
                     }
-                  } else if (parameters.mean_wait_of_all >  86084550) {
+                  } else {
                     return new_order_LM45(parameters);
                   }
-                } else if (parameters.work_so_far >  679122.5) {
+                } else {
                   return new_order_LM46(parameters);
                 }
               }
             }
           }
-        } else if (parameters.wait_so_far >  153778519) {
+        } else {
 
           if (parameters.work_so_far <= 89711) {
             return new_order_LM47(parameters);
-          } else if (parameters.work_so_far >  89711) {
+          } else {
 
             if (parameters.num_of_wait_locks <= 1.5) {
               return new_order_LM48(parameters);
-            } else if (parameters.num_of_wait_locks >  1.5) {
+            } else {
 
               if (parameters.num_locks_so_far <= 5.5) {
                 return new_order_LM49(parameters);
-              } else if (parameters.num_locks_so_far >  5.5) {
+              } else {
                 return new_order_LM50(parameters);
               }
             }
           }
         }
       }
-    } else if (parameters.work_so_far >  4559141.5) {
+    } else {
 
       if (parameters.wait_so_far <= 398279629.5) {
 
@@ -1512,18 +1512,18 @@ new_order_estimate(work_wait &parameters){
 
                     if (parameters.cpu_usage <= 0.977) {
                       return new_order_LM51(parameters);
-                    } else if (parameters.cpu_usage >  0.977) {
+                    } else {
                       return new_order_LM52(parameters);
                     }
-                  } else if (parameters.wait_so_far >  133233226.5) {
+                  } else {
 
                     if (parameters.num_of_wait_locks <= 1.5) {
                       return new_order_LM53(parameters);
-                    } else if (parameters.num_of_wait_locks >  1.5) {
+                    } else {
                       return new_order_LM54(parameters);
                     }
                   }
-                } else if (parameters.total_wait_locks >  249.5) {
+                } else {
 
                   if (parameters.num_of_wait_locks <= 3.5) {
 
@@ -1531,51 +1531,51 @@ new_order_estimate(work_wait &parameters){
 
                       if (parameters.wait_so_far <= 161499545) {
                         return new_order_LM55(parameters);
-                      } else if (parameters.wait_so_far >  161499545) {
+                      } else {
 
                         if (parameters.num_of_wait_locks <= 1.5) {
                           return new_order_LM56(parameters);
-                        } else if (parameters.num_of_wait_locks >  1.5) {
+                        } else {
                           return new_order_LM57(parameters);
                         }
                       }
-                    } else if (parameters.avg_latency_of_same_past_second >  392658000) {
+                    } else {
 
                       if (parameters.num_locks_so_far <= 9.5) {
                         return new_order_LM58(parameters);
-                      } else if (parameters.num_locks_so_far >  9.5) {
+                      } else {
                         return new_order_LM59(parameters);
                       }
                     }
-                  } else if (parameters.num_of_wait_locks >  3.5) {
+                  } else {
                     return new_order_LM60(parameters);
                   }
                 }
-              } else if (parameters.num_locks_so_far >  12.5) {
+              } else {
                 return new_order_LM61(parameters);
               }
-            } else if (parameters.work_so_far >  16696386) {
+            } else {
 
               if (parameters.num_locks_so_far <= 5.5) {
                 return new_order_LM62(parameters);
-              } else if (parameters.num_locks_so_far >  5.5) {
+              } else {
 
                 if (parameters.wait_so_far <= 14080366) {
                   return new_order_LM63(parameters);
-                } else if (parameters.wait_so_far >  14080366) {
+                } else {
 
                   if (parameters.num_of_wait_locks <= 1.5) {
                     return new_order_LM64(parameters);
-                  } else if (parameters.num_of_wait_locks >  1.5) {
+                  } else {
                     return new_order_LM65(parameters);
                   }
                 }
               }
             }
-          } else if (parameters.num_locks_so_far >  18.5) {
+          } else {
             return new_order_LM66(parameters);
           }
-        } else if (parameters.work_so_far >  36584086.5) {
+        } else {
 
           if (parameters.work_so_far <= 203601915) {
 
@@ -1583,49 +1583,49 @@ new_order_estimate(work_wait &parameters){
 
               if (parameters.wait_so_far <= 168541934.5) {
                 return new_order_LM67(parameters);
-              } else if (parameters.wait_so_far >  168541934.5) {
+              } else {
 
                 if (parameters.num_of_wait_locks <= 1.5) {
                   return new_order_LM68(parameters);
-                } else if (parameters.num_of_wait_locks >  1.5) {
+                } else {
 
                   if (parameters.num_locks_so_far <= 5.5) {
                     return new_order_LM69(parameters);
-                  } else if (parameters.num_locks_so_far >  5.5) {
+                  } else {
                     return new_order_LM70(parameters);
                   }
                 }
               }
-            } else if (parameters.num_locks_so_far >  21.5) {
+            } else {
               return new_order_LM71(parameters);
             }
-          } else if (parameters.work_so_far >  203601915) {
+          } else {
 
             if (parameters.num_locks_so_far <= 23.5) {
               return new_order_LM72(parameters);
-            } else if (parameters.num_locks_so_far >  23.5) {
+            } else {
               return new_order_LM73(parameters);
             }
           }
         }
-      } else if (parameters.wait_so_far >  398279629.5) {
+      } else {
 
         if (parameters.num_of_wait_locks <= 1.5) {
           return new_order_LM74(parameters);
-        } else if (parameters.num_of_wait_locks >  1.5) {
+        } else {
 
           if (parameters.num_locks_so_far <= 5.5) {
             return new_order_LM75(parameters);
-          } else if (parameters.num_locks_so_far >  5.5) {
+          } else {
 
             if (parameters.wait_so_far <= 760319347.5) {
 
               if (parameters.num_locks_so_far <= 13.5) {
                 return new_order_LM76(parameters);
-              } else if (parameters.num_locks_so_far >  13.5) {
+              } else {
                 return new_order_LM77(parameters);
               }
-            } else if (parameters.wait_so_far >  760319347.5) {
+            } else {
               return new_order_LM78(parameters);
             }
           }
@@ -2383,7 +2383,7 @@ payment_LM48(work_wait &parameters) {
 	- 335278149.6774;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
-static
+
 double
 payment_estimate(work_wait &parameters){
 
@@ -2395,23 +2395,23 @@ payment_estimate(work_wait &parameters){
 
         if (parameters.work_so_far <= 6229.5) {
           return payment_LM1(parameters);
-        } else if (parameters.work_so_far >  6229.5) {
+        } else {
           return payment_LM2(parameters);
         }
-      } else if (parameters.num_of_wait_locks >  1.5) {
+      } else {
 
         if (parameters.total_wait_locks <= 48.5) {
           return payment_LM3(parameters);
-        } else if (parameters.total_wait_locks >  48.5) {
+        } else {
 
           if (parameters.mean_wait_of_all <= 28683000) {
             return payment_LM4(parameters);
-          } else if (parameters.mean_wait_of_all >  28683000) {
+          } else {
             return payment_LM5(parameters);
           }
         }
       }
-    } else if (parameters.work_so_far >  7693.5) {
+    } else {
 
       if (parameters.num_of_wait_locks <= 1.5) {
 
@@ -2419,52 +2419,52 @@ payment_estimate(work_wait &parameters){
 
           if (parameters.wait_so_far <= 15595772) {
             return payment_LM6(parameters);
-          } else if (parameters.wait_so_far >  15595772) {
+          } else {
 
             if (parameters.cpu_usage <= 0.848) {
               return payment_LM7(parameters);
-            } else if (parameters.cpu_usage >  0.848) {
+            } else {
 
               if (parameters.mean_wait_of_all <= 26748750) {
 
                 if (parameters.work_so_far <= 8631) {
                   return payment_LM8(parameters);
-                } else if (parameters.work_so_far >  8631) {
+                } else {
                   return payment_LM9(parameters);
                 }
-              } else if (parameters.mean_wait_of_all >  26748750) {
+              } else {
 
                 if (parameters.avg_latency_of_same_past_second <= 25347900) {
 
                   if (parameters.avg_latency_of_same_past_second <= 20253550) {
                     return payment_LM10(parameters);
-                  } else if (parameters.avg_latency_of_same_past_second >  20253550) {
+                  } else {
 
                     if (parameters.total_wait_locks <= 56) {
 
                       if (parameters.total_wait_locks <= 11) {
                         return payment_LM11(parameters);
-                      } else if (parameters.total_wait_locks >  11) {
+                      } else {
 
                         if (parameters.total_wait_locks <= 41.5) {
                           return payment_LM12(parameters);
-                        } else if (parameters.total_wait_locks >  41.5) {
+                        } else {
                           return payment_LM13(parameters);
                         }
                       }
-                    } else if (parameters.total_wait_locks >  56) {
+                    } else {
                       return payment_LM14(parameters);
                     }
                   }
-                } else if (parameters.avg_latency_of_same_past_second >  25347900) {
+                } else {
 
                   if (parameters.wait_so_far <= 28782159.5) {
                     return payment_LM15(parameters);
-                  } else if (parameters.wait_so_far >  28782159.5) {
+                  } else {
 
                     if (parameters.total_wait_locks <= 63) {
                       return payment_LM16(parameters);
-                    } else if (parameters.total_wait_locks >  63) {
+                    } else {
                       return payment_LM17(parameters);
                     }
                   }
@@ -2472,54 +2472,54 @@ payment_estimate(work_wait &parameters){
               }
             }
           }
-        } else if (parameters.cpu_usage >  0.898) {
+        } else {
 
           if (parameters.work_so_far <= 10978) {
             return payment_LM18(parameters);
-          } else if (parameters.work_so_far >  10978) {
+          } else {
             return payment_LM19(parameters);
           }
         }
-      } else if (parameters.num_of_wait_locks >  1.5) {
+      } else {
 
         if (parameters.num_of_wait_locks <= 2.5) {
 
           if (parameters.wait_so_far <= 26199530) {
             return payment_LM20(parameters);
-          } else if (parameters.wait_so_far >  26199530) {
+          } else {
 
             if (parameters.work_so_far <= 8517) {
               return payment_LM21(parameters);
-            } else if (parameters.work_so_far >  8517) {
+            } else {
 
               if (parameters.total_wait_locks <= 30.5) {
 
                 if (parameters.cpu_usage <= 0.859) {
                   return payment_LM22(parameters);
-                } else if (parameters.cpu_usage >  0.859) {
+                } else {
 
                   if (parameters.work_so_far <= 11347.5) {
                     return payment_LM23(parameters);
-                  } else if (parameters.work_so_far >  11347.5) {
+                  } else {
 
                     if (parameters.mean_wait_of_all <= 32221100) {
                       return payment_LM24(parameters);
-                    } else if (parameters.mean_wait_of_all >  32221100) {
+                    } else {
 
                       if (parameters.mean_wait_of_all <= 34002050) {
                         return payment_LM25(parameters);
-                      } else if (parameters.mean_wait_of_all >  34002050) {
+                      } else {
                         return payment_LM26(parameters);
                       }
                     }
                   }
                 }
-              } else if (parameters.total_wait_locks >  30.5) {
+              } else {
                 return payment_LM27(parameters);
               }
             }
           }
-        } else if (parameters.num_of_wait_locks >  2.5) {
+        } else {
 
           if (parameters.cpu_usage <= 0.94) {
 
@@ -2527,26 +2527,26 @@ payment_estimate(work_wait &parameters){
 
               if (parameters.avg_latency_of_same_past_second <= 23730800) {
                 return payment_LM28(parameters);
-              } else if (parameters.avg_latency_of_same_past_second >  23730800) {
+              } else {
 
                 if (parameters.wait_so_far <= 163322405.5) {
                   return payment_LM29(parameters);
-                } else if (parameters.wait_so_far >  163322405.5) {
+                } else {
                   return payment_LM30(parameters);
                 }
               }
-            } else if (parameters.mean_wait_of_all >  26997600) {
+            } else {
               return payment_LM31(parameters);
             }
-          } else if (parameters.cpu_usage >  0.94) {
+          } else {
 
             if (parameters.cpu_usage <= 0.969) {
               return payment_LM32(parameters);
-            } else if (parameters.cpu_usage >  0.969) {
+            } else {
 
               if (parameters.cpu_usage <= 0.99) {
                 return payment_LM33(parameters);
-              } else if (parameters.cpu_usage >  0.99) {
+              } else {
                 return payment_LM34(parameters);
               }
             }
@@ -2554,64 +2554,64 @@ payment_estimate(work_wait &parameters){
         }
       }
     }
-  } else if (parameters.work_so_far >  13713.5) {
+  } else {
 
     if (parameters.work_so_far <= 954932) {
 
       if (parameters.total_wait_locks <= 177.5) {
         return payment_LM35(parameters);
-      } else if (parameters.total_wait_locks >  177.5) {
+      } else {
 
         if (parameters.wait_so_far <= 7842896.5) {
 
           if (parameters.mean_wait_of_all <= 63929000) {
             return payment_LM36(parameters);
-          } else if (parameters.mean_wait_of_all >  63929000) {
+          } else {
             return payment_LM37(parameters);
           }
-        } else if (parameters.wait_so_far >  7842896.5) {
+        } else {
           return payment_LM38(parameters);
         }
       }
-    } else if (parameters.work_so_far >  954932) {
+    } else {
 
       if (parameters.wait_so_far <= 447654301) {
 
         if (parameters.wait_so_far <= 72355461.5) {
           return payment_LM39(parameters);
-        } else if (parameters.wait_so_far >  72355461.5) {
+        } else {
 
           if (parameters.num_locks_so_far <= 2.5) {
             return payment_LM40(parameters);
-          } else if (parameters.num_locks_so_far >  2.5) {
+          } else {
             return payment_LM41(parameters);
           }
         }
-      } else if (parameters.wait_so_far >  447654301) {
+      } else {
 
         if (parameters.num_locks_so_far <= 2.5) {
           return payment_LM42(parameters);
-        } else if (parameters.num_locks_so_far >  2.5) {
+        } else {
 
           if (parameters.wait_so_far <= 698744921.5) {
             return payment_LM43(parameters);
-          } else if (parameters.wait_so_far >  698744921.5) {
+          } else {
 
             if (parameters.wait_so_far <= 817423926) {
               return payment_LM44(parameters);
-            } else if (parameters.wait_so_far >  817423926) {
+            } else {
 
               if (parameters.wait_so_far <= 1000163492) {
                 return payment_LM45(parameters);
-              } else if (parameters.wait_so_far >  1000163492) {
+              } else {
 
                 if (parameters.num_locks_so_far <= 5) {
                   return payment_LM46(parameters);
-                } else if (parameters.num_locks_so_far >  5) {
+                } else {
 
                   if (parameters.num_of_wait_locks <= 2.5) {
                     return payment_LM47(parameters);
-                  } else if (parameters.num_of_wait_locks >  2.5) {
+                  } else {
                     return payment_LM48(parameters);
                   }
                 }
@@ -2869,7 +2869,7 @@ delivery_LM16(work_wait &parameters) {
 	+ 1322289603.858;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
-static
+
 double
 delivery_estimate(work_wait &parameters){
 
@@ -2877,39 +2877,39 @@ delivery_estimate(work_wait &parameters){
 
     if (parameters.work_so_far <= 9391.5) {
       return delivery_LM1(parameters);
-    } else if (parameters.work_so_far >  9391.5) {
+    } else {
 
       if (parameters.num_of_wait_locks <= 1.5) {
 
         if (parameters.mean_wait_of_all <= 27100700) {
           return delivery_LM2(parameters);
-        } else if (parameters.mean_wait_of_all >  27100700) {
+        } else {
           return delivery_LM3(parameters);
         }
-      } else if (parameters.num_of_wait_locks >  1.5) {
+      } else {
 
         if (parameters.work_so_far <= 188138.5) {
           return delivery_LM4(parameters);
-        } else if (parameters.work_so_far >  188138.5) {
+        } else {
 
           if (parameters.work_so_far <= 239156762.5) {
 
             if (parameters.total_wait_locks <= 74.5) {
               return delivery_LM5(parameters);
-            } else if (parameters.total_wait_locks >  74.5) {
+            } else {
               return delivery_LM6(parameters);
             }
-          } else if (parameters.work_so_far >  239156762.5) {
+          } else {
             return delivery_LM7(parameters);
           }
         }
       }
     }
-  } else if (parameters.total_wait_locks >  91.5) {
+  } else {
 
     if (parameters.num_of_wait_locks <= 1.5) {
       return delivery_LM8(parameters);
-    } else if (parameters.num_of_wait_locks >  1.5) {
+    } else {
 
       if (parameters.num_locks_so_far <= 3.5) {
 
@@ -2919,31 +2919,31 @@ delivery_estimate(work_wait &parameters){
 
             if (parameters.mean_wait_of_all <= 63129500) {
               return delivery_LM9(parameters);
-            } else if (parameters.mean_wait_of_all >  63129500) {
+            } else {
 
               if (parameters.mean_wait_of_all <= 69368650) {
                 return delivery_LM10(parameters);
-              } else if (parameters.mean_wait_of_all >  69368650) {
+              } else {
                 return delivery_LM11(parameters);
               }
             }
-          } else if (parameters.wait_so_far >  34224879) {
+          } else {
             return delivery_LM12(parameters);
           }
-        } else if (parameters.wait_so_far >  369181490.5) {
+        } else {
 
           if (parameters.work_so_far <= 16960.5) {
             return delivery_LM13(parameters);
-          } else if (parameters.work_so_far >  16960.5) {
+          } else {
 
             if (parameters.cpu_usage <= 0.822) {
               return delivery_LM14(parameters);
-            } else if (parameters.cpu_usage >  0.822) {
+            } else {
               return delivery_LM15(parameters);
             }
           }
         }
-      } else if (parameters.num_locks_so_far >  3.5) {
+      } else {
         return delivery_LM16(parameters);
       }
     }
@@ -2962,7 +2962,7 @@ stock_level_LM1(work_wait &parameters) {
 	+ 94398197.6413;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
-static
+
 double
 stock_level_estimate(work_wait &parameters){
   return stock_level_LM1(parameters);
@@ -4870,7 +4870,7 @@ tpcc_LM119(work_wait &parameters) {
 	+ 369295699.0216;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
-static
+
 double
 tpcc_estimate(work_wait &parameters){
 
@@ -4882,7 +4882,7 @@ tpcc_estimate(work_wait &parameters){
 
         if (parameters.work_so_far <= 6615.5) {
           return tpcc_LM1(parameters);
-        } else if (parameters.work_so_far >  6615.5) {
+        } else {
 
           if (parameters.total_wait_locks <= 45.5) {
 
@@ -4892,20 +4892,20 @@ tpcc_estimate(work_wait &parameters){
 
                 if (parameters.work_so_far <= 6948) {
                   return tpcc_LM2(parameters);
-                } else if (parameters.work_so_far >  6948) {
+                } else {
                   return tpcc_LM3(parameters);
                 }
-              } else if (parameters.wait_so_far >  28584438.5) {
+              } else {
                 return tpcc_LM4(parameters);
               }
-            } else if (parameters.mean_wait_of_all >  26742500) {
+            } else {
               return tpcc_LM5(parameters);
             }
-          } else if (parameters.total_wait_locks >  45.5) {
+          } else {
             return tpcc_LM6(parameters);
           }
         }
-      } else if (parameters.work_so_far >  7693.5) {
+      } else {
 
         if (parameters.work_so_far <= 11087) {
 
@@ -4913,10 +4913,10 @@ tpcc_estimate(work_wait &parameters){
 
             if (parameters.avg_latency_of_same_past_second <= 94954150) {
               return tpcc_LM7(parameters);
-            } else if (parameters.avg_latency_of_same_past_second >  94954150) {
+            } else {
               return tpcc_LM8(parameters);
             }
-          } else if (parameters.wait_so_far >  28297652.5) {
+          } else {
 
             if (parameters.num_of_wait_locks <= 2.5) {
 
@@ -4924,66 +4924,66 @@ tpcc_estimate(work_wait &parameters){
 
                 if (parameters.avg_latency_of_same_past_second <= 77750500) {
                   return tpcc_LM9(parameters);
-                } else if (parameters.avg_latency_of_same_past_second >  77750500) {
+                } else {
                   return tpcc_LM10(parameters);
                 }
-              } else if (parameters.num_of_wait_locks >  1.5) {
+              } else {
 
                 if (parameters.wait_so_far <= 57649416.5) {
                   return tpcc_LM11(parameters);
-                } else if (parameters.wait_so_far >  57649416.5) {
+                } else {
 
                   if (parameters.work_so_far <= 9845.5) {
 
                     if (parameters.total_wait_locks <= 54.5) {
                       return tpcc_LM12(parameters);
-                    } else if (parameters.total_wait_locks >  54.5) {
+                    } else {
 
                       if (parameters.total_wait_locks <= 63.5) {
 
                         if (parameters.avg_latency_of_same_past_second <= 17731650) {
                           return tpcc_LM13(parameters);
-                        } else if (parameters.avg_latency_of_same_past_second >  17731650) {
+                        } else {
                           return tpcc_LM14(parameters);
                         }
-                      } else if (parameters.total_wait_locks >  63.5) {
+                      } else {
                         return tpcc_LM15(parameters);
                       }
                     }
-                  } else if (parameters.work_so_far >  9845.5) {
+                  } else {
                     return tpcc_LM16(parameters);
                   }
                 }
               }
-            } else if (parameters.num_of_wait_locks >  2.5) {
+            } else {
               return tpcc_LM17(parameters);
             }
           }
-        } else if (parameters.work_so_far >  11087) {
+        } else {
 
           if (parameters.num_of_wait_locks <= 2.5) {
 
             if (parameters.avg_latency_of_same_past_second <= 81378550) {
               return tpcc_LM18(parameters);
-            } else if (parameters.avg_latency_of_same_past_second >  81378550) {
+            } else {
 
               if (parameters.cpu_usage <= 0.89) {
                 return tpcc_LM19(parameters);
-              } else if (parameters.cpu_usage >  0.89) {
+              } else {
                 return tpcc_LM20(parameters);
               }
             }
-          } else if (parameters.num_of_wait_locks >  2.5) {
+          } else {
 
             if (parameters.work_so_far <= 29949) {
               return tpcc_LM21(parameters);
-            } else if (parameters.work_so_far >  29949) {
+            } else {
               return tpcc_LM22(parameters);
             }
           }
         }
       }
-    } else if (parameters.total_wait_locks >  116.5) {
+    } else {
 
       if (parameters.num_of_wait_locks <= 2.5) {
 
@@ -4991,31 +4991,31 @@ tpcc_estimate(work_wait &parameters){
 
           if (parameters.work_so_far <= 60340) {
             return tpcc_LM23(parameters);
-          } else if (parameters.work_so_far >  60340) {
+          } else {
             return tpcc_LM24(parameters);
           }
-        } else if (parameters.avg_latency_of_same_past_second >  474400500) {
+        } else {
 
           if (parameters.avg_latency_of_same_past_second <= 646035500) {
             return tpcc_LM25(parameters);
-          } else if (parameters.avg_latency_of_same_past_second >  646035500) {
+          } else {
 
             if (parameters.work_so_far <= 36357.5) {
               return tpcc_LM26(parameters);
-            } else if (parameters.work_so_far >  36357.5) {
+            } else {
               return tpcc_LM27(parameters);
             }
           }
         }
-      } else if (parameters.num_of_wait_locks >  2.5) {
+      } else {
 
         if (parameters.work_so_far <= 507949) {
           return tpcc_LM28(parameters);
-        } else if (parameters.work_so_far >  507949) {
+        } else {
 
           if (parameters.wait_so_far <= 491324462) {
             return tpcc_LM29(parameters);
-          } else if (parameters.wait_so_far >  491324462) {
+          } else {
 
             if (parameters.work_so_far <= 4631505.5) {
 
@@ -5023,20 +5023,20 @@ tpcc_estimate(work_wait &parameters){
 
                 if (parameters.work_so_far <= 975438) {
                   return tpcc_LM30(parameters);
-                } else if (parameters.work_so_far >  975438) {
+                } else {
                   return tpcc_LM31(parameters);
                 }
-              } else if (parameters.wait_so_far >  844007903) {
+              } else {
                 return tpcc_LM32(parameters);
               }
-            } else if (parameters.work_so_far >  4631505.5) {
+            } else {
               return tpcc_LM33(parameters);
             }
           }
         }
       }
     }
-  } else if (parameters.num_locks_so_far >  2.5) {
+  } else {
 
     if (parameters.total_wait_locks <= 94.5) {
 
@@ -5048,10 +5048,10 @@ tpcc_estimate(work_wait &parameters){
 
             if (parameters.num_locks_so_far <= 32.5) {
               return tpcc_LM34(parameters);
-            } else if (parameters.num_locks_so_far >  32.5) {
+            } else {
               return tpcc_LM35(parameters);
             }
-          } else if (parameters.avg_latency_of_same_past_second >  33273400) {
+          } else {
 
             if (parameters.num_locks_so_far <= 6) {
 
@@ -5059,43 +5059,43 @@ tpcc_estimate(work_wait &parameters){
 
                 if (parameters.wait_so_far <= 34775360.5) {
                   return tpcc_LM36(parameters);
-                } else if (parameters.wait_so_far >  34775360.5) {
+                } else {
                   return tpcc_LM37(parameters);
                 }
-              } else if (parameters.work_so_far >  30820) {
+              } else {
 
                 if (parameters.mean_wait_of_all <= 27829700) {
                   return tpcc_LM38(parameters);
-                } else if (parameters.mean_wait_of_all >  27829700) {
+                } else {
                   return tpcc_LM39(parameters);
                 }
               }
-            } else if (parameters.num_locks_so_far >  6) {
+            } else {
 
               if (parameters.num_locks_so_far <= 12.5) {
                 return tpcc_LM40(parameters);
-              } else if (parameters.num_locks_so_far >  12.5) {
+              } else {
 
                 if (parameters.num_locks_so_far <= 23.5) {
                   return tpcc_LM41(parameters);
-                } else if (parameters.num_locks_so_far >  23.5) {
+                } else {
 
                   if (parameters.num_locks_so_far <= 90.5) {
                     return tpcc_LM42(parameters);
-                  } else if (parameters.num_locks_so_far >  90.5) {
+                  } else {
                     return tpcc_LM43(parameters);
                   }
                 }
               }
             }
           }
-        } else if (parameters.num_of_wait_locks >  1.5) {
+        } else {
           return tpcc_LM44(parameters);
         }
-      } else if (parameters.work_so_far >  22085843.5) {
+      } else {
         return tpcc_LM45(parameters);
       }
-    } else if (parameters.total_wait_locks >  94.5) {
+    } else {
 
       if (parameters.work_so_far <= 14581279.5) {
 
@@ -5113,104 +5113,104 @@ tpcc_estimate(work_wait &parameters){
 
                     if (parameters.total_wait_locks <= 113.5) {
                       return tpcc_LM46(parameters);
-                    } else if (parameters.total_wait_locks >  113.5) {
+                    } else {
 
                       if (parameters.mean_wait_of_all <= 27052100) {
                         return tpcc_LM47(parameters);
-                      } else if (parameters.mean_wait_of_all >  27052100) {
+                      } else {
 
                         if (parameters.mean_wait_of_all <= 28661350) {
                           return tpcc_LM48(parameters);
-                        } else if (parameters.mean_wait_of_all >  28661350) {
+                        } else {
 
                           if (parameters.mean_wait_of_all <= 37950550) {
                             return tpcc_LM49(parameters);
-                          } else if (parameters.mean_wait_of_all >  37950550) {
+                          } else {
                             return tpcc_LM50(parameters);
                           }
                         }
                       }
                     }
-                  } else if (parameters.avg_latency_of_same_past_second >  254484000) {
+                  } else {
                     return tpcc_LM51(parameters);
                   }
-                } else if (parameters.mean_wait_of_all >  38189500) {
+                } else {
 
                   if (parameters.total_wait_locks <= 170.5) {
                     return tpcc_LM52(parameters);
-                  } else if (parameters.total_wait_locks >  170.5) {
+                  } else {
                     return tpcc_LM53(parameters);
                   }
                 }
-              } else if (parameters.num_locks_so_far >  4.5) {
+              } else {
                 return tpcc_LM54(parameters);
               }
-            } else if (parameters.num_locks_so_far >  14.5) {
+            } else {
               return tpcc_LM55(parameters);
             }
-          } else if (parameters.num_of_wait_locks >  1.5) {
+          } else {
 
             if (parameters.total_wait_locks <= 146.5) {
               return tpcc_LM56(parameters);
-            } else if (parameters.total_wait_locks >  146.5) {
+            } else {
 
               if (parameters.wait_so_far <= 396559456.5) {
 
                 if (parameters.avg_latency_of_same_past_second <= 176480500) {
                   return tpcc_LM57(parameters);
-                } else if (parameters.avg_latency_of_same_past_second >  176480500) {
+                } else {
                   return tpcc_LM58(parameters);
                 }
-              } else if (parameters.wait_so_far >  396559456.5) {
+              } else {
 
                 if (parameters.work_so_far <= 675485) {
 
                   if (parameters.total_wait_locks <= 203.5) {
                     return tpcc_LM59(parameters);
-                  } else if (parameters.total_wait_locks >  203.5) {
+                  } else {
 
                     if (parameters.work_so_far <= 78213.5) {
 
                       if (parameters.mean_wait_of_all <= 61467200) {
                         return tpcc_LM60(parameters);
-                      } else if (parameters.mean_wait_of_all >  61467200) {
+                      } else {
                         return tpcc_LM61(parameters);
                       }
-                    } else if (parameters.work_so_far >  78213.5) {
+                    } else {
 
                       if (parameters.cpu_usage <= 0.893) {
                         return tpcc_LM62(parameters);
-                      } else if (parameters.cpu_usage >  0.893) {
+                      } else {
 
                         if (parameters.num_of_wait_locks <= 4.5) {
 
                           if (parameters.wait_so_far <= 780298217.5) {
                             return tpcc_LM63(parameters);
-                          } else if (parameters.wait_so_far >  780298217.5) {
+                          } else {
                             return tpcc_LM64(parameters);
                           }
-                        } else if (parameters.num_of_wait_locks >  4.5) {
+                        } else {
                           return tpcc_LM65(parameters);
                         }
                       }
                     }
                   }
-                } else if (parameters.work_so_far >  675485) {
+                } else {
                   return tpcc_LM66(parameters);
                 }
               }
             }
           }
-        } else if (parameters.avg_latency_of_same_past_second >  364785000) {
+        } else {
 
           if (parameters.work_so_far <= 89524) {
 
             if (parameters.wait_so_far <= 211519583.5) {
               return tpcc_LM67(parameters);
-            } else if (parameters.wait_so_far >  211519583.5) {
+            } else {
               return tpcc_LM68(parameters);
             }
-          } else if (parameters.work_so_far >  89524) {
+          } else {
 
             if (parameters.wait_so_far <= 514664675) {
 
@@ -5224,16 +5224,16 @@ tpcc_estimate(work_wait &parameters){
 
                       if (parameters.wait_so_far <= 36369222) {
                         return tpcc_LM69(parameters);
-                      } else if (parameters.wait_so_far >  36369222) {
+                      } else {
                         return tpcc_LM70(parameters);
                       }
-                    } else if (parameters.num_locks_so_far >  9.5) {
+                    } else {
                       return tpcc_LM71(parameters);
                     }
-                  } else if (parameters.num_of_wait_locks >  3.5) {
+                  } else {
                     return tpcc_LM72(parameters);
                   }
-                } else if (parameters.work_so_far >  3513739) {
+                } else {
 
                   if (parameters.num_locks_so_far <= 16.5) {
 
@@ -5241,52 +5241,52 @@ tpcc_estimate(work_wait &parameters){
 
                       if (parameters.num_of_wait_locks <= 2.5) {
                         return tpcc_LM73(parameters);
-                      } else if (parameters.num_of_wait_locks >  2.5) {
+                      } else {
                         return tpcc_LM74(parameters);
                       }
-                    } else if (parameters.wait_so_far >  348358645.5) {
+                    } else {
 
                       if (parameters.num_locks_so_far <= 11.5) {
 
                         if (parameters.num_of_wait_locks <= 1.5) {
                           return tpcc_LM75(parameters);
-                        } else if (parameters.num_of_wait_locks >  1.5) {
+                        } else {
                           return tpcc_LM76(parameters);
                         }
-                      } else if (parameters.num_locks_so_far >  11.5) {
+                      } else {
                         return tpcc_LM77(parameters);
                       }
                     }
-                  } else if (parameters.num_locks_so_far >  16.5) {
+                  } else {
 
                     if (parameters.wait_so_far <= 195374585) {
                       return tpcc_LM78(parameters);
-                    } else if (parameters.wait_so_far >  195374585) {
+                    } else {
 
                       if (parameters.total_wait_locks <= 248.5) {
 
                         if (parameters.num_of_wait_locks <= 1.5) {
                           return tpcc_LM79(parameters);
-                        } else if (parameters.num_of_wait_locks >  1.5) {
+                        } else {
                           return tpcc_LM80(parameters);
                         }
-                      } else if (parameters.total_wait_locks >  248.5) {
+                      } else {
                         return tpcc_LM81(parameters);
                       }
                     }
                   }
                 }
-              } else if (parameters.mean_wait_of_all >  61980550) {
+              } else {
 
                 if (parameters.work_so_far <= 678681) {
                   return tpcc_LM82(parameters);
-                } else if (parameters.work_so_far >  678681) {
+                } else {
 
                   if (parameters.num_locks_so_far <= 10.5) {
 
                     if (parameters.work_so_far <= 3575803.5) {
                       return tpcc_LM83(parameters);
-                    } else if (parameters.work_so_far >  3575803.5) {
+                    } else {
 
                       if (parameters.num_of_wait_locks <= 3.5) {
 
@@ -5294,71 +5294,71 @@ tpcc_estimate(work_wait &parameters){
 
                           if (parameters.num_of_wait_locks <= 1.5) {
                             return tpcc_LM84(parameters);
-                          } else if (parameters.num_of_wait_locks >  1.5) {
+                          } else {
 
                             if (parameters.cpu_usage <= 0.997) {
                               return tpcc_LM85(parameters);
-                            } else if (parameters.cpu_usage >  0.997) {
+                            } else {
                               return tpcc_LM86(parameters);
                             }
                           }
-                        } else if (parameters.avg_latency_of_same_past_second >  394609000) {
+                        } else {
 
                           if (parameters.num_locks_so_far <= 9.5) {
                             return tpcc_LM87(parameters);
-                          } else if (parameters.num_locks_so_far >  9.5) {
+                          } else {
                             return tpcc_LM88(parameters);
                           }
                         }
-                      } else if (parameters.num_of_wait_locks >  3.5) {
+                      } else {
                         return tpcc_LM89(parameters);
                       }
                     }
-                  } else if (parameters.num_locks_so_far >  10.5) {
+                  } else {
                     return tpcc_LM90(parameters);
                   }
                 }
               }
-            } else if (parameters.wait_so_far >  514664675) {
+            } else {
 
               if (parameters.num_of_wait_locks <= 1.5) {
 
                 if (parameters.avg_latency_of_same_past_second <= 560023000) {
                   return tpcc_LM91(parameters);
-                } else if (parameters.avg_latency_of_same_past_second >  560023000) {
+                } else {
                   return tpcc_LM92(parameters);
                 }
-              } else if (parameters.num_of_wait_locks >  1.5) {
+              } else {
 
                 if (parameters.num_locks_so_far <= 5.5) {
 
                   if (parameters.work_so_far <= 639610.5) {
                     return tpcc_LM93(parameters);
-                  } else if (parameters.work_so_far >  639610.5) {
+                  } else {
 
                     if (parameters.wait_so_far <= 896368537.5) {
                       return tpcc_LM94(parameters);
-                    } else if (parameters.wait_so_far >  896368537.5) {
+                    } else {
                       return tpcc_LM95(parameters);
                     }
                   }
-                } else if (parameters.num_locks_so_far >  5.5) {
+                } else {
 
                   if (parameters.wait_so_far <= 743121054) {
                     return tpcc_LM96(parameters);
-                  } else if (parameters.wait_so_far >  743121054) {
+                  } else {
 
                     if (parameters.avg_latency_of_same_past_second <= 565044500) {
                       return tpcc_LM97(parameters);
-                    } else if (parameters.avg_latency_of_same_past_second >  565044500) {
+                    } else {
 
                       if (parameters.cpu_usage <= 0.867) {
                         return tpcc_LM98(parameters);
-                      } else if (parameters.cpu_usage >  0.867) {
+                      } else {
 
                         if (parameters.work_so_far <= 1347655.5) {
                           return tpcc_LM99(parameters);
-                        } else if (parameters.work_so_far >  1347655.5) {
+                        } else {
                           return tpcc_LM100(parameters);
                         }
                       }
@@ -5369,16 +5369,16 @@ tpcc_estimate(work_wait &parameters){
             }
           }
         }
-      } else if (parameters.work_so_far >  14581279.5) {
+      } else {
 
         if (parameters.num_of_wait_locks <= 1.5) {
 
           if (parameters.num_locks_so_far <= 64.5) {
             return tpcc_LM101(parameters);
-          } else if (parameters.num_locks_so_far >  64.5) {
+          } else {
             return tpcc_LM102(parameters);
           }
-        } else if (parameters.num_of_wait_locks >  1.5) {
+        } else {
 
           if (parameters.wait_so_far <= 307928329) {
 
@@ -5386,10 +5386,10 @@ tpcc_estimate(work_wait &parameters){
 
               if (parameters.num_locks_so_far <= 21.5) {
                 return tpcc_LM103(parameters);
-              } else if (parameters.num_locks_so_far >  21.5) {
+              } else {
                 return tpcc_LM104(parameters);
               }
-            } else if (parameters.work_so_far >  123723393.5) {
+            } else {
 
               if (parameters.avg_latency_of_same_past_second <= 478397000) {
 
@@ -5397,18 +5397,18 @@ tpcc_estimate(work_wait &parameters){
 
                   if (parameters.num_locks_so_far <= 19.5) {
                     return tpcc_LM105(parameters);
-                  } else if (parameters.num_locks_so_far >  19.5) {
+                  } else {
                     return tpcc_LM106(parameters);
                   }
-                } else if (parameters.work_so_far >  256318560) {
+                } else {
 
                   if (parameters.num_locks_so_far <= 29.5) {
                     return tpcc_LM107(parameters);
-                  } else if (parameters.num_locks_so_far >  29.5) {
+                  } else {
                     return tpcc_LM108(parameters);
                   }
                 }
-              } else if (parameters.avg_latency_of_same_past_second >  478397000) {
+              } else {
 
                 if (parameters.work_so_far <= 570640938) {
 
@@ -5416,7 +5416,7 @@ tpcc_estimate(work_wait &parameters){
 
                     if (parameters.num_locks_so_far <= 7) {
                       return tpcc_LM109(parameters);
-                    } else if (parameters.num_locks_so_far >  7) {
+                    } else {
 
                       if (parameters.mean_wait_of_all <= 98833050) {
 
@@ -5424,39 +5424,39 @@ tpcc_estimate(work_wait &parameters){
 
                           if (parameters.work_so_far <= 235057945) {
                             return tpcc_LM110(parameters);
-                          } else if (parameters.work_so_far >  235057945) {
+                          } else {
                             return tpcc_LM111(parameters);
                           }
-                        } else if (parameters.total_wait_locks >  313.5) {
+                        } else {
 
                           if (parameters.wait_so_far <= 61261203.5) {
                             return tpcc_LM112(parameters);
-                          } else if (parameters.wait_so_far >  61261203.5) {
+                          } else {
                             return tpcc_LM113(parameters);
                           }
                         }
-                      } else if (parameters.mean_wait_of_all >  98833050) {
+                      } else {
                         return tpcc_LM114(parameters);
                       }
                     }
-                  } else if (parameters.num_locks_so_far >  21) {
+                  } else {
                     return tpcc_LM115(parameters);
                   }
-                } else if (parameters.work_so_far >  570640938) {
+                } else {
 
                   if (parameters.avg_latency_of_same_past_second <= 756370500) {
                     return tpcc_LM116(parameters);
-                  } else if (parameters.avg_latency_of_same_past_second >  756370500) {
+                  } else {
                     return tpcc_LM117(parameters);
                   }
                 }
               }
             }
-          } else if (parameters.wait_so_far >  307928329) {
+          } else {
 
             if (parameters.num_locks_so_far <= 5.5) {
               return tpcc_LM118(parameters);
-            } else if (parameters.num_locks_so_far >  5.5) {
+            } else {
               return tpcc_LM119(parameters);
             }
           }
