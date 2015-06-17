@@ -9,6 +9,7 @@
 #include "lock0var.h"
 #include "trx0trx.h"
 #include "trace_tool.h"
+#include "m5p.h"
 
 #include <algorithm>
 #include <fstream>
@@ -121,120 +122,8 @@ estimate(
 
 static
 double
-new_order_estimate(work_wait parameters)
-{
-  double actual_remaining =
-  
-  0.7864 * parameters.work_so_far +
-  -0.0297 * parameters.wait_so_far +
-  2942981.4508 * parameters.num_locks_so_far +
-  -4235373.8011 * parameters.num_of_wait_locks +
-  1004352.9371 * parameters.total_wait_locks +
-  -14.1105 * parameters.total_granted_locks +
-  1.0799 * parameters.mean_work_of_all +
-  -1.6725 * parameters.mean_wait_of_all +
-  -65678069.6481 * parameters.cpu_usage +
-  0.5402 * parameters.avg_work_of_same_past_second +
-  0.8986 * parameters.avg_wait_of_same_past_second +
-  -0.74   * parameters.avg_latency_of_all_past_second +
-  -0.1256 * parameters.avg_latency_of_same_past_5_seconds +
-  0.361  * parameters.avg_latency_of_same_last_20 +
-  -0.0531 * parameters.max_latency_of_same_last_50 +
-  92356470.5408;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-static
-double
-payment_estimate(work_wait parameters)
-{
-  double actual_remaining =
-  
-  0.4896 * parameters.work_so_far +
-  0.0396 * parameters.wait_so_far +
-  19372717.5916 * parameters.num_locks_so_far +
-  -8599030.6497 * parameters.num_of_wait_locks +
-  353784.2308 * parameters.total_wait_locks +
-  -5.9633 * parameters.total_granted_locks +
-  -0.6071 * parameters.mean_wait_of_all +
-  -0.4072 * parameters.avg_work_of_same_past_second +
-  -0.3808 * parameters.avg_wait_of_same_past_second +
-  0.3612 * parameters.avg_latency_of_all_past_second +
-  0.0859 * parameters.avg_latency_of_same_last_20 +
-  -0.0093 * parameters.max_latency_of_same_last_50 +
-  -2874425.7536;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-static
-double
-delivery_estimate(work_wait parameters)
-{
-  double actual_remaining =
-  
-  0.5288 * parameters.work_so_far +
-  -0.2784 * parameters.wait_so_far +
-  -3353368.597 * parameters.num_locks_so_far +
-  162570672.1884 * parameters.num_of_wait_locks +
-  1274780.6497 * parameters.total_wait_locks +
-  -20.5316 * parameters.total_granted_locks +
-  -1.4657 * parameters.mean_work_of_all +
-  0.2398 * parameters.avg_work_of_same_past_second +
-  -0.3096 * parameters.avg_wait_of_same_past_second +
-  -0.5545 * parameters.avg_latency_of_all_past_second +
-  0.6522 * parameters.avg_latency_of_same_last_20 +
-  0.0373 * parameters.max_latency_of_same_last_50 +
-  -23975031.578;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-static
-double
-stock_level_estimate(work_wait parameters)
-{
-  double actual_remaining =
-  
-  -0.0722 * parameters.wait_so_far +
-  -211081.0858 * parameters.num_locks_so_far +
-  117801453.8488 * parameters.num_of_wait_locks +
-  122501.2727 * parameters.total_wait_locks +
-  1.057  * parameters.mean_work_of_all +
-  -0.8101 * parameters.mean_wait_of_all +
-  -0.298  * parameters.avg_work_of_same_past_second +
-  0.2695 * parameters.avg_wait_of_same_past_second +
-  0.043  * parameters.avg_latency_of_all_past_second +
-  -0.2368 * parameters.avg_latency_of_same_past_5_seconds +
-  0.0381 * parameters.avg_latency_of_same_last_20 +
-  0.0178 * parameters.max_latency_of_same_last_50 +
-  -120696837.0021;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-static
-double
-tpcc_estimate(work_wait parameters)
-{
-  double actual_remaining =
-  
-  0.7959 * parameters.work_so_far +
-  -0.009  * parameters.wait_so_far +
-  864001.7598 * parameters.num_locks_so_far +
-  -7122050.386 * parameters.num_of_wait_locks +
-  629163.2553 * parameters.total_wait_locks +
-  -11.1112 * parameters.total_granted_locks +
-  -0.2616 * parameters.mean_work_of_all +
-  -0.8173 * parameters.mean_wait_of_all +
-  -23403843.1769 * parameters.cpu_usage +
-  0.5794 * parameters.avg_work_of_same_past_second +
-  -0.1485 * parameters.avg_wait_of_same_past_second +
-  -0.1637 * parameters.avg_latency_of_all_past_second +
-  0.1016 * parameters.avg_latency_of_same_past_5_seconds +
-  0.2213 * parameters.avg_latency_of_same_last_20 +
-  -0.0263 * parameters.max_latency_of_same_last_50 +
-  169357714.3522;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
 estimate(
-  work_wait parameters,
+  work_wait &parameters,
   transaction_type type)
 {
   switch (type) {
