@@ -505,7 +505,7 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
         type == trx_type)
     {
       record.avg_latency_of_same_past_5_seconds += latency;
-      ++num_trx_of_same_past_second;
+      ++num_trx_of_same_past_5_seconds;
     }
     if (size - index < 21)
     {
@@ -537,6 +537,10 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
   if (num_trx_of_same_past_5_seconds > 0)
   {
     record.avg_latency_of_same_past_5_seconds /= num_trx_of_same_past_5_seconds;
+  }
+  if (num_trx_of_same_last_20 > 0)
+  {
+    record.avg_latency_of_same_last_20 /= num_trx_of_same_last_20;
   }
   
   ulint *time_so_far = NULL;
