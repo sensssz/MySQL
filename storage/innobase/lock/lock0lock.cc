@@ -2935,7 +2935,7 @@ lock_rec_dequeue_from_page(
     lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
     locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
     
-    timespec now = TraceTool::get_time();
+//    timespec now = TraceTool::get_time();
     /* Find other locks that can also be granted. */
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
