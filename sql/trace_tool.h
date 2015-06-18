@@ -212,6 +212,9 @@ public:
     ulint *add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
                        ulint num_of_wait_locks, ulint prediction, ulint transaction_id);
     
+    work_wait parameters_necessary(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                                   ulint num_of_wait_locks, ulint transaction_id);
+    
     work_wait parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
                        ulint num_of_wait_locks, ulint transaction_id);
 

@@ -15,7 +15,6 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -550,6 +549,59 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
   return time_so_far;
 }
 
+
+work_wait TraceTool::parameters_necessary(ulint work_so_far, ulint wait_so_far, ulint num_locks,
+                                          ulint num_of_wait_locks, ulint transaction_id)
+{
+  work_wait record;
+  record.work_so_far = work_so_far;
+  record.wait_so_far = wait_so_far;
+  record.num_locks_so_far = num_locks;
+  record.num_of_wait_locks = num_of_wait_locks;
+  record.total_wait_locks = total_wait_locks;
+  record.mean_wait_of_all = mean_wait_of_all;
+  record.cpu_usage = cpu_usage;
+  record.avg_latency_of_same_past_second = 0;
+  record.transaction_id = transaction_id;
+  
+  transaction_type type = transaction_types[transaction_id];
+  ulint num_trx_of_same_past_second = 0;
+  ulint now = time(NULL);
+  
+  ulint size = last_second_commit_times.size();
+  for (int index = size - 1; index >= 0; --index)
+  {
+    ulint commit_time = last_second_commit_times[index];
+    
+    ulint trx_id = last_second_transaction_ids[index];
+    ulint latency = function_times.back()[trx_id];
+    transaction_type trx_type = transaction_types[trx_id];
+    
+    if (now - commit_time > 2)
+    {
+      break;
+    }
+    
+    if (type == trx_type)
+    {
+      ulint wait_time = function_times[0][trx_id];
+      ulint work_time = latency - wait_time;
+      record.avg_latency_of_same_past_second += latency;
+      record.avg_work_of_same_past_second += work_time;
+      record.avg_wait_of_same_past_second += wait_time;
+      ++num_trx_of_same_past_second;
+    }
+  }
+  
+  if (num_trx_of_same_past_second > 0)
+  {
+    record.avg_latency_of_same_past_second /= num_trx_of_same_past_second;
+    record.avg_work_of_same_past_second /= num_trx_of_same_past_second;
+    record.avg_wait_of_same_past_second /= num_trx_of_same_past_second;
+  }
+  
+  return record;
+}
 
 work_wait TraceTool::parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
                               ulint num_of_wait_locks, ulint transaction_id)
