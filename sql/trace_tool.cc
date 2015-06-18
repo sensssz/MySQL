@@ -9,13 +9,11 @@
 #include <cstdlib>
 #include <cassert>
 
-#include "m5p.cc"
-
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define ACCURACY
+#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -423,11 +421,11 @@ void TraceTool::end_transaction()
     update_ctv(latency);
     pthread_mutex_unlock(&var_mutex);
     
-//    pthread_mutex_lock(&last_second_mutex);
-//    ulint now_in_seconds = time(NULL);
-//    last_second_commit_times.push_back(now_in_seconds);
-//    last_second_transaction_ids.push_back(current_transaction_id);
-//    pthread_mutex_unlock(&last_second_mutex);
+    pthread_mutex_lock(&last_second_mutex);
+    ulint now_in_seconds = time(NULL);
+    last_second_commit_times.push_back(now_in_seconds);
+    last_second_transaction_ids.push_back(current_transaction_id);
+    pthread_mutex_unlock(&last_second_mutex);
   }
 #endif
 }
@@ -809,6 +807,7 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_isotonic_accuracy()
 {
+  ofstream tpcc_accuracy("accuracy/new_order");
   ofstream new_order_accuracy("accuracy/new_order");
   ofstream payment_accuracy("accuracy/payment");
   ofstream order_status_accuracy("accuracy/order_status");
@@ -830,6 +829,7 @@ void TraceTool::write_isotonic_accuracy()
     
     ulint actual_remaining = latency - time_so_far;
     
+    tpcc_accuracy << estimated_remaining << ',' << actual_remaining << endl;
     if (transaction_start_times[index])
     {
       switch (type)
@@ -856,6 +856,7 @@ void TraceTool::write_isotonic_accuracy()
   }
   estimated_remainings.clear();
   transaction_ids.clear();
+  tpcc_accuracy.close();
   new_order_accuracy.close();
   payment_accuracy.close();
   order_status_accuracy.close();

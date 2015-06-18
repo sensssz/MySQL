@@ -1919,6 +1919,96 @@ payment_estimate(work_wait &parameters){
 }
 static
 double
+delivery_LM1(work_wait &parameters) {
+  double actual_remaining = 
+	0.295 * parameters.work_so_far 
+	- 0.0073 * parameters.wait_so_far 
+	+ 8483523.137 * parameters.num_locks_so_far 
+	+ 311868.5524 * parameters.total_wait_locks 
+	- 0.0597 * parameters.mean_wait_of_all 
+	+ 113057838.4426 * parameters.cpu_usage 
+	- 0.0241 * parameters.avg_latency_of_same_past_second 
+	+ 152246268.381;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+
+static
+double
+delivery_LM2(work_wait &parameters) {
+  double actual_remaining = 
+	0.295 * parameters.work_so_far 
+	- 0.3093 * parameters.wait_so_far 
+	+ 9496819.1055 * parameters.num_locks_so_far 
+	+ 328858.4281 * parameters.total_wait_locks 
+	- 0.0597 * parameters.mean_wait_of_all 
+	+ 113057838.4426 * parameters.cpu_usage 
+	- 0.0241 * parameters.avg_latency_of_same_past_second 
+	+ 344854325.6641;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+
+static
+double
+delivery_LM3(work_wait &parameters) {
+  double actual_remaining = 
+	1.5074 * parameters.work_so_far 
+	+ 0.296 * parameters.wait_so_far 
+	- 4644028.0822 * parameters.num_locks_so_far 
+	+ 533800.4665 * parameters.total_wait_locks 
+	- 0.0597 * parameters.mean_wait_of_all 
+	+ 649970286.4653 * parameters.cpu_usage 
+	- 0.0131 * parameters.avg_latency_of_same_past_second 
+	- 167042042.2452;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+
+static
+double
+delivery_LM4(work_wait &parameters) {
+  double actual_remaining = 
+	0.8625 * parameters.work_so_far 
+	+ 0.0209 * parameters.wait_so_far 
+	- 10063510.5859 * parameters.num_locks_so_far 
+	+ 91138.8685 * parameters.total_wait_locks 
+	- 0.1288 * parameters.mean_wait_of_all 
+	+ 35604647.9938 * parameters.cpu_usage 
+	- 0.0123 * parameters.avg_latency_of_same_past_second 
+	+ 928388140.9699;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+double
+delivery_estimate(work_wait &parameters){
+
+  if (parameters.work_so_far <= 313523300.5) {
+
+    if (parameters.work_so_far <= 625904) {
+
+      if (parameters.total_wait_locks <= 258) {
+        return delivery_LM1(parameters);
+      } else {
+        return delivery_LM2(parameters);
+      }
+    } else {
+      return delivery_LM3(parameters);
+    }
+  } else {
+    return delivery_LM4(parameters);
+  }
+}
+static
+double
+stock_level_LM1(work_wait &parameters) {
+  double actual_remaining = 
+	228146.6313 * parameters.num_locks_so_far 
+	- 13347944.7653;
+  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
+}
+double
+stock_level_estimate(work_wait &parameters){
+  return stock_level_LM1(parameters);
+}
+static
+double
 tpcc_LM1(work_wait &parameters) {
   double actual_remaining = 
 	37.1268 * parameters.work_so_far 
@@ -3783,94 +3873,4 @@ tpcc_estimate(work_wait &parameters){
       }
     }
   }
-}
-static
-double
-delivery_LM1(work_wait &parameters) {
-  double actual_remaining = 
-	0.295 * parameters.work_so_far 
-	- 0.0073 * parameters.wait_so_far 
-	+ 8483523.137 * parameters.num_locks_so_far 
-	+ 311868.5524 * parameters.total_wait_locks 
-	- 0.0597 * parameters.mean_wait_of_all 
-	+ 113057838.4426 * parameters.cpu_usage 
-	- 0.0241 * parameters.avg_latency_of_same_past_second 
-	+ 152246268.381;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
-delivery_LM2(work_wait &parameters) {
-  double actual_remaining = 
-	0.295 * parameters.work_so_far 
-	- 0.3093 * parameters.wait_so_far 
-	+ 9496819.1055 * parameters.num_locks_so_far 
-	+ 328858.4281 * parameters.total_wait_locks 
-	- 0.0597 * parameters.mean_wait_of_all 
-	+ 113057838.4426 * parameters.cpu_usage 
-	- 0.0241 * parameters.avg_latency_of_same_past_second 
-	+ 344854325.6641;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
-delivery_LM3(work_wait &parameters) {
-  double actual_remaining = 
-	1.5074 * parameters.work_so_far 
-	+ 0.296 * parameters.wait_so_far 
-	- 4644028.0822 * parameters.num_locks_so_far 
-	+ 533800.4665 * parameters.total_wait_locks 
-	- 0.0597 * parameters.mean_wait_of_all 
-	+ 649970286.4653 * parameters.cpu_usage 
-	- 0.0131 * parameters.avg_latency_of_same_past_second 
-	- 167042042.2452;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
-delivery_LM4(work_wait &parameters) {
-  double actual_remaining = 
-	0.8625 * parameters.work_so_far 
-	+ 0.0209 * parameters.wait_so_far 
-	- 10063510.5859 * parameters.num_locks_so_far 
-	+ 91138.8685 * parameters.total_wait_locks 
-	- 0.1288 * parameters.mean_wait_of_all 
-	+ 35604647.9938 * parameters.cpu_usage 
-	- 0.0123 * parameters.avg_latency_of_same_past_second 
-	+ 928388140.9699;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-double
-delivery_estimate(work_wait &parameters){
-
-  if (parameters.work_so_far <= 313523300.5) {
-
-    if (parameters.work_so_far <= 625904) {
-
-      if (parameters.total_wait_locks <= 258) {
-        return delivery_LM1(parameters);
-      } else {
-        return delivery_LM2(parameters);
-      }
-    } else {
-      return delivery_LM3(parameters);
-    }
-  } else {
-    return delivery_LM4(parameters);
-  }
-}
-static
-double
-stock_level_LM1(work_wait &parameters) {
-  double actual_remaining = 
-	228146.6313 * parameters.num_locks_so_far 
-	- 13347944.7653;
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-double
-stock_level_estimate(work_wait &parameters){
-  return stock_level_LM1(parameters);
 }
