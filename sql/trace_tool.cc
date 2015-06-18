@@ -15,7 +15,6 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -856,7 +855,8 @@ void TraceTool::write_work_wait()
       
       if (latency < total_wait ||
           total_wait < record.wait_so_far ||
-          total_work < record.work_so_far)
+          total_work < record.work_so_far ||
+          latency < record.time_so_far)
       {
         continue;
       }

@@ -1408,12 +1408,12 @@ trx_commit_low(
 		lsn = 0;
 	}
   
-  ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+//  ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
 	trx_commit_in_memory(trx, lsn);
 
   if (trx->is_user_trx)
   {
-    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
+//    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
 //    TraceTool::get_instance()->add_record(1, num_locks);
   }
 }
