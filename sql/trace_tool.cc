@@ -442,7 +442,7 @@ void TraceTool::add_record(int function_index, long duration)
 }
 
 ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                              ulint num_of_wait_locks, ulint transaction_id)
+                              ulint num_of_wait_locks, ulint prediction, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
@@ -462,6 +462,7 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
   record.avg_latency_of_same_last_20 = 0;
   record.max_latency_of_same_last_50 = 0;
   record.avg_latency_of_trx_hold_locks = 0;
+  record.prediction = prediction;
   record.transaction_id = transaction_id;
   
   transaction_type type = transaction_types[transaction_id];
@@ -828,7 +829,7 @@ void TraceTool::write_work_wait()
                     "mean_latency_of_other_transactions_of_this_type_over_the_past_5_seconds,"
                     "mean_latency_of_the_last_20_transactions_of_this_type,"
                     "max_latency_of_the_last_50_transactions_of_this_type,"
-                    "actual_remaining");
+                    "prediction,actual_remaining");
   tpcc << attributes << endl;
   new_order << attributes << endl;
   payment << attributes << endl;
@@ -847,6 +848,14 @@ void TraceTool::write_work_wait()
       ulint total_wait = function_times[0][record.transaction_id];
       ulint total_work = latency - total_wait;
       ulint actual_remaining = latency - record.time_so_far;
+      
+      if (latency < total_wait ||
+          total_wait < record.wait_so_far ||
+          total_work < record.work_so_far)
+      {
+        continue;
+      }
+      
       ut_a(latency > total_wait);
       ut_a(total_wait > record.wait_so_far);
       ut_a(total_work > record.work_so_far);
@@ -865,7 +874,7 @@ void TraceTool::write_work_wait()
            << "," << record.avg_latency_of_same_past_5_seconds
            << "," << record.avg_latency_of_same_last_20
            << "," << record.max_latency_of_same_last_50
-           << "," << actual_remaining << endl;
+           << "," << record.prediction << "," << actual_remaining << endl;
       tpcc << line.str().c_str();
       switch (type)
       {

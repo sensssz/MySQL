@@ -135,9 +135,9 @@ estimate(
       return payment_estimate(parameters);
 //    case ORDER_STATUS:
 //      return 4000000;
-    case DELIVERY:
+//    case DELIVERY:
 //      return 3000000;
-      return delivery_estimate(parameters);
+//      return delivery_estimate(parameters);
     case STOCK_LEVEL:
       return stock_level_estimate(parameters);
     default:
@@ -742,6 +742,12 @@ min_var_order(
     }
   }
   
+  for (ulint index = 0, size = locks.size(); index < size; ++index)
+  {
+    lock_t *lock = locks[index];
+    lock->marked = false;
+  }
+  
   return min_heuristic;
 }
 
@@ -783,9 +789,10 @@ LVM_schedule(
         trx->is_user_trx)
     {
       lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-                                                                     wait_locks.size(), trx->transaction_id);
+                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
     }
   }
+  
   estimate_mutex_exit();
   
   vector<lock_t *> merged_locks;

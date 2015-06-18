@@ -84,6 +84,7 @@ typedef struct work_wait
     double max_latency_of_same_last_50;
     double avg_latency_of_trx_hold_locks;
     ulint time_so_far;
+    ulint prediction;
     ulint transaction_id;
 } work_wait;
 
@@ -209,7 +210,7 @@ public:
     /********************************************************************//**
     Add a record about work time and wait time. */
     ulint *add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                       ulint num_of_wait_locks, ulint transaction_id);
+                       ulint num_of_wait_locks, ulint prediction, ulint transaction_id);
     
     work_wait parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
                        ulint num_of_wait_locks, ulint transaction_id);
