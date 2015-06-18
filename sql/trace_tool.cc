@@ -15,6 +15,7 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -392,12 +393,10 @@ void TraceTool::update_ctv(ulint latency)
   double old_mean = mean_latency;
   mean_latency = old_mean + (latency - old_mean) / num_trans;
   
-#ifdef WORK_WAIT
   ulint wait_time = function_times[0][current_transaction_id];
   ulint work_time = latency - wait_time;
   mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans;
   mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans;
-#endif
 }
 
 void TraceTool::end_transaction()
@@ -807,6 +806,7 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_isotonic_accuracy()
 {
+  ofstream tpcc_accuracy("accuracy/tpcc");
   ofstream new_order_accuracy("accuracy/new_order");
   ofstream payment_accuracy("accuracy/payment");
   ofstream order_status_accuracy("accuracy/order_status");
@@ -828,6 +828,7 @@ void TraceTool::write_isotonic_accuracy()
     
     ulint actual_remaining = latency - time_so_far;
     
+    tpcc_accuracy << estimated_remaining << ',' << actual_remaining << endl;
     if (transaction_start_times[index])
     {
       switch (type)
@@ -854,6 +855,7 @@ void TraceTool::write_isotonic_accuracy()
   }
   estimated_remainings.clear();
   transaction_ids.clear();
+  tpcc_accuracy.close();
   new_order_accuracy.close();
   payment_accuracy.close();
   order_status_accuracy.close();
