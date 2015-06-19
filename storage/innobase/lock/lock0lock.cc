@@ -2098,8 +2098,6 @@ lock_rec_enqueue_waiting(
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
   
-  ++TraceTool::total_wait_locks;
-  
   return(DB_LOCK_WAIT);
 }
 
@@ -2414,10 +2412,8 @@ lock_rec_lock(
   common cases */
   switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr)) {
   case LOCK_REC_SUCCESS:
-      ++TraceTool::total_granted_locks;
     return(DB_SUCCESS);
   case LOCK_REC_SUCCESS_CREATED:
-      ++TraceTool::total_granted_locks;
     return(DB_SUCCESS_LOCKED_REC);
   case LOCK_REC_FAIL:
     return(lock_rec_lock_slow(impl, mode, block,
@@ -2528,26 +2524,6 @@ lock_grant(
 {
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
-  
-  timespec now = TraceTool::get_time();
-  trx_t *trx = lock->trx;
-  ulint wait_time = TraceTool::difftime(lock->wait_start, now);
-  trx->total_wait_time += wait_time;
-  --TraceTool::total_wait_locks;
-  ++TraceTool::total_granted_locks;
-  
-  ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//  if (lock->process_time > 0 &&
-//      rand() % 100 < 40 &&
-//      trx->is_user_trx)
-//  {
-//    TraceTool::get_instance()->add_estimate_record(time_so_far, lock->process_time, trx->transaction_id);
-//  }
-  
-  if (lock->time_at_grant != NULL)
-  {
-    *(lock->time_at_grant) = time_so_far;
-  }
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2773,6 +2749,92 @@ locks_grant(
     }
   }
 }
+static
+void
+merge_read_locks(
+  vector<lock_t *> &wait_locks,
+  vector<lock_t *> &merged_locks,
+  vector<lock_t *> &read_locks)
+{
+  ulint longest_time_so_far = 0;
+  for (ulint index = 0, size = wait_locks.size();
+       index < size; ++index)
+  {
+    lock_t *lock = wait_locks[index];
+    if (lock_get_mode(lock) == LOCK_S)
+    {
+      read_locks.push_back(lock);
+      if (lock->time_so_far > longest_time_so_far)
+      {
+        longest_time_so_far = lock->time_so_far;
+      }
+    }
+    else
+    {
+      merged_locks.push_back(lock);
+    }
+  }
+  if (read_locks.size() > 0)
+  {
+    lock_t *lock = read_locks[0];
+    lock->original_time_so_far = lock->time_so_far;
+    lock->time_so_far = longest_time_so_far;
+    merged_locks.push_back(lock);
+  }
+}
+
+
+static
+bool
+compare_by_time_so_far(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  return lock1->time_so_far > lock2->time_so_far;
+}
+
+static
+void
+schedule(
+  vector<lock_t *> wait_locks,
+  vector<lock_t *> locks_to_grant)
+{
+    vector<lock_t *> merged_locks;
+    vector<lock_t *> read_locks;
+    merge_read_locks(wait_locks, merged_locks, read_locks);
+    
+    timespec now = TraceTool::get_time();
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+        lock_t *lock = wait_locks[index];
+        trx_t *trx = lock->trx;
+        lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+    }
+    sort(merged_locks.begin(), merged_locks.end(), compare_by_time_so_far);
+    
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+        lock_t *lock = wait_locks[index];
+        lock->ranking = index;
+        if (lock_get_mode(lock) == LOCK_S)
+        {
+            lock->time_so_far = lock->original_time_so_far;
+            for (ulint read_index = 0, read_size = read_locks.size();
+                 read_index < read_size; ++read_index)
+            {
+                read_locks[read_index]->ranking = index;
+            }
+        }
+    }
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+    if (wait_locks[index]->ranking == 0)
+    {
+      locks_to_grant.push_back(wait_locks[index]);
+    }
+    }
+}
+
 
 static
 void
@@ -2820,11 +2882,7 @@ lock_next_to_grant(
     if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
         locks_to_grant.size() == 0) /* No batch in queue */
     {
-      if (wait_locks.size() > TraceTool::max_num_locks)
-      {
-        TraceTool::max_num_locks = wait_locks.size();
-      }
-      LVM_schedule(wait_locks, locks_to_grant);
+      schedule(wait_locks, locks_to_grant);
     }
   }
 }
@@ -2859,8 +2917,6 @@ lock_rec_dequeue_from_page(
 	page_no = in_lock->un_member.rec_lock.page_no;
 
 	in_lock->index->table->n_rec_locks--;
-  
-  --TraceTool::total_granted_locks;
 
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), in_lock);
