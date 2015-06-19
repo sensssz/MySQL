@@ -2909,6 +2909,10 @@ lock_rec_dequeue_from_page(
 //        ++num_of_wait_locks;
 //      }
 //    }
+//    if (num_of_wait_locks> TraceTool::max_num_locks)
+//    {
+//      TraceTool::max_num_locks = num_of_wait_locks;
+//    }
     
     vector<lock_t *> locks_to_grant;
     lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
