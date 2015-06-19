@@ -9,6 +9,7 @@
 #include "lock0var.h"
 #include "trx0trx.h"
 #include "trace_tool.h"
+#include "m5p.h"
 
 #include <algorithm>
 #include <fstream>
@@ -119,6 +120,7 @@ estimate(
   }
 }
 
+/*
 static
 double
 new_order_estimate(work_wait &parameters)
@@ -204,6 +206,7 @@ tpcc_estimate(work_wait &parameters)
   
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
+ */
 
 static
 double
@@ -223,8 +226,8 @@ estimate(
     case DELIVERY:
 //      return 3000000;
       return delivery_estimate(parameters);
-//    case STOCK_LEVEL:
-//      return stock_level_estimate(parameters);
+    case STOCK_LEVEL:
+      return stock_level_estimate(parameters);
     default:
       return tpcc_estimate(parameters);
   }
@@ -548,17 +551,17 @@ LVM_schedule(
     }
     ulint work_so_far = lock->time_so_far - wait_so_far;
     ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
+    work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type);
     
-    if ((rand() % 100 < 20 ||
-         trx->type == ORDER_STATUS) &&
-        trx->is_user_trx)
-    {
-      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-    }
+//    if ((rand() % 100 < 20 ||
+//         trx->type == ORDER_STATUS) &&
+//        trx->is_user_trx)
+//    {
+//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
+//    }
   }
   estimate_mutex_exit();
   
