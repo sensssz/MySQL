@@ -9,8 +9,8 @@
 #include "lock0var.h"
 #include "trx0trx.h"
 #include "trace_tool.h"
-#include "m5p.h"
 
+#include <cmath>
 #include <algorithm>
 #include <fstream>
 #include <float.h>
@@ -24,6 +24,8 @@ using std::sort;
 using std::find;
 using std::string;
 using std::pair;
+
+#include "m5p.cc"
 
 typedef pair<lock_t *, lock_t *> pair_t;
 
@@ -217,19 +219,19 @@ estimate(
   switch (type) {
     case NEW_ORDER:
 //      return 1000000;
-      return new_order_estimate(parameters);
+      return new_order_log_estimate(parameters);
     case PAYMENT:
 //      return 2000000;
-      return payment_estimate(parameters);
+      return payment_log_estimate(parameters);
 //    case ORDER_STATUS:
 //      return 4000000;
     case DELIVERY:
 //      return 3000000;
-      return delivery_estimate(parameters);
+      return delivery_log_estimate(parameters);
     case STOCK_LEVEL:
-      return stock_level_estimate(parameters);
+      return stock_level_log_estimate(parameters);
     default:
-      return tpcc_estimate(parameters);
+      return tpcc_log_estimate(parameters);
   }
 }
 
@@ -553,15 +555,15 @@ LVM_schedule(
     ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
     work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
-    lock->process_time = estimate(parameters, trx->type);
+    lock->process_time = exp(estimate(parameters, trx->type));
     
-//    if ((rand() % 100 < 20 ||
-//         trx->type == ORDER_STATUS) &&
-//        trx->is_user_trx)
-//    {
-//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-//    }
+    if ((rand() % 100 < 20 ||
+         trx->type == ORDER_STATUS) &&
+        trx->is_user_trx)
+    {
+      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
+    }
   }
   estimate_mutex_exit();
   
