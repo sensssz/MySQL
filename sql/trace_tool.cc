@@ -13,7 +13,6 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -718,6 +717,31 @@ void TraceTool::add_estimate_record(ulint time_so_far, ulint estimated_remaining
   pthread_mutex_unlock(&estimate_mutex);
 }
 
+void TraceTool::write_schedules()
+{
+  ofstream schedule_log("schedules");
+  for (ulint index = 0, size = schedules.size(); index < size; ++index)
+  {
+    schedule_t *schedule = schedules[index];
+    schedule_log << "  mean_latency = " << schedule->mean_latency << endl;
+    for (ulint lock_index = 0, locks_size = schedule->locks.size();
+         lock_index < locks_size; ++lock_index)
+    {
+      schedule_lock_t *lock = schedule->locks[lock_index];
+      ulint latency = function_times.back()[lock->trx_id];
+      if (latency > lock->time_so_far)
+      {
+        ulint remaining = latency - lock->time_so_far;
+        schedule_log << "  lock_t lock" << lock_index << "={" << lock->trans_type << ",'" << lock->lock_type << "',"
+        << lock->ranking << "," << lock->time_so_far << "," << remaining << "};" << endl;
+      }
+      delete lock;
+    }
+    schedule_log << endl;
+    delete schedule;
+  }
+}
+
 void TraceTool::write_latency(string dir)
 {
   ofstream tpcc_log;
@@ -970,6 +994,7 @@ void TraceTool::write_work_wait()
 
 void TraceTool::write_log()
 {
+  write_schedules();
 #ifdef ACCURACY
   write_isotonic_accuracy();
 #endif

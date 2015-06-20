@@ -88,6 +88,21 @@ typedef struct work_wait
     ulint transaction_id;
 } work_wait;
 
+typedef struct schedule_lock_t
+{
+    ulint time_so_far;
+    char lock_type;
+    int ranking;
+    transaction_type trans_type;
+    ulint trx_id;
+} schedule_lock_t;
+
+typedef struct schedule_t
+{
+    double mean_latency;
+    vector<schedule_lock_t *> locks;
+} schedule_t;
+
 class TraceTool
 {
 private:
@@ -121,6 +136,8 @@ private:
     
     vector<work_wait> work_waits;
     static pthread_mutex_t work_wait_mutex;
+    
+    vector<schedule_t *> schedules;
     
     ulint previous_user;
     ulint previous_nice;
@@ -209,6 +226,11 @@ public:
     Analysis the current query to find out the transaction type. */
     void set_query(const char *query);
     
+    void add_schedule(schedule_t *schedule)
+    {
+        schedules.push_back(schedule);
+    }
+    
     /********************************************************************//**
     Add a record about work time and wait time. */
     ulint *add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
@@ -224,6 +246,7 @@ public:
     Add a record about estimating latency using isotonic models. */
     void add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id);
     
+    void write_schedules();
     /********************************************************************//**
     Dump data about work time and wait time to log file. */
     void write_work_wait();

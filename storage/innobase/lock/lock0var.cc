@@ -247,6 +247,25 @@ lock_get_mode(
   return(static_cast<enum lock_mode>(lock->type_mode & LOCK_MODE_MASK));
 }
 
+/*********************************************************************//**
+Gets the mode of a lock.
+@return mode */
+UNIV_INLINE
+char
+lock_get_mode_char(
+/*==========*/
+  const lock_t* lock) /*!< in: lock */
+{
+  if (lock_get_mode(lock) == LOCK_S)
+  {
+    return 'S';
+  }
+  else
+  {
+    return 'X';
+  }
+}
+
 static
 double
 square(
@@ -254,8 +273,6 @@ square(
 {
   return number * number;
 }
-
-
 
 /*************************************************************//**
 Calculat the variance of a list of numbers. */
@@ -541,6 +558,7 @@ LVM_schedule(
   
   timespec now = TraceTool::get_time();
   estimate_mutex_enter();
+  double mean_latency = TraceTool::mean_latency;
   for (ulint index = 0, size = all_locks.size(); index < size; ++index)
   {
     lock_t *lock = all_locks[index];
@@ -557,13 +575,13 @@ LVM_schedule(
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = exp(estimate(parameters, trx->type));
     
-    if ((rand() % 100 < 20 ||
-         trx->type == ORDER_STATUS) &&
-        trx->is_user_trx)
-    {
-      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-    }
+//    if ((rand() % 100 < 20 ||
+//         trx->type == ORDER_STATUS) &&
+//        trx->is_user_trx)
+//    {
+//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
+//    }
   }
   estimate_mutex_exit();
   
@@ -612,6 +630,36 @@ LVM_schedule(
     {
       locks_to_grant.push_back(lock);
     }
+  }
+  
+  lock_t *lock = wait_locks[0];
+  bool do_monitor = lock->un_member.rec_lock.space == 34 &&
+                    lock->un_member.rec_lock.page_no == 3 &&
+                    lock_rec_find_set_bit(lock) == 11;
+//  TraceTool::get_instance()->get_log() << lock->un_member.rec_lock.space << ","
+//  << lock->un_member.rec_lock.page_no << "," << lock_rec_find_set_bit(lock) << endl;
+  if (do_monitor)
+  {
+//    ofstream &log = TraceTool::get_instance()->get_log();
+    schedule_t *schedule = new schedule_t;
+    schedule->mean_latency = mean_latency;
+//    log << "  mean_latency = " << mean_latency << ";" << endl;
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = wait_locks[index];
+      schedule_lock_t *schedule_lock = new schedule_lock_t;
+      schedule_lock->ranking = lock->ranking;
+      schedule_lock->lock_type = lock_get_mode_char(lock);
+      schedule_lock->trans_type = lock->trx->type;
+      schedule_lock->trx_id = lock->trx->transaction_id;
+      schedule->locks.push_back(schedule_lock);
+      lock->time_at_grant = &(schedule_lock->time_so_far);
+//      trx_t *trx = lock->trx;
+//      log << "  lock_t lock" << index << "={" << trx->type << ",'" << lock_get_mode_str(lock) << "',"
+//          << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
+    }
+    TraceTool::get_instance()->add_schedule(schedule);
+//    log << endl;
   }
   
   if (granted_locks.size() > 0 &&
