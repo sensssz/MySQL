@@ -252,6 +252,10 @@ void *TraceTool::check_write_log(void *arg)
       src.close();
       dst.close();
       
+      ofstream max_lock("max_lock");
+      max_lock << max_num_locks << endl;
+      max_lock.close();
+      
       /* Create a new TraceTool instnance. */
       TraceTool *old_instace = instance;
       instance = new TraceTool;
@@ -972,8 +976,5 @@ void TraceTool::write_log()
 #ifdef WORK_WAIT
   write_work_wait();
 #endif
-  ofstream max_lock("max_lock");
-  max_lock << max_num_locks << endl;
-  max_lock.close();
   write_latency("latency/original/");
 }

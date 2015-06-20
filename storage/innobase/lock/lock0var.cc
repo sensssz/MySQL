@@ -219,19 +219,19 @@ estimate(
   switch (type) {
     case NEW_ORDER:
 //      return 1000000;
-      return new_order_log_estimate(parameters);
+      return new_order_estimate(parameters);
     case PAYMENT:
 //      return 2000000;
-      return payment_log_estimate(parameters);
+      return payment_estimate(parameters);
 //    case ORDER_STATUS:
 //      return 4000000;
     case DELIVERY:
 //      return 3000000;
-      return delivery_log_estimate(parameters);
+      return delivery_estimate(parameters);
     case STOCK_LEVEL:
-      return stock_level_log_estimate(parameters);
+      return stock_level_estimate(parameters);
     default:
-      return tpcc_log_estimate(parameters);
+      return tpcc_estimate(parameters);
   }
 }
 
