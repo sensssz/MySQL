@@ -95,6 +95,7 @@ Created 2/16/1996 Heikki Tuuri
 # include "os0sync.h"
 # include "zlib.h"
 # include "ut0crc32.h"
+#include "lock0var.h"
 #include "trace_tool.h"
 
 /** Log sequence number immediately after startup */
@@ -3095,6 +3096,7 @@ innobase_shutdown_for_mysql(void)
 	srv_was_started = FALSE;
 	srv_start_has_been_called = FALSE;
   
+  indi_cleanup();
   delete TraceTool::get_instance();
 
 	return(DB_SUCCESS);

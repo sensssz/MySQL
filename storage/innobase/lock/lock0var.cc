@@ -26,6 +26,9 @@ using std::pair;
 
 typedef pair<lock_t *, lock_t *> pair_t;
 
+static double loop_times = 0;
+static long call_times = 0;
+
 void
 read_isotonic(
   const char *name,
@@ -264,6 +267,7 @@ LVM_schedule(
     return;
   }
   
+  ofstream &log = TraceTool::get_instance()->get_log();
   timespec now = TraceTool::get_time();
   for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
@@ -283,13 +287,16 @@ LVM_schedule(
   ulint min_var_index = 0;
   ulint num_perms = permutations.size();
   
+  ++call_times;
+  loop_times = loop_times + ((int) num_perms * 30 - loop_times) / call_times;
+  
   for (ulint index = 0; index < num_perms; ++index)
   {
     variances.push_back(0);
     hits.push_back(0);
   }
   
-  for (ulint count = 0; count < 1000; ++count)
+  for (ulint count = 0; count < 30; ++count)
   {
     for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
     {
@@ -327,6 +334,21 @@ LVM_schedule(
   
   assign_rankings(permutations[max_hit_index], read_locks);
   
+  lock_t *lock = wait_locks[0];
+  bool do_monitor = lock->un_member.rec_lock.space == 34 &&
+                    lock->un_member.rec_lock.page_no == 3 &&
+                    lock_rec_find_set_bit(lock) == 30 && false;
+  if (do_monitor)
+  {
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+      lock_t *lock = wait_locks[index];
+      trx_t *trx = lock->trx;
+      log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
+      << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
+    }
+    log << endl;
+  }
   
   for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
@@ -343,5 +365,7 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
+  TraceTool::get_instance()->get_log() << loop_times << endl;
+  TraceTool::get_instance()->get_log().close();
 }
 

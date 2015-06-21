@@ -2768,6 +2768,7 @@ lock_next_to_grant(
 {
   int smallest_ranking = INT_MAX;
   vector<lock_t *> wait_locks;
+  ulint size = 0;
   
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
        lock != NULL;
@@ -2793,7 +2794,11 @@ lock_next_to_grant(
       {
         locks_to_grant.push_back(lock);
       }
-      wait_locks.push_back(lock);
+      if (size < MAX_BATCH_SIZE)
+      {
+        wait_locks.push_back(lock);
+        ++size;
+      }
     }
   }
   
