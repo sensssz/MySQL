@@ -2098,8 +2098,6 @@ lock_rec_enqueue_waiting(
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
   
-  ++TraceTool::total_wait_locks;
-  
   return(DB_LOCK_WAIT);
 }
 
@@ -2414,10 +2412,8 @@ lock_rec_lock(
   common cases */
   switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr)) {
   case LOCK_REC_SUCCESS:
-      ++TraceTool::total_granted_locks;
     return(DB_SUCCESS);
   case LOCK_REC_SUCCESS_CREATED:
-      ++TraceTool::total_granted_locks;
     return(DB_SUCCESS_LOCKED_REC);
   case LOCK_REC_FAIL:
     return(lock_rec_lock_slow(impl, mode, block,
@@ -2535,7 +2531,7 @@ lock_grant(
   trx->total_wait_time += wait_time;
   
   ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-  TraceTool::get_instance()->add_estimate_record(time_so_far, lock_get_mode(lock) == LOCK_S);
+  TraceTool::get_instance()->add_estimate_record(time_so_far, trx->transaction_id, lock_get_mode(lock) == LOCK_S);
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2808,10 +2804,6 @@ lock_next_to_grant(
     if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
         locks_to_grant.size() == 0) /* No batch in queue */
     {
-      if (wait_locks.size() > TraceTool::max_num_locks)
-      {
-        TraceTool::max_num_locks = wait_locks.size();
-      }
       LVM_schedule(wait_locks, locks_to_grant);
     }
   }
@@ -2865,7 +2857,6 @@ lock_rec_dequeue_from_page(
       if (lock_get_wait(lock) &&
           !lock_rec_has_to_wait_in_queue(lock))
       {
-        
         lock_grant(lock);
       }
     }

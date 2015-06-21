@@ -59,6 +59,12 @@ enum transaction_type
 };
 typedef enum transaction_type transaction_type;
 
+typedef struct time_record_t
+{
+    ulint time_sof_far;
+    ulint trx_id;
+} time_record_t;
+
 class TraceTool
 {
 private:
@@ -82,8 +88,9 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
-    static __thread vector<ulint> inclusive_times_so_far;/*!< Time so far when a lock is granted. */
-    static __thread vector<ulint> exclusive_times_so_far;/*!< Time so far when a lock is granted. */
+    static list<time_record_t> inclusive_times_so_far;/*!< Time so far when a lock is granted. */
+    static list<time_record_t> exclusive_times_so_far;/*!< Time so far when a lock is granted. */
+    static pthread_mutex_t time_so_far_mutex;
     static vector<ulint> inclusive_remainings;
     static vector<ulint> exclusive_remainings;
     static pthread_mutex_t remaining_mutex;
@@ -162,7 +169,7 @@ public:
     
     /********************************************************************//**
     Add a record about estimating latency using isotonic models. */
-    void add_estimate_record(ulint time_so_far, bool inclusive);
+    void add_estimate_record(ulint time_so_far, ulint trx_id, bool inclusive);
     
     /********************************************************************//**
     Dump data about function running time and latency to log file. */

@@ -52,11 +52,15 @@ __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
 
-__thread vector<ulint> TraceTool::inclusive_times_so_far;
-__thread vector<ulint> TraceTool::exclusive_times_so_far;
+list<time_record_t> TraceTool::inclusive_times_so_far;
+list<time_record_t> TraceTool::exclusive_times_so_far;
+pthread_mutex_t TraceTool::time_so_far_mutex = PTHREAD_MUTEX_INITIALIZER;
 vector<ulint> TraceTool::inclusive_remainings;
 vector<ulint> TraceTool::exclusive_remainings;
 pthread_mutex_t TraceTool::remaining_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+ulint TraceTool::num_trans = 0;
+double TraceTool::mean_latency = 0;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -160,8 +164,6 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
-  inclusive_times_so_far.reserve(50);
-  inclusive_times_so_far.reserve(50);
   
   srand(time(0));
 }
@@ -331,11 +333,31 @@ void TraceTool::end_transaction()
   pthread_rwlock_unlock(&data_lock);
 #endif
   pthread_mutex_lock(&remaining_mutex);
-  inclusive_remainings.insert(inclusive_remainings.end(), inclusive_times_so_far.begin(), inclusive_times_so_far.end());
-  exclusive_remainings.insert(exclusive_remainings.end(), exclusive_times_so_far.begin(), exclusive_times_so_far.end());
+  pthread_mutex_lock(&time_so_far_mutex);
+  for (list<time_record_t>::iterator iter = inclusive_times_so_far.begin();
+       iter != inclusive_times_so_far.end(); ++iter)
+  {
+    if (iter->trx_id == current_transaction_id)
+    {
+      ulint actual_remaining = latency - iter->time_sof_far;
+      inclusive_remainings.push_back(actual_remaining);
+      iter = inclusive_times_so_far.erase(iter);
+      --iter;
+    }
+  }
+  for (list<time_record_t>::iterator iter = exclusive_times_so_far.begin();
+       iter != exclusive_times_so_far.end(); ++iter)
+  {
+    if (iter->trx_id == current_transaction_id)
+    {
+      ulint actual_remaining = latency - iter->time_sof_far;
+      exclusive_remainings.push_back(actual_remaining);
+      iter = exclusive_times_so_far.erase(iter);
+      --iter;
+    }
+  }
+  pthread_mutex_unlock(&time_so_far_mutex);
   pthread_mutex_unlock(&remaining_mutex);
-  inclusive_times_so_far.clear();
-  exclusive_times_so_far.clear();
 }
 
 void TraceTool::add_record(int function_index, long duration)
@@ -349,19 +371,24 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-void TraceTool::add_estimate_record(ulint time_so_far, bool inclusive)
+void TraceTool::add_estimate_record(ulint time_so_far, ulint trx_id, bool inclusive)
 {
+  pthread_mutex_lock(&time_so_far_mutex);
+  time_record_t record;
+  record.time_sof_far = time_so_far;
+  record.trx_id = trx_id;
   if (inclusive)
   {
-    inclusive_times_so_far.push_back(time_so_far);
+    inclusive_times_so_far.push_back(record);
   }
   else
   {
-    exclusive_times_so_far.push_back(time_so_far);
+    exclusive_times_so_far.push_back(record);
   }
+  pthread_mutex_unlock(&time_so_far_mutex);
 }
 
-static ulint TraceTool::estimate(bool inclusive)
+ulint TraceTool::estimate(bool inclusive)
 {
   if (inclusive &&
       inclusive_remainings.size() > 0)
