@@ -835,29 +835,10 @@ LVM_schedule(
   }
   
   timespec now = TraceTool::get_time();
-  estimate_mutex_enter();
   for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
-    lock_t *lock = wait_locks[index];
-    trx_t *trx = lock->trx;
-    lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-    ulint wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-    ulint work_so_far = lock->time_so_far - wait_so_far;
-    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
-                                                                 wait_locks.size(), trx->transaction_id);
-    lock->process_time = estimate(parameters, trx->type);
     
-//    if ((rand() % 100 < 20 ||
-//         trx->type == ORDER_STATUS) &&
-//        trx->is_user_trx)
-//    {
-//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-//    }
   }
-  
-  estimate_mutex_exit();
   
   vector<lock_t *> merged_locks;
   vector<lock_t *> read_locks;

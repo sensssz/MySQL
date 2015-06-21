@@ -2533,21 +2533,9 @@ lock_grant(
   trx_t *trx = lock->trx;
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   trx->total_wait_time += wait_time;
-  --TraceTool::total_wait_locks;
-  ++TraceTool::total_granted_locks;
   
   ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//  if (lock->process_time > 0 &&
-//      rand() % 100 < 40 &&
-//      trx->is_user_trx)
-//  {
-//    TraceTool::get_instance()->add_estimate_record(time_so_far, lock->process_time, trx->transaction_id);
-//  }
-  
-  if (lock->time_at_grant != NULL)
-  {
-    *(lock->time_at_grant) = time_so_far;
-  }
+  TraceTool::get_instance()->add_estimate_record(time_so_far, lock_get_mode(lock) == LOCK_S);
 
   lock_reset_lock_and_trx_wait(lock);
 
@@ -2859,8 +2847,6 @@ lock_rec_dequeue_from_page(
 	page_no = in_lock->un_member.rec_lock.page_no;
 
 	in_lock->index->table->n_rec_locks--;
-  
-  --TraceTool::total_granted_locks;
 
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), in_lock);
@@ -2869,79 +2855,55 @@ lock_rec_dequeue_from_page(
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
-  
-//  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-//       lock != NULL;
-//       lock = lock_rec_get_next_on_page(lock))
-//  {
-//    if (lock_get_wait(lock) &&
-//        !lock_rec_has_to_wait_in_queue(lock))
-//    {
-//      
-//      lock_grant(lock);
-//    }
-//  }
-  
-  /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-  if (first_lock_on_page == NULL)
+
+  if (!TraceTool::can_do_estimate())
   {
-      return;
-  }
-  
-  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-       heap_no < n_bits; ++heap_no)
-  {
-    /* Not a lock on this record. */
-    if (!lock_rec_get_nth_bit(in_lock, heap_no))
+    for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+         lock != NULL;
+         lock = lock_rec_get_next_on_page(lock))
     {
-      continue;
+      if (lock_get_wait(lock) &&
+          !lock_rec_has_to_wait_in_queue(lock))
+      {
+        
+        lock_grant(lock);
+      }
+    }
+  }
+  else
+  {
+    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
+    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+    if (first_lock_on_page == NULL)
+    {
+        return;
     }
     
-//    ulint num_of_wait_locks = 0;
-//    for (lock = lock_rec_get_first(space, page_no, heap_no);
-//         lock != NULL;
-//         lock = lock_rec_get_next(heap_no, lock))
-//    {
-//      if (lock_get_wait(lock))
-//      {
-//        ++num_of_wait_locks;
-//      }
-//    }
-//    if (num_of_wait_locks> TraceTool::max_num_locks)
-//    {
-//      TraceTool::max_num_locks = num_of_wait_locks;
-//    }
-    
-    vector<lock_t *> locks_to_grant;
-    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
-    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
-    
-//    timespec now = TraceTool::get_time();
-    /* Find other locks that can also be granted. */
-    for (lock = lock_rec_get_first(space, page_no, heap_no);
-         lock != NULL;
-         lock = lock_rec_get_next(heap_no, lock))
+    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+         heap_no < n_bits; ++heap_no)
     {
-      if (lock_get_wait(lock))
+      /* Not a lock on this record. */
+      if (!lock_rec_get_nth_bit(in_lock, heap_no))
       {
-        if (!lock_rec_has_to_wait_in_queue(lock))
+        continue;
+      }
+      
+      vector<lock_t *> locks_to_grant;
+      lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+      locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
+      
+      /* Find other locks that can also be granted. */
+      for (lock = lock_rec_get_first(space, page_no, heap_no);
+           lock != NULL;
+           lock = lock_rec_get_next(heap_no, lock))
+      {
+        if (lock_get_wait(lock))
         {
-//          trx_t *trx = lock->trx;
-//          if (rand() % 100 < 20 ||
-//              trx->type == ORDER_STATUS ||
-//              trx->type == DELIVERY ||
-//              trx->type == STOCK_LEVEL)
-//          {
-//            ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//            ulint wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-//            ulint work = time_so_far - wait;
-//            ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-//            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
-//                                                                           num_of_wait_locks, trx->transaction_id);
-//          }
-          lock_grant(lock);
+          if (!lock_rec_has_to_wait_in_queue(lock))
+          {
+            lock_grant(lock);
+          }
         }
       }
     }
