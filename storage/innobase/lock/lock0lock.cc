@@ -2804,6 +2804,7 @@ lock_next_to_grant(
   int smallest_ranking = INT_MAX;
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
+  ulint num_waits = 0;
   
   ulint size = 0;
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
@@ -2819,6 +2820,7 @@ lock_next_to_grant(
     }
     else
     {
+      ++num_waits;
       if (lock->ranking != -1 &&
           lock->ranking < smallest_ranking)
       {
@@ -2841,6 +2843,10 @@ lock_next_to_grant(
   /* No one is holding a lock on this record when we reach here */
   if (wait_locks.size() > 0) /* Queue is not empty */
   {
+    if (num_waits > TraceTool::max_num_locks)
+    {
+      TraceTool::max_num_locks = num_waits;
+    }
     bool new_wait_lock = wait_locks.back()->ranking == -1;
     if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
         locks_to_grant.size() == 0) /* No batch in queue */
@@ -2920,20 +2926,20 @@ lock_rec_dequeue_from_page(
       continue;
     }
     
-//    ulint num_of_wait_locks = 0;
-//    for (lock = lock_rec_get_first(space, page_no, heap_no);
-//         lock != NULL;
-//         lock = lock_rec_get_next(heap_no, lock))
-//    {
-//      if (lock_get_wait(lock))
-//      {
-//        ++num_of_wait_locks;
-//      }
-//    }
-//    if (num_of_wait_locks > TraceTool::max_num_locks)
-//    {
-//      TraceTool::max_num_locks = num_of_wait_locks;
-//    }
+    ulint num_of_wait_locks = 0;
+    for (lock = lock_rec_get_first(space, page_no, heap_no);
+         lock != NULL;
+         lock = lock_rec_get_next(heap_no, lock))
+    {
+      if (lock_get_wait(lock))
+      {
+        ++num_of_wait_locks;
+      }
+    }
+    if (num_of_wait_locks > TraceTool::max_num_locks)
+    {
+      TraceTool::max_num_locks = num_of_wait_locks;
+    }
     
     vector<lock_t *> locks_to_grant;
     lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
