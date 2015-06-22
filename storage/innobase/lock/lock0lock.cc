@@ -2048,24 +2048,24 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
-  vector<lock_t *> wait_locks;
-  vector<lock_t *> granted_locks;
-  vector<lock_t *> locks_to_grant;
-  bool has_batch = false;
-  
-  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
-  
-  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
-      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
-  {
-    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-    locks_grant(locks_to_grant, buf_block_get_space(block),
-                buf_block_get_page_no(block), heap_no, trx);
-    if (!lock_get_wait(lock))
-    {
-      return DB_SUCCESS_LOCKED_REC;
-    }
-  }
+//  vector<lock_t *> wait_locks;
+//  vector<lock_t *> granted_locks;
+//  vector<lock_t *> locks_to_grant;
+//  bool has_batch = false;
+//  
+//  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+//  
+//  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+//      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
+//  {
+//    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+//    locks_grant(locks_to_grant, buf_block_get_space(block),
+//                buf_block_get_page_no(block), heap_no, trx);
+//    if (!lock_get_wait(lock))
+//    {
+//      return DB_SUCCESS_LOCKED_REC;
+//    }
+//  }
   
   
   /* Release the mutex to obey the latching order.
@@ -2941,11 +2941,11 @@ lock_rec_dequeue_from_page(
       TraceTool::max_num_locks = num_of_wait_locks;
     }
     
-    vector<lock_t *> locks_to_grant;
-    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
-    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
+//    vector<lock_t *> locks_to_grant;
+//    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+//    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
     
-//    timespec now = TraceTool::get_time();
+    timespec now = TraceTool::get_time();
     /* Find other locks that can also be granted. */
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
@@ -2955,19 +2955,19 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue(lock))
         {
-//          trx_t *trx = lock->trx;
-//          if (rand() % 100 < 20 ||
-//              trx->type == ORDER_STATUS ||
-//              trx->type == DELIVERY ||
-//              trx->type == STOCK_LEVEL)
-//          {
-//            ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//            ulint wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-//            ulint work = time_so_far - wait;
-//            ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-//            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
-//                                                                           num_of_wait_locks, trx->transaction_id);
-//          }
+          trx_t *trx = lock->trx;
+          if (rand() % 100 < 20 ||
+              trx->type == ORDER_STATUS ||
+              trx->type == DELIVERY ||
+              trx->type == STOCK_LEVEL)
+          {
+            ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+            ulint wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+            ulint work = time_so_far - wait;
+            ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
+                                                                           num_of_wait_locks, 0, trx->transaction_id);
+          }
           lock_grant(lock);
         }
       }
