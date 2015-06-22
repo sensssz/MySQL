@@ -287,14 +287,14 @@ LVM_schedule(
   ulint min_var_index = 0;
   ulint num_perms = permutations.size();
   
-  ++call_times;
-  loop_times = loop_times + ((int) num_perms * 30 - loop_times) / call_times;
-  
   for (ulint index = 0; index < num_perms; ++index)
   {
     variances.push_back(0);
     hits.push_back(0);
   }
+  
+  double loops = 0;
+  ulint start_prune_count = (merged_locks.size() == 5) ? 10 : 4;
   
   for (ulint count = 0; count < 30; ++count)
   {
@@ -305,6 +305,13 @@ LVM_schedule(
     }
     for (ulint index = 0; index < num_perms; ++index)
     {
+      if (count >= start_prune_count &&
+          hits[index] == 0)
+      {
+        continue;
+      }
+      
+      ++loops;
       assign_rankings(permutations[index], read_locks);
       sort(wait_locks.begin(), wait_locks.end(), compare_by_ranking);
       vector<ulint> rolling_sum;
@@ -331,6 +338,9 @@ LVM_schedule(
       max_hit_index = index;
     }
   }
+  
+//  ++call_times;
+//  loop_times = loop_times + (loops - loop_times) / call_times;
   
   assign_rankings(permutations[max_hit_index], read_locks);
   
@@ -365,7 +375,7 @@ UNIV_INTERN
 void
 indi_cleanup()
 {
-  TraceTool::get_instance()->get_log() << loop_times << endl;
-  TraceTool::get_instance()->get_log().close();
+//  TraceTool::get_instance()->get_log() << loop_times << endl;
+//  TraceTool::get_instance()->get_log().close();
 }
 
