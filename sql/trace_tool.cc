@@ -437,7 +437,7 @@ void TraceTool::write_time_so_far(string dir)
         continue;
       }
       
-      ulint remaining = latency - times_so_far;
+      ulint remaining = latency - time_so_far;
       tpcc_log << time_so_far << ',' << remaining << endl;
       switch (type)
       {
@@ -562,6 +562,6 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
-  write_time_so_far("time_so_far/")
+  write_time_so_far("time_so_far/");
   write_latency("latency/");
 }
