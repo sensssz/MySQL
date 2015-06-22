@@ -88,6 +88,9 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
+    vector<ulint> times_so_far;
+    vector<ulint> transaction_ids;
+    
     static list<time_record_t> inclusive_times_so_far;/*!< Time so far when a lock is granted. */
     static list<time_record_t> exclusive_times_so_far;/*!< Time so far when a lock is granted. */
     static pthread_mutex_t time_so_far_mutex;
@@ -171,6 +174,7 @@ public:
     Add a record about estimating latency using isotonic models. */
     void add_estimate_record(ulint time_so_far, ulint trx_id, bool inclusive);
     
+    void write_time_so_far(string dir);
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency(string dir);

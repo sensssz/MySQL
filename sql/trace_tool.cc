@@ -385,6 +385,8 @@ void TraceTool::add_estimate_record(ulint time_so_far, ulint trx_id, bool inclus
   {
     exclusive_times_so_far.push_back(record);
   }
+  times_so_far.push_back(time_so_far);
+  transaction_ids.push_back(trx_id);
   pthread_mutex_unlock(&time_so_far_mutex);
 }
 
@@ -403,6 +405,68 @@ ulint TraceTool::estimate(bool inclusive)
     return exclusive_remainings[index];
   }
   return 0;
+}
+
+void TraceTool::write_time_so_far(string dir)
+{
+  ofstream tpcc_log;
+  ofstream new_order_log;
+  ofstream payment_log;
+  ofstream order_status_log;
+  ofstream delivery_log;
+  ofstream stock_level_log;
+  
+  tpcc_log.open(dir + "tpcc");
+  new_order_log.open(dir + "new_order");
+  payment_log.open(dir + "payment");
+  order_status_log.open(dir + "order_status");
+  delivery_log.open(dir + "delivery");
+  stock_level_log.open(dir + "stock_level");
+  
+  for (ulint index = 0, size = times_so_far.size(); index < size; ++index)
+  {
+    ulint trx_id = transaction_ids[index];
+    
+    if (transaction_start_times[trx_id] > 0)
+    {
+      transaction_type type = transaction_types[trx_id];
+      ulint latency = function_times.back()[trx_id];
+      ulint time_so_far = times_so_far[index];
+      if (latency < time_so_far)
+      {
+        continue;
+      }
+      
+      ulint remaining = latency - times_so_far;
+      tpcc_log << time_so_far << ',' << remaining << endl;
+      switch (type)
+      {
+        case NEW_ORDER:
+          new_order_log << time_so_far << ',' << remaining << endl;
+          break;
+        case PAYMENT:
+          payment_log << time_so_far << ',' << remaining << endl;
+          break;
+        case ORDER_STATUS:
+          order_status_log << time_so_far << ',' << remaining << endl;
+          break;
+        case DELIVERY:
+          delivery_log << time_so_far << ',' << remaining << endl;
+          break;
+        case STOCK_LEVEL:
+          stock_level_log << time_so_far << ',' << remaining << endl;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  tpcc_log.close();
+  new_order_log.close();
+  payment_log.close();
+  order_status_log.close();
+  delivery_log.close();
+  stock_level_log.close();
 }
 
 void TraceTool::write_latency(string dir)
@@ -498,5 +562,6 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
-  write_latency("latency/original/");
+  write_time_so_far("time_so_far/")
+  write_latency("latency/");
 }
