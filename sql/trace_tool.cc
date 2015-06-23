@@ -873,14 +873,12 @@ void TraceTool::write_work_wait()
   ofstream stock_level("work_wait/stock_level.csv");
   
   string attributes("type,work_so_far,wait_so_far,"
-                    "number_of_locks_so_far,number_of_wait_locks_in_current_queue,"
-                    "number_of_all_wait_locks,number_of_all_granted_locks,"
-                    "mean_work_time_of_all_trx,mean_wait_time_of_all_trx,"
-                    "cpu_usage,mean_latency_of_trx_of_this_type_over_the_past_second,"
+                    "number_of_locks_so_far,"
+                    "number_of_all_wait_locks,"
+                    "mean_wait_time_of_all_trx,"
+                    "cpu_usage,"
                     "mean_work_time_of_trx_of_this_type_over_the_past_second,"
                     "mean_wait_time_of_trx_of_this_type_over_the_past_second,"
-                    "mean_latency_of_all_transactions_over_the_past_second,"
-                    "mean_latency_of_other_transactions_of_this_type_over_the_past_5_seconds,"
                     "mean_latency_of_the_last_20_transactions_of_this_type,"
                     "max_latency_of_the_last_50_transactions_of_this_type,"
                     "actual_remaining");
@@ -916,16 +914,27 @@ void TraceTool::write_work_wait()
       
       stringstream line;
       
+//      line << type + 1 << "," << record.work_so_far
+//           << "," << record.wait_so_far << "," << record.num_locks_so_far
+//           << "," << record.num_of_wait_locks << "," << record.total_wait_locks
+//           << "," << record.total_granted_locks << "," << record.mean_work_of_all
+//           << "," << record.mean_wait_of_all << "," << record.cpu_usage
+//           << "," << record.avg_latency_of_same_past_second
+//           << "," << record.avg_work_of_same_past_second
+//           << "," << record.avg_wait_of_same_past_second
+//           << "," << record.avg_latency_of_all_past_second
+//           << "," << record.avg_latency_of_same_past_5_seconds
+//           << "," << record.avg_latency_of_same_last_20
+//           << "," << record.max_latency_of_same_last_50
+//           << "," << actual_remaining << endl;
+      
+      
       line << type + 1 << "," << record.work_so_far
            << "," << record.wait_so_far << "," << record.num_locks_so_far
-           << "," << record.num_of_wait_locks << "," << record.total_wait_locks
-           << "," << record.total_granted_locks << "," << record.mean_work_of_all
-           << "," << record.mean_wait_of_all << "," << record.cpu_usage
-           << "," << record.avg_latency_of_same_past_second
+           << "," << record.total_wait_locks << "," << record.mean_wait_of_all
+           << "," << record.cpu_usage
            << "," << record.avg_work_of_same_past_second
            << "," << record.avg_wait_of_same_past_second
-           << "," << record.avg_latency_of_all_past_second
-           << "," << record.avg_latency_of_same_past_5_seconds
            << "," << record.avg_latency_of_same_last_20
            << "," << record.max_latency_of_same_last_50
            << "," << actual_remaining << endl;

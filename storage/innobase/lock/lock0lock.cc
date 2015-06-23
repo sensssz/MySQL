@@ -2941,11 +2941,11 @@ lock_rec_dequeue_from_page(
       TraceTool::max_num_locks = num_of_wait_locks;
     }
     
-//    vector<lock_t *> locks_to_grant;
-//    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
-//    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
+    vector<lock_t *> locks_to_grant;
+    lock_next_to_grant(space, page_no, heap_no, locks_to_grant);
+    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
     
-    timespec now = TraceTool::get_time();
+//    timespec now = TraceTool::get_time();
     /* Find other locks that can also be granted. */
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
@@ -2955,19 +2955,19 @@ lock_rec_dequeue_from_page(
       {
         if (!lock_rec_has_to_wait_in_queue(lock))
         {
-          trx_t *trx = lock->trx;
-          if (rand() % 100 < 20 ||
-              trx->type == ORDER_STATUS ||
-              trx->type == DELIVERY ||
-              trx->type == STOCK_LEVEL)
-          {
-            ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-            ulint wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-            ulint work = time_so_far - wait;
-            ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
-                                                                           num_of_wait_locks, 0, trx->transaction_id);
-          }
+//          trx_t *trx = lock->trx;
+//          if (rand() % 100 < 20 ||
+//              trx->type == ORDER_STATUS ||
+//              trx->type == DELIVERY ||
+//              trx->type == STOCK_LEVEL)
+//          {
+//            ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+//            ulint wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+//            ulint work = time_so_far - wait;
+//            ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+//            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
+//                                                                           num_of_wait_locks, 0, trx->transaction_id);
+//          }
           lock_grant(lock);
         }
       }

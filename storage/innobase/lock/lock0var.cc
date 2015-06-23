@@ -222,11 +222,10 @@ estimate(
     case PAYMENT:
       return payment_estimate(parameters);
 //    case ORDER_STATUS:
-    case DELIVERY:
-//      return 3000000;
-      return delivery_estimate(parameters);
-//    case STOCK_LEVEL:
-//      return stock_level_estimate(parameters);
+//    case DELIVERY:
+//      return delivery_estimate(parameters);
+    case STOCK_LEVEL:
+      return stock_level_estimate(parameters);
     default:
       return tpcc_estimate(parameters);
   }
