@@ -105,15 +105,11 @@ estimate(
 {
   switch (type) {
     case NEW_ORDER:
-//      return 1000000;
       return new_order_estimate(work, wait, num_locks);
     case PAYMENT:
-//      return 2000000;
       return payment_estimate(work, wait, num_locks);
 //    case ORDER_STATUS:
-//      return 4000000;
     case DELIVERY:
-//      return 3000000;
       return delivery_estimate(work, wait, num_locks);
     case STOCK_LEVEL:
       return stock_level_estimate(work, wait, num_locks);
@@ -121,94 +117,6 @@ estimate(
       return tpcc_estimate(work, wait, num_locks);
   }
 }
-
-/*
-static
-double
-new_order_estimate(work_wait &parameters)
-{
-  double actual_remaining =
-  
-  0.7592 * parameters.work_so_far +
-  0.201  * parameters.wait_so_far +
-  564178.1491 * parameters.num_locks_so_far +
-  -61426852.4944 * parameters.num_of_wait_locks +
-  1560434.2988 * parameters.total_wait_locks +
-  2.3032 * parameters.mean_work_of_all +
-  -3.6264 * parameters.mean_wait_of_all +
-  -0.421  * parameters.avg_work_of_same_past_second +
-  -0.8136 * parameters.avg_wait_of_same_past_second +
-  0.5857 * parameters.avg_latency_of_all_past_second +
-  0.2934 * parameters.avg_latency_of_same_past_5_seconds +
-  0.3807 * parameters.avg_latency_of_same_last_20 +
-  -0.1047 * parameters.max_latency_of_same_last_50 +
-  150407332.832;
-  
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
-payment_estimate(work_wait &parameters)
-{
-  double actual_remaining =
-  
-  1.032  * parameters.work_so_far +
-  0.2612 * parameters.wait_so_far +
-  39210061.9504 * parameters.num_locks_so_far +
-  210621.5677 * parameters.total_wait_locks +
-  0.4958 * parameters.mean_work_of_all +
-  -0.7318 * parameters.mean_wait_of_all +
-  -0.2639 * parameters.avg_work_of_same_past_second +
-  -0.1244 * parameters.avg_wait_of_same_past_second +
-  0.1148 * parameters.avg_latency_of_all_past_second +
-  0.0692 * parameters.avg_latency_of_same_past_5_seconds +
-  -0.0072 * parameters.max_latency_of_same_last_50 +
-  -93448799.6617;
-  
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
-delivery_estimate(work_wait &parameters)
-{
-  double actual_remaining =
-  
-  0.8261 * parameters.work_so_far +
-  0.6436 * parameters.wait_so_far +
-  1909785.4806 * parameters.total_wait_locks +
-  -0.4486 * parameters.avg_latency_of_all_past_second +
-  0.371  * parameters.avg_latency_of_same_last_20 +
-  92478363.3615;
-  
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
-
-static
-double
-tpcc_estimate(work_wait &parameters)
-{
-  double actual_remaining =
-  
-  0.7823 * parameters.work_so_far +
-  0.2828 * parameters.wait_so_far +
-  2422854.872  * parameters.num_locks_so_far +
-  -28701813.6584 * parameters.num_of_wait_locks +
-  1079008.6852 * parameters.total_wait_locks +
-  -9.9006 * parameters.total_granted_locks +
-  -1.4303 * parameters.mean_wait_of_all +
-  0.4234 * parameters.avg_work_of_same_past_second +
-  -0.4988 * parameters.avg_wait_of_same_past_second +
-  0.0423 * parameters.avg_latency_of_all_past_second +
-  0.2693 * parameters.avg_latency_of_same_past_5_seconds +
-  0.1719 * parameters.avg_latency_of_same_last_20 +
-  -0.0503 * parameters.max_latency_of_same_last_50 +
-  135424678.2785;
-  
-  return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
-}
- */
 
 static
 double
@@ -222,8 +130,8 @@ estimate(
     case PAYMENT:
       return payment_estimate(parameters);
 //    case ORDER_STATUS:
-//    case DELIVERY:
-//      return delivery_estimate(parameters);
+    case DELIVERY:
+      return delivery_estimate(parameters);
     case STOCK_LEVEL:
       return stock_level_estimate(parameters);
     default:
@@ -549,7 +457,7 @@ LVM_schedule(
     }
     ulint work_so_far = lock->time_so_far - wait_so_far;
     ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
+    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type);
     

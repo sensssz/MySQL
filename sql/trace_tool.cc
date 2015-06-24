@@ -798,7 +798,7 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_accuracy()
 {
-  ofstream tpcc("work_wait/accuracy/new_order");
+  ofstream tpcc("work_wait/accuracy/tpcc");
   ofstream new_order("work_wait/accuracy/new_order");
   ofstream payment("work_wait/accuracy/payment");
   ofstream order_status("work_wait/accuracy/order_status");
@@ -872,7 +872,7 @@ void TraceTool::write_work_wait()
   ofstream delivery("work_wait/delivery.csv");
   ofstream stock_level("work_wait/stock_level.csv");
   
-  string attributes("type,work_so_far,wait_so_far,"
+  string attributes("work_so_far,wait_so_far,"
                     "number_of_locks_so_far,"
                     "number_of_all_wait_locks,"
                     "mean_wait_time_of_all_trx,"
@@ -914,30 +914,20 @@ void TraceTool::write_work_wait()
       
       stringstream line;
       
-//      line << type + 1 << "," << record.work_so_far
-//           << "," << record.wait_so_far << "," << record.num_locks_so_far
-//           << "," << record.num_of_wait_locks << "," << record.total_wait_locks
-//           << "," << record.total_granted_locks << "," << record.mean_work_of_all
-//           << "," << record.mean_wait_of_all << "," << record.cpu_usage
-//           << "," << record.avg_latency_of_same_past_second
-//           << "," << record.avg_work_of_same_past_second
-//           << "," << record.avg_wait_of_same_past_second
-//           << "," << record.avg_latency_of_all_past_second
-//           << "," << record.avg_latency_of_same_past_5_seconds
-//           << "," << record.avg_latency_of_same_last_20
-//           << "," << record.max_latency_of_same_last_50
-//           << "," << actual_remaining << endl;
-      
-      
-      line << type + 1 << "," << record.work_so_far
+      line << record.work_so_far
            << "," << record.wait_so_far << "," << record.num_locks_so_far
-           << "," << record.total_wait_locks << "," << record.mean_wait_of_all
-           << "," << record.cpu_usage
+           << "," << record.num_of_wait_locks << "," << record.total_wait_locks
+           << "," << record.total_granted_locks << "," << record.mean_work_of_all
+           << "," << record.mean_wait_of_all << "," << record.cpu_usage
+           << "," << record.avg_latency_of_same_past_second
            << "," << record.avg_work_of_same_past_second
            << "," << record.avg_wait_of_same_past_second
+           << "," << record.avg_latency_of_all_past_second
+           << "," << record.avg_latency_of_same_past_5_seconds
            << "," << record.avg_latency_of_same_last_20
            << "," << record.max_latency_of_same_last_50
            << "," << actual_remaining << endl;
+      
       tpcc << line.str().c_str();
       switch (type)
       {
