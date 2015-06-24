@@ -106,7 +106,7 @@ private:
     
     ofstream log_file;                      /*!< An log file for outputing debug messages. */
     
-    vector<vector<ulint> > function_times;  /*!< Stores the running time of the child functions
+    vector<vector<long> > function_times;  /*!< Stores the running time of the child functions
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
@@ -147,7 +147,7 @@ public:
     static double mean_wait_of_all;
     static long total_wait_locks;
     static long total_granted_locks;
-    static long max_num_locks;
+    static ulint max_num_locks;
     static pthread_mutex_t var_mutex;
     static pthread_mutex_t last_second_mutex;
     
@@ -163,7 +163,7 @@ public:
     
     /********************************************************************//**
     Calcualte time interval in nanoseconds. */
-    static ulint difftime(timespec start, timespec end);
+    static long difftime(timespec start, timespec end);
     
     double get_cpu_usage();
     
@@ -188,7 +188,7 @@ public:
 
     /********************************************************************//**
     Sumbits the total wait time of a transaction. */
-    void update_ctv(ulint latency);
+    void update_ctv(long latency);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */
@@ -210,7 +210,7 @@ public:
                        long num_of_wait_locks, double prediction, ulint transaction_id);
     
     work_wait parameters_necessary(long work_so_far, long wait_so_far, long num_locks,
-                                              long num_of_wait_locks, ulint transaction_id);
+                                   long num_of_wait_locks, ulint transaction_id);
     
     work_wait parameters(long work_so_far, long wait_so_far, long num_locks,
                        long num_of_wait_locks, ulint transaction_id);
@@ -234,3 +234,4 @@ public:
 };
 
 #endif
+f

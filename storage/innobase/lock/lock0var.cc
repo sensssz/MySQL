@@ -29,93 +29,12 @@ using std::pair;
 
 typedef pair<lock_t *, lock_t *> pair_t;
 
-void
-read_isotonic(
-  const char *name,
-  ulint *&so_far,
-  ulint *&estimated,
-  ulint &length)
-{
-  ifstream isotonic_file(name);
-  isotonic_file >> length >> length;
-  so_far = (ulint *)malloc(sizeof(ulint) * length);
-  estimated = (ulint *)malloc(sizeof(ulint) * length);
-  double x = 0;
-  double y = 0;
-  for (ulint index = 0; index < length; ++index)
-  {
-    isotonic_file >> x >> y;
-    so_far[index] = x;
-    estimated[index] = y;
-  }
-  isotonic_file.close();
-}
-
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
 UNIV_INTERN
 void
 indi_init()
 {
-}
-
-static
-double
-new_order_estimate(ulint work, ulint wait, ulint num_locks)
-{
-  double result = 0.391422 * work + -0.035204 * wait + -5778412.679344 * num_locks + 151676562.841838;
-  return result > 0 ? result : work + wait;
-}
-static
-double
-payment_estimate(ulint work, ulint wait, ulint num_locks)
-{
-  double result = 0.167429 * work + 0.018503 * wait + 484540.671643 * num_locks + 14373517.557892;
-  return result > 0 ? result : work + wait;
-}
-static
-double
-delivery_estimate(ulint work, ulint wait, ulint num_locks)
-{
-  double result = 0.335207 * work + 0.012636 * wait + -3567320.906844 * num_locks + 215839241.070575;
-  return result > 0 ? result : work + wait;
-}
-static
-double
-stock_level_estimate(ulint work, ulint wait, ulint num_locks)
-{
-  double result = 0.254872 * work + -0.030642 * wait + -101840.123786 * num_locks + 22112874.484210;
-  return result > 0 ? result : work + wait;
-}
-static
-double
-tpcc_estimate(ulint work, ulint wait, ulint num_locks)
-{
-  double result = 0.327740 * work + 0.008922 * wait + -50320.149374 * num_locks + 56625490.273089;
-  return result > 0 ? result : work + wait;
-}
-
-static
-double
-estimate(
-  ulint work,
-  ulint wait,
-  ulint num_locks,
-  transaction_type type)
-{
-  switch (type) {
-    case NEW_ORDER:
-      return new_order_estimate(work, wait, num_locks);
-    case PAYMENT:
-      return payment_estimate(work, wait, num_locks);
-//    case ORDER_STATUS:
-    case DELIVERY:
-      return delivery_estimate(work, wait, num_locks);
-    case STOCK_LEVEL:
-      return stock_level_estimate(work, wait, num_locks);
-    default:
-      return tpcc_estimate(work, wait, num_locks);
-  }
 }
 
 static
@@ -132,8 +51,8 @@ estimate(
 //    case ORDER_STATUS:
     case DELIVERY:
       return delivery_estimate(parameters);
-    case STOCK_LEVEL:
-      return stock_level_estimate(parameters);
+//    case STOCK_LEVEL:
+//      return stock_level_estimate(parameters);
     default:
       return tpcc_estimate(parameters);
   }
@@ -166,11 +85,11 @@ Calculat the variance of a list of numbers. */
 static
 double
 var(
-  vector<ulint> &numbers)
+  vector<long> &numbers)
 {
   double mean = TraceTool::mean_latency;
   double variance = TraceTool::var_latency;
-  ulint num_trans = TraceTool::num_trans;
+  long num_trans = TraceTool::num_trans;
   
   for (ulint index = 0, size = numbers.size(); index < size; ++index)
   {
@@ -191,11 +110,11 @@ static
 void
 cumsum(
   vector<lock_t *> &locks,
-  vector<ulint> &rolling_sum)
+  vector<long> &rolling_sum)
 {
-  ulint sum_of_previous_process_time = 0;
+  long sum_of_previous_process_time = 0;
   int previous_ranking = 0;
-  ulint max_process = 0;
+  long max_process = 0;
   
   for (ulint index = 0, size = locks.size(); index < size; ++index)
   {
@@ -223,7 +142,7 @@ static
 bool
 is_redundant(
   vector<int> &rankings,
-  ulint num_of_ranking)
+  long num_of_ranking)
 {
   vector<bool> rank_exists(num_of_ranking, false);
   int max_rank = 0;
@@ -457,7 +376,7 @@ LVM_schedule(
     }
     long work_so_far = lock->time_so_far - wait_so_far;
     long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
+    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type);
     
@@ -490,7 +409,7 @@ LVM_schedule(
       wait_locks[index]->ranking = enumeration[index];
     }
     sort(all_locks.begin() + granted_size, all_locks.end(), compare);
-    vector<ulint> rolling_sum;
+    vector<long> rolling_sum;
     cumsum(all_locks, rolling_sum);
     double variance = var(rolling_sum);
     if (variance < min_variance)

@@ -61,7 +61,7 @@ double TraceTool::mean_wait_of_all = 0;
 long TraceTool::total_wait_locks = 0;
 long TraceTool::total_granted_locks= 0;
 double TraceTool::cpu_usage = 0;
-long TraceTool::max_num_locks = 0;
+ulint TraceTool::max_num_locks = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::last_second_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -163,7 +163,7 @@ TraceTool::TraceTool() : function_times()
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
-    vector<ulint> function_time;
+    vector<long> function_time;
     function_time.reserve(500000);
     function_time.push_back(0);
     function_times.push_back(function_time);
@@ -285,12 +285,12 @@ timespec TraceTool::get_time()
   return now;
 }
 
-ulint TraceTool::difftime(timespec start, timespec end)
+long TraceTool::difftime(timespec start, timespec end)
 {
   return (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
 }
 
-ulint TraceTool::now_micro()
+long TraceTool::now_micro()
 {
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
@@ -320,7 +320,7 @@ void TraceTool::start_new_query()
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
-    for (vector<vector<ulint> >::iterator iterator = function_times.begin();
+    for (vector<vector<long> >::iterator iterator = function_times.begin();
          iterator != function_times.end();
          ++iterator)
     {
@@ -387,7 +387,7 @@ void TraceTool::end_query()
 
 /********************************************************************//**
 Sumbits the total wait time of a transaction. */
-void TraceTool::update_ctv(ulint latency)
+void TraceTool::update_ctv(long latency)
 {
   ++num_trans;
   double old_mean = mean_latency;
@@ -395,8 +395,8 @@ void TraceTool::update_ctv(ulint latency)
   mean_latency = old_mean + (latency - old_mean) / num_trans;
   var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
 
-  ulint wait_time = function_times[0][current_transaction_id];
-  ulint work_time = latency - wait_time;
+  long wait_time = function_times[0][current_transaction_id];
+  long work_time = latency - wait_time;
   mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans;
   mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans;
 }
@@ -407,7 +407,7 @@ void TraceTool::end_transaction()
   type = NONE;
 #ifdef LATENCY
   timespec now = get_time();
-  ulint latency = difftime(trans_start, now);
+  long latency = difftime(trans_start, now);
   pthread_rwlock_rdlock(&data_lock);
   function_times.back()[current_transaction_id] = latency;
   if (!commit_successful)
@@ -652,8 +652,8 @@ work_wait TraceTool::parameters(long work_so_far, long wait_so_far, long num_loc
       ++num_trx_of_all_past_second;
       if (type == trx_type)
       {
-        ulint wait_time = function_times[0][trx_id];
-        ulint work_time = latency - wait_time;
+        long wait_time = function_times[0][trx_id];
+        long work_time = latency - wait_time;
         record.avg_latency_of_same_past_second += latency;
         record.avg_work_of_same_past_second += work_time;
         record.avg_wait_of_same_past_second += wait_time;
@@ -752,14 +752,14 @@ void TraceTool::write_latency(string dir)
   }
   
   int function_index = 0;
-  for (vector<vector<ulint> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+  for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)
     {
       if (transaction_start_times[index] > 0)
       {
-        ulint latency = (*iterator)[index];
+        long latency = (*iterator)[index];
         tpcc_log << function_index << ',' << latency << endl;
         switch (transaction_types[index])
         {
