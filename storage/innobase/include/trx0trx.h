@@ -743,7 +743,7 @@ struct trx_t{
 	we treat all read-only transactions as non-locking.  */
 	trx_state_t	state;
     timespec    trx_start_time;
-    ulint       total_wait_time;
+    long       total_wait_time;
     transaction_type    type;
     ulint       transaction_id;
     ibool       is_user_trx;

@@ -2536,7 +2536,7 @@ lock_grant(
   --TraceTool::total_wait_locks;
   ++TraceTool::total_granted_locks;
   
-  ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+  long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
   
   if (lock->time_at_grant != NULL)
   {

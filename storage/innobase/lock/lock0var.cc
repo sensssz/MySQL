@@ -27,28 +27,6 @@ using std::pair;
 
 typedef pair<lock_t *, lock_t *> pair_t;
 
-void
-read_isotonic(
-  const char *name,
-  ulint *&so_far,
-  ulint *&estimated,
-  ulint &length)
-{
-  ifstream isotonic_file(name);
-  isotonic_file >> length >> length;
-  so_far = (ulint *)malloc(sizeof(ulint) * length);
-  estimated = (ulint *)malloc(sizeof(ulint) * length);
-  double x = 0;
-  double y = 0;
-  for (ulint index = 0; index < length; ++index)
-  {
-    isotonic_file >> x >> y;
-    so_far[index] = x;
-    estimated[index] = y;
-  }
-  isotonic_file.close();
-}
-
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
 UNIV_INTERN
@@ -71,8 +49,8 @@ estimate(
 //    case ORDER_STATUS:
     case DELIVERY:
       return delivery_estimate(parameters);
-    case STOCK_LEVEL:
-      return stock_level_estimate(parameters);
+//    case STOCK_LEVEL:
+//      return stock_level_estimate(parameters);
     default:
       return tpcc_estimate(parameters);
   }
@@ -104,7 +82,7 @@ Calculat the mean of a list of numbers. */
 static
 double
 mean(
-  vector<ulint> &numbers)
+  vector<long> &numbers)
 {
   double total = 0;
   
@@ -121,7 +99,7 @@ Calculat the variance of a list of numbers. */
 static
 double
 var(
-  vector<ulint> &numbers)
+  vector<long> &numbers)
 {
   double heuristic = 0;
   double mean = TraceTool::mean_latency;
@@ -140,11 +118,11 @@ static
 void
 cumsum(
   vector<lock_t *> &locks,
-  vector<ulint> &rolling_sum)
+  vector<long> &rolling_sum)
 {
-  ulint sum_of_previous_process_time = 0;
+  long sum_of_previous_process_time = 0;
   int previous_ranking = 0;
-  ulint max_process = 0;
+  long max_process = 0;
   
   for (ulint index = 0, size = locks.size(); index < size; ++index)
   {
@@ -174,11 +152,11 @@ static
 void
 cumsum(
   list<lock_t *> &locks,
-  vector<ulint> &rolling_sum)
+  vector<long> &rolling_sum)
 {
-  ulint sum_of_previous_process_time = 0;
+  long sum_of_previous_process_time = 0;
   int previous_ranking = 0;
-  ulint max_process = 0;
+  long max_process = 0;
   
   for (list<lock_t *>::iterator iter = locks.begin(); iter != locks.end(); ++iter)
   {
@@ -243,7 +221,7 @@ heuristic(
     ++index;
   }
   sort(locks.begin(), locks.end(), compare_by_ranking);
-  vector<ulint> rolling_sum;
+  vector<long> rolling_sum;
   cumsum(locks, rolling_sum);
   return var(rolling_sum);
 }
@@ -271,7 +249,7 @@ heuristic(
     ++index;
   }
   sort(locks.begin(), locks.end(), compare_by_ranking);
-  vector<ulint> rolling_sum;
+  vector<long> rolling_sum;
   cumsum(locks, rolling_sum);
   return var(rolling_sum);
 }
@@ -282,7 +260,7 @@ heuristic(
   vector<lock_t *> &locks)
 {
   sort(locks.begin(), locks.end(), compare_by_ranking);
-  vector<ulint> rolling_sum;
+  vector<long> rolling_sum;
   cumsum(locks, rolling_sum);
   return var(rolling_sum);
 }
@@ -294,8 +272,8 @@ merge_read_locks(
   vector<lock_t *> &merged_locks,
   vector<lock_t *> &read_locks)
 {
-  ulint longest_time_so_far = 0;
-  ulint longest_process = 0;
+  long longest_time_so_far = 0;
+  long longest_process = 0;
   for (ulint index = 0, size = wait_locks.size();
        index < size; ++index)
   {
@@ -384,12 +362,12 @@ list<lock_t *>::iterator
 min_iter(
   list<lock_t *> &locks)
 {
-  ulint min_process = ULONG_MAX;
+  long min_process = LONG_MAX;
   list<lock_t *>::iterator min_iter;
   
   for (list<lock_t *>::iterator iter = locks.begin(); iter != locks.end(); ++iter)
   {
-    ulint process = (*iter)->process_time;
+    long process = (*iter)->process_time;
     if (process < min_process)
     {
       min_process = process;
@@ -542,7 +520,7 @@ find_min_heuristic_on_process(
     ++ranking;
   }
   sort(locks.begin(), locks.end(), compare_by_ranking);
-  vector<ulint> rolling_sum;
+  vector<long> rolling_sum;
   cumsum(locks, rolling_sum);
   double min_heuristic = var(rolling_sum);
   double average = mean(rolling_sum);
@@ -648,7 +626,7 @@ min_var_order(
   while (swap)
   {
     swap = false;
-    ulint min_difference = ULONG_MAX;
+    long min_difference = LONG_MAX;
     ulint min_index = candidates.size();
     for (ulint index = 0, size = candidates.size(); index < size - 1; ++index)
     {
@@ -657,7 +635,7 @@ min_var_order(
       if (lock1->time_so_far < lock2->time_so_far &&
           !contains(swapped_pairs, lock1, lock2))
       {
-        ulint difference = lock2->time_so_far - lock1->time_so_far;
+        long difference = lock2->time_so_far - lock1->time_so_far;
         if (difference < min_difference)
         {
           min_difference = difference;
@@ -710,9 +688,9 @@ LVM_schedule(
     lock_t *lock = wait_locks[index];
     trx_t *trx = lock->trx;
     lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-    ulint wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-    ulint work_so_far = lock->time_so_far - wait_so_far;
-    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+    long wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+    long work_so_far = lock->time_so_far - wait_so_far;
+    long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
     work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type);
