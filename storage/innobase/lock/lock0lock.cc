@@ -2537,12 +2537,6 @@ lock_grant(
   ++TraceTool::total_granted_locks;
   
   ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//  if (lock->process_time > 0 &&
-//      rand() % 100 < 40 &&
-//      trx->is_user_trx)
-//  {
-//    TraceTool::get_instance()->add_estimate_record(time_so_far, lock->process_time, trx->transaction_id);
-//  }
   
   if (lock->time_at_grant != NULL)
   {

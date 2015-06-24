@@ -111,11 +111,6 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
-    vector<ulint> times_so_far;             /*!< Time so far when a lock is granted. */
-    vector<ulint> estimated_remainings;     /*!< Estimated latency of an isotonic model. */
-    vector<ulint> transaction_ids;          /*!< Corresponding transaction ID for time so far. */
-    static pthread_mutex_t estimate_mutex;
-    
     vector<ulint> last_second_commit_times;  /*!< Stores the commit time of transactions. */
     vector<ulint> last_second_transaction_ids;
     
@@ -217,17 +212,13 @@ public:
     
     work_wait parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
                        ulint num_of_wait_locks, ulint transaction_id);
-
-    /********************************************************************//**
-    Add a record about estimating latency using isotonic models. */
-    void add_estimate_record(ulint time_so_far, ulint estimated_remaining, ulint transasction_id);
     
     /********************************************************************//**
     Dump data about work time and wait time to log file. */
     void write_work_wait();
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
-    void write_isotonic_accuracy();
+    void write_accuracy();
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency(string dir);
