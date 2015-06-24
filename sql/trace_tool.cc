@@ -53,15 +53,15 @@ __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
 
-ulint TraceTool::num_trans = 0;
+long TraceTool::num_trans = 0;
 double TraceTool::mean_latency = 0;
 double TraceTool::var_latency = 0;
 double TraceTool::mean_work_of_all = 0;
 double TraceTool::mean_wait_of_all = 0;
-ulint TraceTool::total_wait_locks = 0;
-ulint TraceTool::total_granted_locks= 0;
+long TraceTool::total_wait_locks = 0;
+long TraceTool::total_granted_locks= 0;
 double TraceTool::cpu_usage = 0;
-ulint TraceTool::max_num_locks = 0;
+long TraceTool::max_num_locks = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::last_second_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -441,8 +441,8 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_unlock(&data_lock);
 }
 
-ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                              ulint num_of_wait_locks, ulint prediction, ulint transaction_id)
+long *TraceTool::add_work_wait(long work_so_far, long wait_so_far, long num_locks,
+                              long num_of_wait_locks, double prediction, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
@@ -466,23 +466,23 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
   record.transaction_id = transaction_id;
   
   transaction_type type = transaction_types[transaction_id];
-  ulint num_trx_of_all_past_second = 0;
-  ulint num_trx_of_same_past_second = 0;
-  ulint num_trx_of_same_past_5_seconds = 0;
-  ulint num_trx_of_same_last_20 = 0;
+  long num_trx_of_all_past_second = 0;
+  long num_trx_of_same_past_second = 0;
+  long num_trx_of_same_past_5_seconds = 0;
+  long num_trx_of_same_last_20 = 0;
   ulint now = time(NULL);
   bool past_second = true;
   bool past_5_seconds = true;
   
-  ulint size = last_second_commit_times.size();
-  for (int index = size - 1; index >= 0; --index)
+  long size = last_second_commit_times.size();
+  for (long index = size - 1; index >= 0; --index)
   {
     ulint commit_time = last_second_commit_times[index];
     past_second = now - commit_time <= 2;
     past_5_seconds = now - commit_time <= 6;
     
     ulint trx_id = last_second_transaction_ids[index];
-    ulint latency = function_times.back()[trx_id];
+    long latency = function_times.back()[trx_id];
     transaction_type trx_type = transaction_types[trx_id];
     
     if (past_second)
@@ -491,8 +491,8 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
       ++num_trx_of_all_past_second;
       if (type == trx_type)
       {
-        ulint wait_time = function_times[0][trx_id];
-        ulint work_time = latency - wait_time;
+        long wait_time = function_times[0][trx_id];
+        long work_time = latency - wait_time;
         record.avg_latency_of_same_past_second += latency;
         record.avg_work_of_same_past_second += work_time;
         record.avg_wait_of_same_past_second += wait_time;
@@ -541,7 +541,7 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
     record.avg_latency_of_same_last_20 /= num_trx_of_same_last_20;
   }
   
-  ulint *time_so_far = NULL;
+  long *time_so_far = NULL;
   pthread_mutex_lock(&work_wait_mutex);
   work_waits.push_back(record);
   time_so_far = &(work_waits.back().time_so_far);
@@ -550,8 +550,8 @@ ulint *TraceTool::add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_
   return time_so_far;
 }
 
-work_wait TraceTool::parameters_necessary(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                                          ulint num_of_wait_locks, ulint transaction_id)
+work_wait TraceTool::parameters_necessary(long work_so_far, long wait_so_far, long num_locks,
+                                          long num_of_wait_locks, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
@@ -565,16 +565,16 @@ work_wait TraceTool::parameters_necessary(ulint work_so_far, ulint wait_so_far, 
   record.transaction_id = transaction_id;
   
   transaction_type type = transaction_types[transaction_id];
-  ulint num_trx_of_same_past_second = 0;
+  double num_trx_of_same_past_second = 0;
   ulint now = time(NULL);
   
-  ulint size = last_second_commit_times.size();
-  for (int index = size - 1; index >= 0; --index)
+  long size = last_second_commit_times.size();
+  for (long index = size - 1; index >= 0; --index)
   {
     ulint commit_time = last_second_commit_times[index];
     
     ulint trx_id = last_second_transaction_ids[index];
-    ulint latency = function_times.back()[trx_id];
+    long latency = function_times.back()[trx_id];
     transaction_type trx_type = transaction_types[trx_id];
     
     if (now - commit_time > 2)
@@ -584,8 +584,8 @@ work_wait TraceTool::parameters_necessary(ulint work_so_far, ulint wait_so_far, 
     
     if (type == trx_type)
     {
-      ulint wait_time = function_times[0][trx_id];
-      ulint work_time = latency - wait_time;
+      long wait_time = function_times[0][trx_id];
+      long work_time = latency - wait_time;
       record.avg_latency_of_same_past_second += latency;
       record.avg_work_of_same_past_second += work_time;
       record.avg_wait_of_same_past_second += wait_time;
@@ -603,8 +603,8 @@ work_wait TraceTool::parameters_necessary(ulint work_so_far, ulint wait_so_far, 
   return record;
 }
 
-work_wait TraceTool::parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                              ulint num_of_wait_locks, ulint transaction_id)
+work_wait TraceTool::parameters(long work_so_far, long wait_so_far, long num_locks,
+                              long num_of_wait_locks, ulint transaction_id)
 {
   work_wait record;
   record.work_so_far = work_so_far;
@@ -627,23 +627,23 @@ work_wait TraceTool::parameters(ulint work_so_far, ulint wait_so_far, ulint num_
   record.transaction_id = transaction_id;
   
   transaction_type type = transaction_types[transaction_id];
-  ulint num_trx_of_all_past_second = 0;
-  ulint num_trx_of_same_past_second = 0;
-  ulint num_trx_of_same_past_5_seconds = 0;
-  ulint num_trx_of_same_last_20 = 0;
+  long num_trx_of_all_past_second = 0;
+  long num_trx_of_same_past_second = 0;
+  long num_trx_of_same_past_5_seconds = 0;
+  long num_trx_of_same_last_20 = 0;
   ulint now = time(NULL);
   bool past_second = true;
   bool past_5_seconds = true;
   
-  ulint size = last_second_commit_times.size();
-  for (int index = size - 1; index >= 0; --index)
+  long size = last_second_commit_times.size();
+  for (long index = size - 1; index >= 0; --index)
   {
     ulint commit_time = last_second_commit_times[index];
     past_second = now - commit_time <= 2;
     past_5_seconds = now - commit_time <= 6;
     
     ulint trx_id = last_second_transaction_ids[index];
-    ulint latency = function_times.back()[trx_id];
+    long latency = function_times.back()[trx_id];
     transaction_type trx_type = transaction_types[trx_id];
     
     if (past_second)
@@ -811,10 +811,10 @@ void TraceTool::write_accuracy()
     if (transaction_start_times[record.transaction_id] > 0)
     {
       transaction_type type = transaction_types[record.transaction_id];
-      ulint latency = function_times.back()[record.transaction_id];
-      ulint total_wait = function_times[0][record.transaction_id];
-      ulint total_work = latency - total_wait;
-      ulint actual_remaining = latency - record.time_so_far;
+      long latency = (long) function_times.back()[record.transaction_id];
+      long total_wait = (long) function_times[0][record.transaction_id];
+      long total_work = latency - total_wait;
+      long actual_remaining = latency - record.time_so_far;
       
       if (latency < total_wait ||
           total_wait < record.wait_so_far ||
@@ -873,12 +873,14 @@ void TraceTool::write_work_wait()
   ofstream stock_level("work_wait/stock_level.csv");
   
   string attributes("work_so_far,wait_so_far,"
-                    "number_of_locks_so_far,"
-                    "number_of_all_wait_locks,"
-                    "mean_wait_time_of_all_trx,"
-                    "cpu_usage,"
+                    "number_of_locks_so_far,number_of_wait_locks_in_current_queue,"
+                    "number_of_all_wait_locks,number_of_all_granted_locks,"
+                    "mean_work_time_of_all_trx,mean_wait_time_of_all_trx,"
+                    "cpu_usage,mean_latency_of_trx_of_this_type_over_the_past_second,"
                     "mean_work_time_of_trx_of_this_type_over_the_past_second,"
                     "mean_wait_time_of_trx_of_this_type_over_the_past_second,"
+                    "mean_latency_of_all_transactions_over_the_past_second,"
+                    "mean_latency_of_other_transactions_of_this_type_over_the_past_5_seconds,"
                     "mean_latency_of_the_last_20_transactions_of_this_type,"
                     "max_latency_of_the_last_50_transactions_of_this_type,"
                     "actual_remaining");
@@ -896,10 +898,10 @@ void TraceTool::write_work_wait()
     if (transaction_start_times[record.transaction_id] > 0)
     {
       transaction_type type = transaction_types[record.transaction_id];
-      ulint latency = function_times.back()[record.transaction_id];
-      ulint total_wait = function_times[0][record.transaction_id];
-      ulint total_work = latency - total_wait;
-      ulint actual_remaining = latency - record.time_so_far;
+      long latency = function_times.back()[record.transaction_id];
+      long total_wait = function_times[0][record.transaction_id];
+      long total_work = latency - total_wait;
+      long actual_remaining = latency - record.time_so_far;
       
       if (latency < total_wait ||
           total_wait < record.wait_so_far ||

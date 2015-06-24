@@ -450,14 +450,14 @@ LVM_schedule(
     lock_t *lock = all_locks[index];
     trx_t *trx = lock->trx;
     lock->time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-    ulint wait_so_far = trx->total_wait_time;
+    long wait_so_far = (long) trx->total_wait_time;
     if (lock_get_wait(lock))
     {
-      wait_so_far += TraceTool::difftime(lock->wait_start, now);
+      wait_so_far += (long) TraceTool::difftime(lock->wait_start, now);
     }
-    ulint work_so_far = lock->time_so_far - wait_so_far;
-    ulint num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
+    long work_so_far = lock->time_so_far - wait_so_far;
+    long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+    work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type);
     

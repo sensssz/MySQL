@@ -66,12 +66,12 @@ typedef enum transaction_type transaction_type;
 
 typedef struct work_wait
 {
-    ulint work_so_far;
-    ulint wait_so_far;
-    ulint num_locks_so_far;
-    ulint num_of_wait_locks;
-    ulint total_wait_locks;
-    ulint total_granted_locks;
+    long work_so_far;
+    long wait_so_far;
+    long num_locks_so_far;
+    long num_of_wait_locks;
+    long total_wait_locks;
+    long total_granted_locks;
     double mean_work_of_all;
     double mean_wait_of_all;
     double cpu_usage;
@@ -83,8 +83,8 @@ typedef struct work_wait
     double avg_latency_of_same_last_20;
     double max_latency_of_same_last_50;
     double avg_latency_of_trx_hold_locks;
-    ulint time_so_far;
-    ulint prediction;
+    long time_so_far;
+    double prediction;
     ulint transaction_id;
 } work_wait;
 
@@ -138,16 +138,16 @@ public:
                                                  these two doesn't have to be true at the same time). */
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
-    static ulint num_trans;                 /*!< Number of successfully submitted transactions. */
+    static long num_trans;                 /*!< Number of successfully submitted transactions. */
     static double mean_latency;             /*!< Mean of total wait time of successfully committed
                                              transactions*/
     static double var_latency;              /*!< Mean of total wait time of successfully committed
                                              transactions*/
     static double mean_work_of_all;
     static double mean_wait_of_all;
-    static ulint total_wait_locks;
-    static ulint total_granted_locks;
-    static ulint max_num_locks;
+    static long total_wait_locks;
+    static long total_granted_locks;
+    static long max_num_locks;
     static pthread_mutex_t var_mutex;
     static pthread_mutex_t last_second_mutex;
     
@@ -206,14 +206,14 @@ public:
     
     /********************************************************************//**
     Add a record about work time and wait time. */
-    ulint *add_work_wait(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                       ulint num_of_wait_locks, ulint prediction, ulint transaction_id);
+    long *add_work_wait(long work_so_far, long wait_so_far, long num_locks,
+                       long num_of_wait_locks, double prediction, ulint transaction_id);
     
-    work_wait parameters_necessary(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                                              ulint num_of_wait_locks, ulint transaction_id);
+    work_wait parameters_necessary(long work_so_far, long wait_so_far, long num_locks,
+                                              long num_of_wait_locks, ulint transaction_id);
     
-    work_wait parameters(ulint work_so_far, ulint wait_so_far, ulint num_locks,
-                       ulint num_of_wait_locks, ulint transaction_id);
+    work_wait parameters(long work_so_far, long wait_so_far, long num_locks,
+                       long num_of_wait_locks, ulint transaction_id);
     
     /********************************************************************//**
     Dump data about work time and wait time to log file. */

@@ -80,7 +80,7 @@ struct lock_t {
     ulint           original_time_so_far;
     ulint           original_process;
     bool            marked;
-    ulint           *time_at_grant;
+    long           *time_at_grant;
     timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {

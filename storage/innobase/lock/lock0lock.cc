@@ -2555,7 +2555,7 @@ lock_grant(
   --TraceTool::total_wait_locks;
   ++TraceTool::total_granted_locks;
   
-  ulint time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+  long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
 //  if (lock->process_time > 0 &&
 //      rand() % 100 < 40 &&
 //      trx->is_user_trx)
@@ -2804,7 +2804,7 @@ lock_next_to_grant(
   int smallest_ranking = INT_MAX;
   vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
-  ulint num_waits = 0;
+  long num_waits = 0;
   
   ulint size = 0;
   for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
@@ -2926,7 +2926,7 @@ lock_rec_dequeue_from_page(
       continue;
     }
     
-    ulint num_of_wait_locks = 0;
+    long num_of_wait_locks = 0;
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
          lock = lock_rec_get_next(heap_no, lock))
