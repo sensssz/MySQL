@@ -74,7 +74,7 @@ static bool record_join_nest_info(st_select_lex *select,
                                   List<TABLE_LIST> *tables);
 static uint build_bitmap_for_nested_joins(List<TABLE_LIST> *join_list,
         uint first_unused);
-static ORDER *remove_const(JOIN *join,ORDER *first_order, Item *cond,
+static ORDER *mysql_remove_const(JOIN *join,ORDER *first_order, Item *cond,
                            bool change_list, bool *simple_order,
                            const char *clause_type);
 static void save_index_subquery_explain_info(JOIN_TAB *join_tab, Item* where);
@@ -515,7 +515,7 @@ JOIN::optimize()
     /* Optimize distinct away if possible */
     {
         ORDER *org_order= order;
-        order= ORDER_with_src(remove_const(this, order, conds, 1, &simple_order, "ORDER BY"), order.src);;
+        order= ORDER_with_src(mysql_remove_const(this, order, conds, 1, &simple_order, "ORDER BY"), order.src);;
         if (thd->is_error())
         {
             error= 1;
@@ -689,7 +689,7 @@ JOIN::optimize()
     simple_group= 0;
     {
         ORDER *old_group_list= group_list;
-        group_list= ORDER_with_src(remove_const(this, group_list, conds,
+        group_list= ORDER_with_src(mysql_remove_const(this, group_list, conds,
                                                 rollup.state == ROLLUP::STATE_NONE,
                                                 &simple_group, "GROUP BY"),
                                    group_list.src);
@@ -8584,7 +8584,7 @@ static bool duplicate_order(const ORDER *first_order,
 */
 
 static ORDER *
-remove_const(JOIN *join,ORDER *first_order, Item *cond,
+mysql_remove_const(JOIN *join,ORDER *first_order, Item *cond,
              bool change_list, bool *simple_order, const char *clause_type)
 {
     if (join->plan_is_const()) {

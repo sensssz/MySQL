@@ -13,7 +13,6 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -65,6 +64,11 @@ ulint TraceTool::max_num_locks = 0;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::last_second_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+deque<buf_page_t *> TraceTool::pages_to_make_young;
+deque<ib_uint32_t> TraceTool::space_ids;
+deque<ib_uint32_t> TraceTool::page_nos;
+pthread_mutex_t TraceTool::buf_page_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -290,7 +294,7 @@ long TraceTool::difftime(timespec start, timespec end)
   return (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
 }
 
-long TraceTool::now_micro()
+ulint TraceTool::now_micro()
 {
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
