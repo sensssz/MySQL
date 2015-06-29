@@ -751,9 +751,9 @@ LVM_schedule(
   }
   
   lock_t *lock = wait_locks[0];
-  bool do_monitor = lock->un_member.rec_lock.space == 34 &&
+  bool do_monitor = lock->un_member.rec_lock.space == 14 &&
                     lock->un_member.rec_lock.page_no == 3 &&
-                    lock_rec_find_set_bit(lock) == 30 && false;
+                    lock_rec_find_set_bit(lock) == 21 && false;
   if (do_monitor)
   {
     ofstream &log = TraceTool::get_instance()->get_log();
