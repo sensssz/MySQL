@@ -3,6 +3,7 @@
 
 #include "../storage/innobase/include/os0sync.h"
 #include "../storage/innobase/include/lock0types.h"
+#include "../storage/innobase/include/buf0buf.h"
 #include <fstream>
 #include <list>
 #include <vector>
@@ -29,8 +30,8 @@ using std::ofstream;
 using std::list;
 using std::vector;
 using std::endl;
-using std::unordered_map;
 using std::string;
+using std::deque;
 
 /** The global transaction id counter */
 extern ulint transaction_id;
@@ -116,7 +117,6 @@ private:
     
     vector<work_wait> work_waits;
     static pthread_mutex_t work_wait_mutex;
-    
     ulint previous_user;
     ulint previous_nice;
     ulint previous_system;
@@ -151,6 +151,12 @@ public:
     static ulint max_num_locks;
     static pthread_mutex_t var_mutex;
     static pthread_mutex_t last_second_mutex;
+    
+    static deque<buf_page_t *> pages_to_make_young;
+    static deque<ib_uint32_t> space_ids;
+    static deque<ib_uint32_t> page_nos;
+    static pthread_mutex_t buf_page_mutex;
+
     
     static double cpu_usage;
     

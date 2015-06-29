@@ -10,7 +10,7 @@
 #include <cassert>
 
 #define NUM_CORES 2
-#define TARGET_PATH_COUNT 14
+#define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
 
@@ -62,6 +62,11 @@ long TraceTool::total_wait_locks = 0;
 long TraceTool::total_granted_locks= 0;
 double TraceTool::cpu_usage = 0;
 ulint TraceTool::max_num_locks = 0;
+deque<buf_page_t *> TraceTool::pages_to_make_young;
+deque<ib_uint32_t> TraceTool::space_ids;
+deque<ib_uint32_t> TraceTool::page_nos;
+
+pthread_mutex_t TraceTool::buf_page_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::last_second_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -96,7 +101,7 @@ void TRACE_FUNCTION_END()
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &function_end);
-    TraceTool::get_instance()->add_record(0, TraceTool::difftime(function_start, function_end));
+    TraceTool::get_instance()->add_record(1, TraceTool::difftime(function_start, function_end));
   }
 #endif
 }
@@ -157,9 +162,9 @@ TraceTool::TraceTool() : function_times()
   /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log");
 #if defined(MONITOR) || defined(WORK_WAIT)
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 3;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {

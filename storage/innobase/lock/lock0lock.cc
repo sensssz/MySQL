@@ -2838,8 +2838,6 @@ lock_rec_dequeue_from_page(
 					get their lock requests granted,
 					if they are now qualified to it */
 {
-  TraceTool::path_count = 42;
-  TRACE_FUNCTION_START();
 	ulint		space;
 	ulint		page_no;
 	lock_t*		lock;
@@ -2942,8 +2940,6 @@ lock_rec_dequeue_from_page(
       }
     }
   }
-  TRACE_FUNCTION_END();
-  TraceTool::path_count = 0;
 }
 
 /*************************************************************//**
