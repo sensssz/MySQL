@@ -13,7 +13,6 @@
 #define TARGET_PATH_COUNT 14
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -56,6 +55,7 @@ __thread transaction_type TraceTool::type = NONE;
 long TraceTool::num_trans = 0;
 double TraceTool::mean_latency = 0;
 double TraceTool::var_latency = 0;
+__thread long TraceTool::current_trx_wait = 0;
 double TraceTool::mean_work_of_all = 0;
 double TraceTool::mean_wait_of_all = 0;
 long TraceTool::total_wait_locks = 0;
@@ -395,7 +395,7 @@ void TraceTool::update_ctv(long latency)
   mean_latency = old_mean + (latency - old_mean) / num_trans;
   var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
 
-  long wait_time = function_times[0][current_transaction_id];
+  long wait_time = current_trx_wait;
   long work_time = latency - wait_time;
   mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans;
   mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans;

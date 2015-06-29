@@ -143,6 +143,7 @@ public:
                                              transactions*/
     static double var_latency;              /*!< Mean of total wait time of successfully committed
                                              transactions*/
+    static __thread long current_trx_wait;
     static double mean_work_of_all;
     static double mean_wait_of_all;
     static long total_wait_locks;

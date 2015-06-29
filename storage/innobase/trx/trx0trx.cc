@@ -1413,7 +1413,8 @@ trx_commit_low(
 
   if (trx->is_user_trx)
   {
-    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
+    TraceTool::current_trx_wait = trx->total_wait_time;
+//    TraceTool::get_instance()->add_record(0, trx->total_wait_time);
 //    TraceTool::get_instance()->add_record(1, num_locks);
   }
 }
