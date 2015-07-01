@@ -11,7 +11,7 @@
 
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 42
-#define NUMBER_OF_FUNCTIONS 0
+#define NUMBER_OF_FUNCTIONS 1
 #define LATENCY
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
@@ -162,9 +162,9 @@ TraceTool::TraceTool() : function_times()
   /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log");
 #if defined(MONITOR) || defined(WORK_WAIT)
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 3;
-#else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+#else
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {

@@ -55,7 +55,7 @@ Created 5/7/1996 Heikki Tuuri
 #include "trace_tool.h"
 
 ulint MIN_BATCH_SIZE = 2;
-ulint MAX_BATCH_SIZE = 3;
+ulint MAX_BATCH_SIZE = 5;
 ibool HARD_BOUNDARY = true;
 
 /* Restricts the length of search we will do in the waits-for
@@ -2806,9 +2806,9 @@ lock_next_to_grant(
       }
       if (size < MAX_BATCH_SIZE)
       {
-        wait_locks.push_back(lock);
         ++size;
       }
+      wait_locks.push_back(lock);
     }
   }
   
@@ -2843,6 +2843,8 @@ lock_rec_dequeue_from_page(
 					get their lock requests granted,
 					if they are now qualified to it */
 {
+  TraceTool::path_count = 42;
+  TRACE_FUNCTION_START();
 	ulint		space;
 	ulint		page_no;
 	lock_t*		lock;
@@ -2945,6 +2947,8 @@ lock_rec_dequeue_from_page(
       }
     }
   }
+  TRACE_FUNCTION_END();
+  TraceTool::path_count = 0;
 }
 
 /*************************************************************//**

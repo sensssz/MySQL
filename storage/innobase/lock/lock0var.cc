@@ -628,11 +628,12 @@ min_var_order(
     swap = false;
     long min_difference = LONG_MAX;
     ulint min_index = candidates.size();
+    long min_process = candidates[0]->process_time;
     for (ulint index = 0, size = candidates.size(); index < size - 1; ++index)
     {
       lock_t *lock1 = candidates[index];
       lock_t *lock2 = candidates[index + 1];
-      if (lock1->time_so_far < lock2->time_so_far &&
+      if (lock1->time_so_far <= lock2->time_so_far &&
           !contains(swapped_pairs, lock1, lock2))
       {
         long difference = lock2->time_so_far - lock1->time_so_far;
@@ -642,14 +643,40 @@ min_var_order(
           min_index = index;
         }
       }
+      if (lock2->process_time < min_process)
+      {
+        min_process = lock2->process_time;
+      }
     }
+    
+    lock_t *lock1 = candidates[min_index];
+    lock_t *lock2 = candidates[min_index + 1];
     if (min_index < candidates.size())
     {
-      // We can do a swap
-      try_swap(candidates, locks, read_locks, min_index, min_heuristic);
-      pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
-      swapped_pairs.push_back(pair);
-      swap = true;
+      if (lock1->process_time >= lock2->process_time)
+      {
+        lock_t *temp = candidates[min_index];
+        candidates[min_index] = candidates[min_index + 1];
+        candidates[min_index + 1] = temp;
+        pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
+        swapped_pairs.push_back(pair);
+        swap = true;
+      }
+      else
+      {
+        long L1 = lock1->time_so_far;
+        long L2 = lock2->time_so_far;
+        long R1 = lock1->process_time;
+        long R2 = lock2->process_time;
+        if ((L2 - L1) > (R2 - R1) * (1 + ((long) min_index * min_process + L2) / R2))
+        {
+          // We can do a swap
+          try_swap(candidates, locks, read_locks, min_index, min_heuristic);
+          pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
+          swapped_pairs.push_back(pair);
+          swap = true;
+        }
+      }
     }
   }
   
@@ -741,7 +768,7 @@ LVM_schedule(
     if (lock_get_mode(lock) == LOCK_S)
     {
       lock->time_so_far = lock->original_time_so_far;
-      lock->process_time = lock->original_time_so_far;
+      lock->process_time = lock->original_process;
       for (ulint read_index = 0, read_size = read_locks.size();
            read_index < read_size; ++read_index)
       {
@@ -777,6 +804,13 @@ LVM_schedule(
       locks_to_grant.push_back(wait_locks[index]);
     }
   }
+  
+//  timespec sleep_time;
+//  timespec remaining;
+//  
+//  sleep_time.tv_sec = 0;
+//  sleep_time.tv_nsec = 10000;
+//  nanosleep(&sleep_time, &remaining);
 }
 
 /*************************************************************//**
