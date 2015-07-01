@@ -1849,7 +1849,6 @@ buf_page_make_young(
 /*================*/
 	buf_page_t*	bpage)	/*!< in: buffer block of a file page */
 {
-  /*
 	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
 
 	buf_pool_mutex_enter(buf_pool);
@@ -1859,9 +1858,9 @@ buf_page_make_young(
 	buf_LRU_make_block_young(bpage);
 
 	buf_pool_mutex_exit(buf_pool);
-   */
   
   
+  /*
   buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
   unsigned spin_rounds = 0;
   bool locked = false;
@@ -1905,6 +1904,7 @@ buf_page_make_young(
     
     buf_pool_mutex_exit(buf_pool);
   }
+   */
 }
 
 /********************************************************************//**
