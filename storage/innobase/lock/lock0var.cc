@@ -39,21 +39,24 @@ static
 double
 estimate(
   work_wait &parameters,
-  transaction_type type)
+  transaction_type type,
+  char lock_type)
 {
+  double result = 0;
   switch (type) {
     case NEW_ORDER:
-      return new_order_estimate(parameters);
+      result =  new_order_estimate(parameters);
     case PAYMENT:
-      return payment_estimate(parameters);
+      result =  payment_estimate(parameters);
 //    case ORDER_STATUS:
 //    case DELIVERY:
 //      return delivery_estimate(parameters);
     case STOCK_LEVEL:
-      return stock_level_estimate(parameters);
+      result = stock_level_estimate(parameters);
     default:
-      return tpcc_estimate(parameters);
+      result = tpcc_estimate(parameters);
   }
+  TraceTool::get_instance()->get_log() << lock_type << "," << parameters.work_so_far + parameters.wait_so_far << "," << result << endl;
 }
 
 /*********************************************************************//**
@@ -689,6 +692,12 @@ min_var_order(
   return min_heuristic;
 }
 
+char lock_get_type(
+  lock_t *lock)
+{
+  return lock_get_mode(lock) == LOCK_S ? 'S' : 'X';
+}
+
 
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
@@ -720,7 +729,7 @@ LVM_schedule(
     long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
     work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
-    lock->process_time = estimate(parameters, trx->type);
+    lock->process_time = estimate(parameters, trx->type, lock_get_type(lock));
     
 //    if ((rand() % 100 < 20 ||
 //         trx->type == ORDER_STATUS ||
@@ -806,6 +815,7 @@ LVM_schedule(
       locks_to_grant.push_back(wait_locks[index]);
     }
   }
+  TraceTool::get_instance()->get_log() << endl;
   
 //  timespec sleep_time;
 //  timespec remaining;
