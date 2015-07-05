@@ -199,198 +199,199 @@ lock_wait_suspend_thread(
     que_thr_t*	thr)	/*!< in: query thread associated with the
 				user OS thread */
 {
-    TRACE_FUNCTION_START();
-    time_t now = ut_time();
-    srv_slot_t*	slot;
-    double		wait_time;
-    trx_t*		trx;
-    ulint		had_dict_lock;
-    ibool		was_declared_inside_innodb;
-    ib_int64_t	start_time			= 0;
-    ib_int64_t	finish_time;
-    ulint		sec;
-    ulint		ms;
-    ulong		lock_wait_timeout;
+  TRACE_FUNCTION_START();
+  srv_slot_t*	slot;
+  double		wait_time;
+  trx_t*		trx;
+  ulint		had_dict_lock;
+  ibool		was_declared_inside_innodb;
+  ib_int64_t	start_time			= 0;
+  ib_int64_t	finish_time;
+  ulint		sec;
+  ulint		ms;
+  ulong		lock_wait_timeout;
 
-    trx = thr_get_trx(thr);
+  trx = thr_get_trx(thr);
 
-    if (trx->mysql_thd != 0) {
-        DEBUG_SYNC_C("lock_wait_suspend_thread_enter");
-    }
+  if (trx->mysql_thd != 0) {
+      DEBUG_SYNC_C("lock_wait_suspend_thread_enter");
+  }
 
-    /* InnoDB system transactions (such as the purge, and
-    incomplete transactions that are being rolled back after crash
-    recovery) will use the global value of
-    innodb_lock_wait_timeout, because trx->mysql_thd == NULL. */
-    lock_wait_timeout = trx_lock_wait_timeout_get(trx);
+  /* InnoDB system transactions (such as the purge, and
+  incomplete transactions that are being rolled back after crash
+  recovery) will use the global value of
+  innodb_lock_wait_timeout, because trx->mysql_thd == NULL. */
+  lock_wait_timeout = trx_lock_wait_timeout_get(trx);
 
-    lock_wait_mutex_enter();
+  lock_wait_mutex_enter();
 
-    trx_mutex_enter(trx);
+  trx_mutex_enter(trx);
 
-    trx->error_state = DB_SUCCESS;
+  trx->error_state = DB_SUCCESS;
 
-    if (thr->state == QUE_THR_RUNNING) {
+  if (thr->state == QUE_THR_RUNNING) {
 
-        ut_ad(thr->is_active);
+      ut_ad(thr->is_active);
 
-        /* The lock has already been released or this transaction
-        was chosen as a deadlock victim: no need to suspend */
+      /* The lock has already been released or this transaction
+      was chosen as a deadlock victim: no need to suspend */
 
-        if (trx->lock.was_chosen_as_deadlock_victim) {
+      if (trx->lock.was_chosen_as_deadlock_victim) {
 
-            trx->error_state = DB_DEADLOCK;
-            trx->lock.was_chosen_as_deadlock_victim = FALSE;
-        }
+          trx->error_state = DB_DEADLOCK;
+          trx->lock.was_chosen_as_deadlock_victim = FALSE;
+      }
 
-        lock_wait_mutex_exit();
-        trx_mutex_exit(trx);
-        TRACE_FUNCTION_END();
-        return;
-    }
+      lock_wait_mutex_exit();
+      trx_mutex_exit(trx);
+      TRACE_FUNCTION_END();
+      return;
+  }
 
-    ut_ad(!thr->is_active);
+  ut_ad(!thr->is_active);
 
-    slot = lock_wait_table_reserve_slot(thr, lock_wait_timeout);
+  slot = lock_wait_table_reserve_slot(thr, lock_wait_timeout);
 
-    if (thr->lock_state == QUE_THR_LOCK_ROW) {
-        srv_stats.n_lock_wait_count.inc();
-        srv_stats.n_lock_wait_current_count.inc();
+  if (thr->lock_state == QUE_THR_LOCK_ROW) {
+      srv_stats.n_lock_wait_count.inc();
+      srv_stats.n_lock_wait_current_count.inc();
 
-        if (ut_usectime(&sec, &ms) == -1) {
-            start_time = -1;
-        } else {
-            start_time = (ib_int64_t) sec * 1000000 + ms;
-        }
-    }
+      if (ut_usectime(&sec, &ms) == -1) {
+          start_time = -1;
+      } else {
+          start_time = (ib_int64_t) sec * 1000000 + ms;
+      }
+  }
 
-    /* Wake the lock timeout monitor thread, if it is suspended */
+  /* Wake the lock timeout monitor thread, if it is suspended */
 
-    os_event_set(lock_sys->timeout_event);
+  os_event_set(lock_sys->timeout_event);
 
-    lock_wait_mutex_exit();
-    trx_mutex_exit(trx);
+  lock_wait_mutex_exit();
+  trx_mutex_exit(trx);
 
-    ulint	lock_type = ULINT_UNDEFINED;
+  ulint	lock_type = ULINT_UNDEFINED;
 
-    lock_mutex_enter();
+  lock_mutex_enter();
 
-    if (const lock_t* wait_lock = trx->lock.wait_lock) {
-        lock_type = lock_get_type_low(wait_lock);
-    }
+  if (const lock_t* wait_lock = trx->lock.wait_lock) {
+      lock_type = lock_get_type_low(wait_lock);
+  }
 
-    lock_mutex_exit();
+  lock_mutex_exit();
 
-    had_dict_lock = trx->dict_operation_lock_mode;
+  had_dict_lock = trx->dict_operation_lock_mode;
 
-    switch (had_dict_lock) {
-    case 0:
-        break;
-    case RW_S_LATCH:
-        /* Release foreign key check latch */
-        row_mysql_unfreeze_data_dictionary(trx);
+  switch (had_dict_lock) {
+  case 0:
+      break;
+  case RW_S_LATCH:
+      /* Release foreign key check latch */
+      row_mysql_unfreeze_data_dictionary(trx);
 
-        DEBUG_SYNC_C("lock_wait_release_s_latch_before_sleep");
-        break;
-    default:
-        /* There should never be a lock wait when the
-        dictionary latch is reserved in X mode.  Dictionary
-        transactions should only acquire locks on dictionary
-        tables, not other tables. All access to dictionary
-        tables should be covered by dictionary
-        transactions. */
-        ut_error;
-    }
+      DEBUG_SYNC_C("lock_wait_release_s_latch_before_sleep");
+      break;
+  default:
+      /* There should never be a lock wait when the
+      dictionary latch is reserved in X mode.  Dictionary
+      transactions should only acquire locks on dictionary
+      tables, not other tables. All access to dictionary
+      tables should be covered by dictionary
+      transactions. */
+      ut_error;
+  }
 
-    ut_a(trx->dict_operation_lock_mode == 0);
+  ut_a(trx->dict_operation_lock_mode == 0);
 
-    /* Suspend this thread and wait for the event. */
+  /* Suspend this thread and wait for the event. */
 
-    was_declared_inside_innodb = trx->declared_to_be_inside_innodb;
+  was_declared_inside_innodb = trx->declared_to_be_inside_innodb;
 
-    if (was_declared_inside_innodb) {
-        /* We must declare this OS thread to exit InnoDB, since a
-        possible other thread holding a lock which this thread waits
-        for must be allowed to enter, sooner or later */
+  if (was_declared_inside_innodb) {
+      /* We must declare this OS thread to exit InnoDB, since a
+      possible other thread holding a lock which this thread waits
+      for must be allowed to enter, sooner or later */
 
-        srv_conc_force_exit_innodb(trx);
-    }
+      srv_conc_force_exit_innodb(trx);
+  }
 
-    /* Unknown is also treated like a record lock */
-    if (lock_type == ULINT_UNDEFINED || lock_type == LOCK_REC) {
-        thd_wait_begin(trx->mysql_thd, THD_WAIT_ROW_LOCK);
-    } else {
-        ut_ad(lock_type == LOCK_TABLE);
-        thd_wait_begin(trx->mysql_thd, THD_WAIT_TABLE_LOCK);
-    }
+  /* Unknown is also treated like a record lock */
+  if (lock_type == ULINT_UNDEFINED || lock_type == LOCK_REC) {
+      thd_wait_begin(trx->mysql_thd, THD_WAIT_ROW_LOCK);
+  } else {
+      ut_ad(lock_type == LOCK_TABLE);
+      thd_wait_begin(trx->mysql_thd, THD_WAIT_TABLE_LOCK);
+  }
 
-    os_event_wait(slot->event);
+  TRACE_START();
+  os_event_wait(slot->event);
+  TRACE_END(1);
 
-    thd_wait_end(trx->mysql_thd);
+  thd_wait_end(trx->mysql_thd);
 
-    /* After resuming, reacquire the data dictionary latch if
-    necessary. */
+  /* After resuming, reacquire the data dictionary latch if
+  necessary. */
 
-    if (was_declared_inside_innodb) {
+  if (was_declared_inside_innodb) {
 
-        /* Return back inside InnoDB */
+      /* Return back inside InnoDB */
 
-        srv_conc_force_enter_innodb(trx);
-    }
+      srv_conc_force_enter_innodb(trx);
+  }
 
-    if (had_dict_lock) {
+  if (had_dict_lock) {
 
-        row_mysql_freeze_data_dictionary(trx);
-    }
+      row_mysql_freeze_data_dictionary(trx);
+  }
 
-    wait_time = ut_difftime(ut_time(), slot->suspend_time);
+  wait_time = ut_difftime(ut_time(), slot->suspend_time);
 
-    /* Release the slot for others to use */
+  /* Release the slot for others to use */
 
-    lock_wait_table_release_slot(slot);
+  lock_wait_table_release_slot(slot);
 
-    if (thr->lock_state == QUE_THR_LOCK_ROW) {
-        ulint	diff_time;
+  if (thr->lock_state == QUE_THR_LOCK_ROW) {
+      ulint	diff_time;
 
-        if (ut_usectime(&sec, &ms) == -1) {
-            finish_time = -1;
-        } else {
-            finish_time = (ib_int64_t) sec * 1000000 + ms;
-        }
+      if (ut_usectime(&sec, &ms) == -1) {
+          finish_time = -1;
+      } else {
+          finish_time = (ib_int64_t) sec * 1000000 + ms;
+      }
 
-        diff_time = (finish_time > start_time) ?
-                    (ulint) (finish_time - start_time) : 0;
+      diff_time = (finish_time > start_time) ?
+                  (ulint) (finish_time - start_time) : 0;
 
-        srv_stats.n_lock_wait_current_count.dec();
-        srv_stats.n_lock_wait_time.add(diff_time);
+      srv_stats.n_lock_wait_current_count.dec();
+      srv_stats.n_lock_wait_time.add(diff_time);
 
-        /* Only update the variable if we successfully
-        retrieved the start and finish times. See Bug#36819. */
-        if (diff_time > lock_sys->n_lock_max_wait_time
-                && start_time != -1
-                && finish_time != -1) {
+      /* Only update the variable if we successfully
+      retrieved the start and finish times. See Bug#36819. */
+      if (diff_time > lock_sys->n_lock_max_wait_time
+              && start_time != -1
+              && finish_time != -1) {
 
-            lock_sys->n_lock_max_wait_time = diff_time;
-        }
+          lock_sys->n_lock_max_wait_time = diff_time;
+      }
 
-        /* Record the lock wait time for this thread */
-        thd_set_lock_wait_time(trx->mysql_thd, diff_time);
+      /* Record the lock wait time for this thread */
+      thd_set_lock_wait_time(trx->mysql_thd, diff_time);
 
-    }
+  }
 
-    if (lock_wait_timeout < 100000000
-            && wait_time > (double) lock_wait_timeout) {
+  if (lock_wait_timeout < 100000000
+          && wait_time > (double) lock_wait_timeout) {
 
-        trx->error_state = DB_LOCK_WAIT_TIMEOUT;
+      trx->error_state = DB_LOCK_WAIT_TIMEOUT;
 
-        MONITOR_INC(MONITOR_TIMEOUT);
-    }
+      MONITOR_INC(MONITOR_TIMEOUT);
+  }
 
-    if (trx_is_interrupted(trx)) {
+  if (trx_is_interrupted(trx)) {
 
-        trx->error_state = DB_INTERRUPTED;
-    }
-    TRACE_FUNCTION_END();
+      trx->error_state = DB_INTERRUPTED;
+  }
+  TRACE_FUNCTION_END();
 }
 
 /********************************************************************//**

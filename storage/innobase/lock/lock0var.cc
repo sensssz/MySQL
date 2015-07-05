@@ -146,7 +146,10 @@ cumsum(
       previous_ranking = lock->ranking;
     }
     
-    rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
+    if (!lock->trx->queued)
+    {
+      rolling_sum.push_back(lock->time_so_far + lock->process_time + sum_of_previous_process_time);
+    }
   }
 }
 
@@ -777,6 +780,10 @@ LVM_schedule(
   }
   var_mutex_exit();
   assign_rankings(write_locks, read_locks, wait_locks, min_var_read_index);
+  for (ulint index = 0; index < wait_size; ++index)
+  {
+    wait_locks[index]->trx->queued = true;
+  }
   
   lock_t *lock = wait_locks[0];
 //  TraceTool::get_instance()->get_log() << lock->un_member.rec_lock.space << ","
@@ -788,28 +795,28 @@ LVM_schedule(
   {
     ofstream &log = TraceTool::get_instance()->get_log();
 //    log << min_order->size() << "," << read_locks.size() << endl;
-//    log << "  mean_latency = " << mean_latency << ";" << endl;
+    log << "  mean_latency = " << mean_latency << ";" << endl;
     for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
     {
       lock_t *lock = wait_locks[index];
       trx_t *trx = lock->trx;
       log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
-          << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
+          << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << lock->trx->queued << "};" << endl;
     }
     log << endl;
   }
   
-//  ofstream &log = TraceTool::get_instance()->get_log();
-//  //    log << min_order->size() << "," << read_locks.size() << endl;
-//  log << "  mean_latency = " << mean_latency << ";" << endl;
-//  for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
-//  {
-//    lock_t *lock = wait_locks[index];
-//    trx_t *trx = lock->trx;
-//    log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
-//    << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
-//  }
-//  log << endl;
+  ofstream &log = TraceTool::get_instance()->get_log();
+  //    log << min_order->size() << "," << read_locks.size() << endl;
+  log << "  mean_latency = " << mean_latency << ";" << endl;
+  for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+  {
+    lock_t *lock = wait_locks[index];
+    trx_t *trx = lock->trx;
+    log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
+    << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
+  }
+  log << endl;
   
   
   ulint index = 0;

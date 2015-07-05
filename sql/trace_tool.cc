@@ -10,9 +10,10 @@
 #include <cassert>
 
 #define NUM_CORES 2
-#define TARGET_PATH_COUNT 42
+#define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 1
 #define LATENCY
+#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -101,7 +102,8 @@ void TRACE_FUNCTION_END()
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &function_end);
-    TraceTool::get_instance()->add_record(1, TraceTool::difftime(function_start, function_end));
+    long duration = TraceTool::difftime(function_start, function_end);
+    TraceTool::get_instance()->add_record(0, duration);
   }
 #endif
 }
@@ -111,6 +113,7 @@ bool TRACE_START()
 #ifdef MONITOR
   if (TraceTool::should_monitor())
   {
+    TraceTool::get_instance()->get_log() << "TRACE_START" << endl;
     clock_gettime(CLOCK_REALTIME, &call_start);
   }
 #endif
@@ -123,7 +126,9 @@ bool TRACE_END(int index)
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &call_end);
-    TraceTool::get_instance()->add_record(index, TraceTool::difftime(call_start, call_end));
+    long duration = TraceTool::difftime(call_start, call_end);
+    TraceTool::get_instance()->get_log() << "TRACE_END, " << duration << endl;
+    TraceTool::get_instance()->add_record(index, duration);
   }
 #endif
   return false;
@@ -239,7 +244,7 @@ void *TraceTool::check_write_log(void *arg)
      dump data to log files. */
   while (true)
   {
-    sleep(1);
+    sleep(5);
 #ifdef WORK_WAIT
     cpu_usage = instance->get_cpu_usage();
 #endif
