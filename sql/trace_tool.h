@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <string>
 
+#define TRX_TYPES 6
+
 /** This macro is used for tracing the running time of
     a function call which appears inside an if statement*/
 #define TRACE_S_E(function_call, index) (TRACE_START()|(function_call)|TRACE_END(index))
@@ -65,30 +67,6 @@ enum transaction_type
 };
 typedef enum transaction_type transaction_type;
 
-typedef struct work_wait
-{
-    long work_so_far;
-    long wait_so_far;
-    long num_locks_so_far;
-    long num_of_wait_locks;
-    long total_wait_locks;
-    long total_granted_locks;
-    double mean_work_of_all;
-    double mean_wait_of_all;
-    double cpu_usage;
-    double avg_latency_of_same_past_second;
-    double avg_work_of_same_past_second;
-    double avg_wait_of_same_past_second;
-    double avg_latency_of_all_past_second;
-    double avg_latency_of_same_past_5_seconds;
-    double avg_latency_of_same_last_20;
-    double max_latency_of_same_last_50;
-    double avg_latency_of_trx_hold_locks;
-    long time_so_far;
-    double prediction;
-    ulint transaction_id;
-} work_wait;
-
 class TraceTool
 {
 private:
@@ -112,17 +90,6 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
-    vector<ulint> last_second_commit_times;  /*!< Stores the commit time of transactions. */
-    vector<ulint> last_second_transaction_ids;
-    
-    vector<work_wait> work_waits;
-    static pthread_mutex_t work_wait_mutex;
-    ulint previous_user;
-    ulint previous_nice;
-    ulint previous_system;
-    ulint previous_idle;
-    ulint previous_total;
-    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
@@ -138,27 +105,17 @@ public:
                                                  these two doesn't have to be true at the same time). */
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
-    static long num_trans;                 /*!< Number of successfully submitted transactions. */
-    static double mean_latency;             /*!< Mean of total wait time of successfully committed
+    static long num_trans[TRX_TYPES];       /*!< Number of successfully submitted transactions. */
+    static double mean_latency[TRX_TYPES];  /*!< Mean of total wait time of successfully committed
                                              transactions*/
-    static double var_latency;              /*!< Mean of total wait time of successfully committed
+    static double var_latency[TRX_TYPES];   /*!< Mean of total wait time of successfully committed
                                              transactions*/
-    static __thread long current_trx_wait;
-    static double mean_work_of_all;
-    static double mean_wait_of_all;
-    static long total_wait_locks;
-    static long total_granted_locks;
-    static ulint max_num_locks;
     static pthread_mutex_t var_mutex;
-    static pthread_mutex_t last_second_mutex;
     
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
     static deque<ib_uint32_t> page_nos;
     static pthread_mutex_t buf_page_mutex;
-
-    
-    static double cpu_usage;
     
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
@@ -171,8 +128,6 @@ public:
     /********************************************************************//**
     Calcualte time interval in nanoseconds. */
     static long difftime(timespec start, timespec end);
-    
-    double get_cpu_usage();
     
     /********************************************************************//**
     Periododically checks if any query comes in in the last 5 second.
@@ -210,24 +165,6 @@ public:
     /********************************************************************//**
     Analysis the current query to find out the transaction type. */
     void set_query(const char *query);
-    
-    /********************************************************************//**
-    Add a record about work time and wait time. */
-    long *add_work_wait(long work_so_far, long wait_so_far, long num_locks,
-                       long num_of_wait_locks, double prediction, ulint transaction_id);
-    
-    work_wait parameters_necessary(long work_so_far, long wait_so_far, long num_locks,
-                                              long num_of_wait_locks, ulint transaction_id);
-    
-    work_wait parameters(long work_so_far, long wait_so_far, long num_locks,
-                       long num_of_wait_locks, ulint transaction_id);
-    
-    /********************************************************************//**
-    Dump data about work time and wait time to log file. */
-    void write_work_wait();
-    /********************************************************************//**
-    Dump data about function running time and latency to log file. */
-    void write_accuracy();
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency(string dir);
