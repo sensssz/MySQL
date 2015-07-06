@@ -11,9 +11,9 @@
 
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 13
-#define NUMBER_OF_FUNCTIONS 1
+#define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define MONITOR
+#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -113,7 +113,6 @@ bool TRACE_START()
 #ifdef MONITOR
   if (TraceTool::should_monitor())
   {
-    TraceTool::get_instance()->get_log() << "TRACE_START" << endl;
     clock_gettime(CLOCK_REALTIME, &call_start);
   }
 #endif
@@ -127,7 +126,6 @@ bool TRACE_END(int index)
   {
     clock_gettime(CLOCK_REALTIME, &call_end);
     long duration = TraceTool::difftime(call_start, call_end);
-    TraceTool::get_instance()->get_log() << "TRACE_END, " << duration << endl;
     TraceTool::get_instance()->add_record(index, duration);
   }
 #endif
@@ -831,6 +829,7 @@ void TraceTool::write_accuracy()
           total_work < record.work_so_far ||
           latency < record.time_so_far)
       {
+        log_file << "invalid accuracy data" << endl;
         continue;
       }
       ut_a(latency > total_wait);
@@ -918,6 +917,7 @@ void TraceTool::write_work_wait()
           total_work < record.work_so_far ||
           latency < record.time_so_far)
       {
+        log_file << "invalid work wait data" << endl;
         continue;
       }
       ut_a(latency > total_wait);

@@ -744,15 +744,18 @@ LVM_schedule(
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type, lock_get_type(lock));
     
-//    if ((rand() % 100 < 20 ||
-//         trx->type == ORDER_STATUS ||
-//         trx->type == DELIVERY ||
-//         trx->type == STOCK_LEVEL) &&
-//        trx->is_user_trx)
-//    {
-//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-//    }
+    TraceTool::get_instance()->get_log() << trx->is_user_trx << endl;
+    
+    if ((rand() % 100 < 20 ||
+         trx->type == ORDER_STATUS ||
+         trx->type == DELIVERY ||
+         trx->type == STOCK_LEVEL) &&
+        trx->is_user_trx)
+    {
+//      TraceTool::get_instance()->get_log() << "Add work wait" << endl;
+      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
+    }
   }
   
   estimate_mutex_exit();
@@ -806,17 +809,17 @@ LVM_schedule(
     log << endl;
   }
   
-  ofstream &log = TraceTool::get_instance()->get_log();
-  //    log << min_order->size() << "," << read_locks.size() << endl;
-  log << "  mean_latency = " << mean_latency << ";" << endl;
-  for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
-  {
-    lock_t *lock = wait_locks[index];
-    trx_t *trx = lock->trx;
-    log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
-    << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
-  }
-  log << endl;
+//  ofstream &log = TraceTool::get_instance()->get_log();
+//  //    log << min_order->size() << "," << read_locks.size() << endl;
+//  log << "  mean_latency = " << mean_latency << ";" << endl;
+//  for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+//  {
+//    lock_t *lock = wait_locks[index];
+//    trx_t *trx = lock->trx;
+//    log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
+//    << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
+//  }
+//  log << endl;
   
   
   ulint index = 0;

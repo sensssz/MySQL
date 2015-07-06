@@ -6,68 +6,74 @@ double
 new_order_estimate(work_wait &parameters){
   double actual_remaining =
 
-      1.1926 * parameters.work_so_far +
-     -0.1166 * parameters.wait_so_far +
--3897818.6758 * parameters.num_of_wait_locks +
-1808409.07   * parameters.total_wait_locks +
-    -49.2412 * parameters.total_granted_locks +
-      1.9466 * parameters.mean_work_of_all +
-     -0.8364 * parameters.mean_wait_of_all +
--170212005.4485 * parameters.cpu_usage +
-     -0.8098 * parameters.avg_work_of_same_past_second +
-     -1.1576 * parameters.avg_wait_of_same_past_second +
-      1.066  * parameters.avg_latency_of_all_past_second +
-     -0.1517 * parameters.avg_latency_of_same_past_5_seconds +
-     -0.05   * parameters.avg_latency_of_same_last_20 +
-     -0.0289 * parameters.max_latency_of_same_last_50 +
-180391210.9323;
+      0.5137 * parameters.work_so_far +
+     -0.1909 * parameters.wait_so_far +
+-13538627.7171 * parameters.num_of_wait_locks +
+ 226808.1259 * parameters.total_wait_locks +
+     26.409  * parameters.total_granted_locks +
+     -0.5742 * parameters.mean_work_of_all +
+     -0.9763 * parameters.mean_wait_of_all +
+-118768775.5274 * parameters.cpu_usage +
+      0.6616 * parameters.avg_work_of_same_past_second +
+      0.6511 * parameters.avg_wait_of_same_past_second +
+     -0.724  * parameters.avg_latency_of_all_past_second +
+      0.115  * parameters.avg_latency_of_same_past_5_seconds +
+      0.25   * parameters.avg_latency_of_same_last_20 +
+     -0.0169 * parameters.max_latency_of_same_last_50 +
+296198308.5656;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
 double
 payment_estimate(work_wait &parameters){
   double actual_remaining =
 
-     -0.1032 * parameters.work_so_far +
-      0.0047 * parameters.wait_so_far +
-2068523.4291 * parameters.num_of_wait_locks +
- 222277.5028 * parameters.total_wait_locks +
-     -6.2182 * parameters.total_granted_locks +
-      0.144  * parameters.mean_work_of_all +
-     -0.1915 * parameters.mean_wait_of_all +
--31891257.0078 * parameters.cpu_usage +
-      0.2307 * parameters.avg_work_of_same_past_second +
-      0.1477 * parameters.avg_wait_of_same_past_second +
-     -0.1894 * parameters.avg_latency_of_all_past_second +
-      0.0557 * parameters.avg_latency_of_same_past_5_seconds +
-     -0.0107 * parameters.avg_latency_of_same_last_20 +
-     -0.0062 * parameters.max_latency_of_same_last_50 +
-37084358.0135;
+      0.0825 * parameters.work_so_far +
+     -0.0027 * parameters.wait_so_far +
+ 512424.1785 * parameters.num_of_wait_locks +
+  10445.895  * parameters.total_wait_locks +
+      2.5583 * parameters.total_granted_locks +
+      0.2973 * parameters.mean_work_of_all +
+     -0.1855 * parameters.mean_wait_of_all +
+     -0.0832 * parameters.avg_wait_of_same_past_second +
+      0.075  * parameters.avg_latency_of_all_past_second +
+      0.004  * parameters.avg_latency_of_same_past_5_seconds +
+      0.0291 * parameters.avg_latency_of_same_last_20 +
+     -0.0043 * parameters.max_latency_of_same_last_50 +
+3215940.5987;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
 double
 stock_level_estimate(work_wait &parameters){
   double actual_remaining =
 
- +
-6097506.7143;
+      1.5783 * parameters.work_so_far +
+ 159464.8718 * parameters.total_wait_locks +
+    -24.4693 * parameters.total_granted_locks +
+     -0.537  * parameters.mean_wait_of_all +
+648091997.1567 * parameters.cpu_usage +
+     -0.114  * parameters.avg_latency_of_all_past_second +
+      0.0961 * parameters.avg_latency_of_same_last_20 +
+-564270460.7312;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
 double
 tpcc_estimate(work_wait &parameters){
   double actual_remaining =
 
-      0.2577 * parameters.work_so_far +
-     -0.0491 * parameters.wait_so_far +
- 803068.7035 * parameters.total_wait_locks +
-    -22.0914 * parameters.total_granted_locks +
-     -0.2114 * parameters.mean_wait_of_all +
--76884814.3922 * parameters.cpu_usage +
-      1.2585 * parameters.avg_work_of_same_past_second +
-      0.8312 * parameters.avg_wait_of_same_past_second +
-     -0.9923 * parameters.avg_latency_of_all_past_second +
-      0.0518 * parameters.avg_latency_of_same_past_5_seconds +
-     -0.0421 * parameters.avg_latency_of_same_last_20 +
-     -0.0118 * parameters.max_latency_of_same_last_50 +
-101799027.23;
+      0.3008 * parameters.work_so_far +
+     -0.0871 * parameters.wait_so_far +
+1016167.7483 * parameters.num_locks_so_far +
+-4791036.2756 * parameters.num_of_wait_locks +
+  80246.462  * parameters.total_wait_locks +
+      9.113  * parameters.total_granted_locks +
+     -0.3021 * parameters.mean_work_of_all +
+     -0.3015 * parameters.mean_wait_of_all +
+      1.0923 * parameters.avg_work_of_same_past_second +
+      0.096  * parameters.avg_wait_of_same_past_second +
+     -0.3563 * parameters.avg_latency_of_all_past_second +
+      0.1371 * parameters.avg_latency_of_same_past_5_seconds +
+      0.1211 * parameters.avg_latency_of_same_last_20 +
+     -0.0081 * parameters.max_latency_of_same_last_50 +
+61041805.6173;
   return actual_remaining > 0 ? actual_remaining : parameters.work_so_far + parameters.wait_so_far;
 }
