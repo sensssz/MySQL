@@ -2048,24 +2048,24 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
-//  vector<lock_t *> wait_locks;
-//  vector<lock_t *> granted_locks;
-//  vector<lock_t *> locks_to_grant;
-//  bool has_batch = false;
-//  
-//  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
-//  
-//  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
-//      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
-//  {
-//    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
-//    locks_grant(locks_to_grant, buf_block_get_space(block),
-//                buf_block_get_page_no(block), heap_no, trx);
-//    if (!lock_get_wait(lock))
-//    {
-//      return DB_SUCCESS_LOCKED_REC;
-//    }
-//  }
+  vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
+  vector<lock_t *> locks_to_grant;
+  bool has_batch = false;
+  
+  rec_get_wait_granted_locks(block, heap_no, wait_locks, granted_locks, has_batch);
+  
+  if (wait_locks.size() >= MIN_BATCH_SIZE && /*Q.size >= mb*/
+      !(HARD_BOUNDARY && has_batch)) /* Not hard boundary and has batch */
+  {
+    LVM_schedule(wait_locks, granted_locks, locks_to_grant);
+    locks_grant(locks_to_grant, buf_block_get_space(block),
+                buf_block_get_page_no(block), heap_no, trx);
+    if (!lock_get_wait(lock))
+    {
+      return DB_SUCCESS_LOCKED_REC;
+    }
+  }
   
   
   /* Release the mutex to obey the latching order.
