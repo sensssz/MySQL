@@ -49,14 +49,15 @@ estimate(
     case PAYMENT:
       result =  payment_estimate(parameters);
 //    case ORDER_STATUS:
-//    case DELIVERY:
-//      return delivery_estimate(parameters);
+    case DELIVERY:
+      return delivery_estimate(parameters);
     case STOCK_LEVEL:
       result = stock_level_estimate(parameters);
     default:
       result = tpcc_estimate(parameters);
   }
 //  TraceTool::get_instance()->get_log() << lock_type << "," << parameters.work_so_far + parameters.wait_so_far << "," << result << endl;
+  return result;
 }
 
 /*********************************************************************//**
