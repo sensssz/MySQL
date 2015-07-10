@@ -25,7 +25,7 @@ using std::find;
 using std::string;
 using std::pair;
 
-#include "m5p.cc"
+#include "m5p.h"
 
 typedef pair<lock_t *, lock_t *> pair_t;
 
@@ -376,7 +376,7 @@ LVM_schedule(
     }
     long work_so_far = lock->time_so_far - wait_so_far;
     long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
+    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type);
     
