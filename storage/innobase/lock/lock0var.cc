@@ -9,7 +9,7 @@
 #include "lock0var.h"
 #include "trx0trx.h"
 #include "trace_tool.h"
-#include "m5p.cc"
+#include "m5p.h"
 
 #include <algorithm>
 #include <fstream>
@@ -49,8 +49,8 @@ estimate(
     case PAYMENT:
       result =  payment_estimate(parameters);
 //    case ORDER_STATUS:
-    case DELIVERY:
-      return delivery_estimate(parameters);
+//    case DELIVERY:
+//      return delivery_estimate(parameters);
     case STOCK_LEVEL:
       result = stock_level_estimate(parameters);
     default:
