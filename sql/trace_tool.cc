@@ -13,7 +13,6 @@
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -165,7 +164,7 @@ TraceTool::TraceTool() : function_times()
 #if defined(MONITOR) || defined(WORK_WAIT)
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
