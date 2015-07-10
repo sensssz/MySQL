@@ -9,7 +9,7 @@
 #include "lock0var.h"
 #include "trx0trx.h"
 #include "trace_tool.h"
-#include "m5p.cc"
+#include "m5p.h"
 
 #include <algorithm>
 #include <fstream>
@@ -744,18 +744,15 @@ LVM_schedule(
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type, lock_get_type(lock));
     
-    TraceTool::get_instance()->get_log() << trx->is_user_trx << endl;
-    
-    if ((rand() % 100 < 20 ||
-         trx->type == ORDER_STATUS ||
-         trx->type == DELIVERY ||
-         trx->type == STOCK_LEVEL) &&
-        trx->is_user_trx)
-    {
-//      TraceTool::get_instance()->get_log() << "Add work wait" << endl;
-      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-    }
+//    if ((rand() % 100 < 20 ||
+//         trx->type == ORDER_STATUS ||
+//         trx->type == DELIVERY ||
+//         trx->type == STOCK_LEVEL) &&
+//        trx->is_user_trx)
+//    {
+//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
+//    }
   }
   
   estimate_mutex_exit();
