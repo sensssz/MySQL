@@ -2920,19 +2920,30 @@ lock_rec_dequeue_from_page(
     
     if (lock_to_grant != NULL)
     {
+//      bool do_monitor = lock_to_grant->un_member.rec_lock.space == 113 &&
+//      lock_to_grant->un_member.rec_lock.page_no == 3 && heap_no == 31 && false;
+//      if (do_monitor)
+//      {
+//        long time_so_far = TraceTool::difftime(lock_to_grant->trx->trx_start_time, now);
+//        long arrival_time = lock_to_grant->wait_start.tv_sec * 1000000 + lock_to_grant->wait_start.tv_nsec / 1000;
+//        ofstream &log = TraceTool::get_instance()->get_log();
+//        trx_t *trx = lock_to_grant->trx;
+//        log << lock_get_mode_str(lock_to_grant) << "," << time_so_far << "," << arrival_time << ",{rem" << trx->transaction_id << "}" << endl;
+//        TraceTool::time_so_far.push_back(time_so_far);
+//        TraceTool::trx_ids.push_back(trx->transaction_id);
+//      }
       lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
+      lock_grant(lock_to_grant);
       
       /* Find other locks that can also be granted. */
       for (lock = lock_rec_get_first(space, page_no, heap_no);
            lock != NULL;
            lock = lock_rec_get_next(heap_no, lock))
       {
-        if (lock_get_wait(lock))
+        if (lock_get_wait(lock) &&
+            !lock_rec_has_to_wait_in_queue(lock))
         {
-          if (!lock_rec_has_to_wait_in_queue(lock))
-          {
-            lock_grant(lock);
-          }
+          lock_grant(lock);
         }
       }
     }
