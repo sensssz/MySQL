@@ -2923,25 +2923,23 @@ lock_rec_dequeue_from_page(
          lock != NULL;
          lock = lock_rec_get_next(heap_no, lock))
     {
-      if (lock_get_wait(lock))
+      if (lock_get_wait(lock) &&
+          !lock_rec_has_to_wait_in_queue(lock))
       {
-        if (!lock_rec_has_to_wait_in_queue(lock))
-        {
-//          trx_t *trx = lock->trx;
-//          if (rand() % 100 < 20 ||
-//              trx->type == ORDER_STATUS ||
-//              trx->type == DELIVERY ||
-//              trx->type == STOCK_LEVEL)
-//          {
-//            long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-//            long wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-//            long work = time_so_far - wait;
-//            long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-//            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
-//                                                                           num_of_wait_locks, 0, trx->transaction_id);
-//          }
-          lock_grant(lock);
-        }
+        //          trx_t *trx = lock->trx;
+        //          if (rand() % 100 < 20 ||
+        //              trx->type == ORDER_STATUS ||
+        //              trx->type == DELIVERY ||
+        //              trx->type == STOCK_LEVEL)
+        //          {
+        //            long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+        //            long wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+        //            long work = time_so_far - wait;
+        //            long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+        //            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
+        //                                                                           num_of_wait_locks, 0, trx->transaction_id);
+        //          }
+        lock_grant(lock);
       }
     }
   }

@@ -17,6 +17,7 @@
 #include <list>
 #include <string>
 #include <utility>
+#include <queue>
 
 using std::list;
 using std::ifstream;
@@ -24,8 +25,24 @@ using std::sort;
 using std::find;
 using std::string;
 using std::pair;
+using std::priority_queue;
 
 typedef pair<lock_t *, lock_t *> pair_t;
+
+class lock_pair_comparator
+{
+private:
+  const vector<lock_t *> &locks;
+public:
+  lock_pair_comparator(const vector<lock_t *> &wait_locks) : locks(wait_locks)
+  {}
+  bool operator() (const int index1, const int index2)
+  {
+    long diff1 = locks[index1 + 1]->time_so_far - locks[index1]->time_so_far;
+    long diff2 = locks[index2 + 1]->time_so_far - locks[index2]->time_so_far;
+    return diff1 < diff2;
+  }
+};
 
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
@@ -570,19 +587,32 @@ find_min_heuristic_on_process(
 }
 
 static
+void
+swap_locks(
+  vector<lock_t *> &candidates,
+  vector<long> &cumulative_sum,
+  int index)
+{
+  lock_t *temp = candidates[index];
+  candidates[index] = candidates[index + 1];
+  candidates[index + 1] = temp;
+  
+  cumulative_sum[index] -= candidates[index + 1]->process_time;
+  cumulative_sum[index + 1] += candidates[index]->process_time;
+}
+
+static
 bool
 try_swap(
   vector<lock_t *> &candidates,
   vector<lock_t *> &locks,
   vector<lock_t *> &read_locks,
   ulint index,
-  double &min_heuristic)
+  double &min_heuristic,
+  vector<long> &cumulative_sum)
 {
-  lock_t *temp = candidates[index];
-  candidates[index] = candidates[index + 1];
-  candidates[index + 1] = temp;
-  
-  double heu = heuristic(candidates, locks, read_locks);
+  swap_locks(candidates, cumulative_sum, index);
+  double heu = var(cumulative_sum);
   
   if (heu < min_heuristic)
   {
@@ -591,9 +621,7 @@ try_swap(
   }
   else
   {
-    temp = candidates[index];
-    candidates[index] = candidates[index + 1];
-    candidates[index + 1] = temp;
+    swap_locks(candidates, cumulative_sum, index);
     return false;
   }
 }
@@ -625,14 +653,16 @@ min_var_order(
   vector<lock_t *> &read_locks)
 {
   double min_heuristic = find_min_heuristic_on_process(candidates, locks, read_locks);
+  vector<long> cumulative_sum;
+  cumsum(candidates, cumulative_sum);
   vector<pair_t> swapped_pairs;
   bool swap = true;
+  double mean_latency = TraceTool::mean_latency;
   while (swap)
   {
     swap = false;
     long min_difference = LONG_MAX;
     ulint min_index = candidates.size();
-    long min_process = candidates[0]->process_time;
     for (ulint index = 0, size = candidates.size(); index < size - 1; ++index)
     {
       lock_t *lock1 = candidates[index];
@@ -647,21 +677,15 @@ min_var_order(
           min_index = index;
         }
       }
-      if (lock2->process_time < min_process)
-      {
-        min_process = lock2->process_time;
-      }
     }
     
-    lock_t *lock1 = candidates[min_index];
-    lock_t *lock2 = candidates[min_index + 1];
     if (min_index < candidates.size())
     {
+      lock_t *lock1 = candidates[min_index];
+      lock_t *lock2 = candidates[min_index + 1];
       if (lock1->process_time >= lock2->process_time)
       {
-        lock_t *temp = candidates[min_index];
-        candidates[min_index] = candidates[min_index + 1];
-        candidates[min_index + 1] = temp;
+        swap_locks(candidates, cumulative_sum, min_index);
         pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
         swapped_pairs.push_back(pair);
         swap = true;
@@ -672,10 +696,11 @@ min_var_order(
         long L2 = lock2->time_so_far;
         long R1 = lock1->process_time;
         long R2 = lock2->process_time;
-        if ((L2 - L1) > (R2 - R1) * (1 + ((long) min_index * min_process + L2) / R2))
+        long sum = min_index > 0 ? cumulative_sum[min_index - 1] : 0;
+        if ((L2 - L1) > (R2 - R1) * (R1 + R2 + L2 + 2 * sum - 2 * mean_latency) / (2 * R2))
         {
           // We can do a swap
-          try_swap(candidates, locks, read_locks, min_index, min_heuristic);
+          try_swap(candidates, locks, read_locks, min_index, min_heuristic, cumulative_sum);
           pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
           swapped_pairs.push_back(pair);
           swap = true;
