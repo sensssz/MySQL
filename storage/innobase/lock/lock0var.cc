@@ -29,21 +29,6 @@ using std::priority_queue;
 
 typedef pair<lock_t *, lock_t *> pair_t;
 
-class lock_pair_comparator
-{
-private:
-  const vector<lock_t *> &locks;
-public:
-  lock_pair_comparator(const vector<lock_t *> &wait_locks) : locks(wait_locks)
-  {}
-  bool operator() (const int index1, const int index2)
-  {
-    long diff1 = locks[index1 + 1]->time_so_far - locks[index1]->time_so_far;
-    long diff2 = locks[index2 + 1]->time_so_far - locks[index2]->time_so_far;
-    return diff1 < diff2;
-  }
-};
-
 /*************************************************************//**
 Do initilization for the min-variance scheduling algorithm. */
 UNIV_INTERN
@@ -683,28 +668,18 @@ min_var_order(
     {
       lock_t *lock1 = candidates[min_index];
       lock_t *lock2 = candidates[min_index + 1];
-      if (lock1->process_time >= lock2->process_time)
+      long L1 = lock1->time_so_far;
+      long L2 = lock2->time_so_far;
+      long R1 = lock1->process_time;
+      long R2 = lock2->process_time;
+      long sum = min_index > 0 ? cumulative_sum[min_index - 1] : 0;
+      if ((2 * sum - 2 * mean_latency + R1 + R2 + 2 * L2) * (R1 - R2) + 2 * R2 * (L2 - L1) > 0)
       {
-        swap_locks(candidates, cumulative_sum, min_index);
+        // We can do a swap
+        try_swap(candidates, locks, read_locks, min_index, min_heuristic, cumulative_sum);
         pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
         swapped_pairs.push_back(pair);
         swap = true;
-      }
-      else
-      {
-        long L1 = lock1->time_so_far;
-        long L2 = lock2->time_so_far;
-        long R1 = lock1->process_time;
-        long R2 = lock2->process_time;
-        long sum = min_index > 0 ? cumulative_sum[min_index - 1] : 0;
-        if ((L2 - L1) > (R2 - R1) * (R1 + R2 + L2 + 2 * sum - 2 * mean_latency) / (2 * R2))
-        {
-          // We can do a swap
-          try_swap(candidates, locks, read_locks, min_index, min_heuristic, cumulative_sum);
-          pair_t pair = make_pair(candidates[min_index], candidates[min_index + 1]);
-          swapped_pairs.push_back(pair);
-          swap = true;
-        }
       }
     }
   }
