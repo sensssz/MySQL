@@ -2936,7 +2936,7 @@ lock_rec_dequeue_from_page(
       lock_grant(lock_to_grant);
       
       /* Find other locks that can also be granted. */
-      for (lock = lock_rec_get_first(space, page_no, heap_no);
+      for (lock = first_wait_lock;
            lock != NULL;
            lock = lock_rec_get_next(heap_no, lock))
       {
