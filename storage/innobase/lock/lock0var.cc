@@ -699,6 +699,23 @@ char lock_get_type(
   return lock_get_mode(lock) == LOCK_S ? 'S' : 'X';
 }
 
+double
+max(
+  double number)
+{
+  return number > 0 ? number : 0;
+}
+
+double
+wpt_early(
+  lock_t *lock,
+  double average_process,
+  double max_process,
+  timespec &now)
+{
+  return 0;
+}
+
 
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
@@ -719,6 +736,7 @@ LVM_schedule(
   }
   
   timespec now = TraceTool::get_time();
+  double average_process = 0;
   estimate_mutex_enter();
   for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
@@ -731,6 +749,7 @@ LVM_schedule(
     work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
                                                                  wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type, lock_get_type(lock));
+    average_process += lock->process_time;
     
 //    if ((rand() % 100 < 20 ||
 //         trx->type == ORDER_STATUS ||
@@ -744,32 +763,13 @@ LVM_schedule(
   }
   
   estimate_mutex_exit();
+  average_process /= wait_locks.size();
   
   vector<lock_t *> merged_locks;
   vector<lock_t *> read_locks;
   vector<lock_t *> *min_order = NULL;
   
   merge_read_locks(wait_locks, merged_locks, read_locks);
-  sort(merged_locks.begin(), merged_locks.end(), compare_by_process);
-  vector<lock_t *> odd_after;
-  vector<lock_t *> even_after;
-  double mean_latency = TraceTool::mean_latency;
-  
-  if (merged_locks.size() > 2)
-  {
-    var_mutex_enter();
-    rearrange(merged_locks, odd_after, true);
-    rearrange(merged_locks, even_after, false);
-    double min_heu1 = min_var_order(odd_after, wait_locks, read_locks);
-    double min_heu2 = min_var_order(even_after, wait_locks, read_locks);
-    min_order = min_heu1 < min_heu2 ? &odd_after : &even_after;
-    var_mutex_exit();
-  }
-  else
-  {
-    min_order = &merged_locks;
-  }
-  
   
   for (ulint index = 0, size = min_order->size(); index < size; ++index)
   {
@@ -787,28 +787,6 @@ LVM_schedule(
     }
   }
   
-  lock_t *lock = wait_locks[0];
-//  TraceTool::get_instance()->get_log() << lock->un_member.rec_lock.space << ","
-//  << lock->un_member.rec_lock.page_no << "," << lock_rec_find_set_bit(lock) << endl;
-  bool do_monitor = lock->un_member.rec_lock.space == 113 &&
-                    lock->un_member.rec_lock.page_no == 3 &&
-                    lock_rec_find_set_bit(lock) == 31 && false;
-  if (do_monitor)
-  {
-    ofstream &log = TraceTool::get_instance()->get_log();
-    log << min_order->size() << "," << read_locks.size() << endl;
-    log << "  mean_latency = " << mean_latency << ";" << endl;
-    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
-    {
-      lock_t *lock = wait_locks[index];
-      trx_t *trx = lock->trx;
-      log << "  lock_t lock" << index << "={" << trx->id << ",'" << lock_get_mode_str(lock) << "',"
-          << lock->ranking << "," << lock->time_so_far << "," << lock->process_time << "," << "0,0,false};" << endl;
-    }
-    log << endl;
-  }
-  
-  
   for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
   {
     if (wait_locks[index]->ranking == 0)
@@ -816,14 +794,6 @@ LVM_schedule(
       locks_to_grant.push_back(wait_locks[index]);
     }
   }
-//  TraceTool::get_instance()->get_log() << endl;
-  
-//  timespec sleep_time;
-//  timespec remaining;
-//  
-//  sleep_time.tv_sec = 0;
-//  sleep_time.tv_nsec = 10000;
-//  nanosleep(&sleep_time, &remaining);
 }
 
 /*************************************************************//**
