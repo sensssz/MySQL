@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <string>
 
+#define TRX_TYPES 6
+
 /** This macro is used for tracing the running time of
     a function call which appears inside an if statement*/
 #define TRACE_S_E(function_call, index) (TRACE_START()|(function_call)|TRACE_END(index))
@@ -138,10 +140,10 @@ public:
                                                  these two doesn't have to be true at the same time). */
     static __thread bool commit_successful; /*!< True if the current transaction successfully commits. */
     static __thread transaction_type type;  /*!< Type of the current transaction. */
-    static long num_trans;                 /*!< Number of successfully submitted transactions. */
-    static double mean_latency;             /*!< Mean of total wait time of successfully committed
+    static long num_trans[TRX_TYPES];       /*!< Number of successfully submitted transactions. */
+    static double mean_latency[TRX_TYPES];  /*!< Mean of total wait time of successfully committed
                                              transactions*/
-    static double var_latency;              /*!< Mean of total wait time of successfully committed
+    static double var_latency[TRX_TYPES];   /*!< Mean of total wait time of successfully committed
                                              transactions*/
     static __thread long current_trx_wait;
     static double mean_work_of_all;

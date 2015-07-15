@@ -2768,66 +2768,6 @@ locks_grant(
   }
 }
 
-static
-void
-lock_next_to_grant(
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no,
-  vector<lock_t *> &locks_to_grant)
-{
-  int smallest_ranking = INT_MAX;
-  vector<lock_t *> wait_locks;
-  ulint size = 0;
-  
-  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
-       lock != NULL;
-       lock = lock_rec_get_next(heap_no, lock))
-  {
-    /* If there is still any lock on this record, we will not
-      grant other locks */
-    if (!lock_get_wait(lock))
-    {
-      locks_to_grant.clear();
-      return;
-    }
-    else
-    {
-      if (lock->ranking != -1 &&
-          lock->ranking < smallest_ranking)
-      {
-        smallest_ranking = lock->ranking;
-        locks_to_grant.clear();
-        locks_to_grant.push_back(lock);
-      }
-      else if (lock->ranking == smallest_ranking)
-      {
-        locks_to_grant.push_back(lock);
-      }
-      if (size < MAX_BATCH_SIZE)
-      {
-        ++size;
-      }
-      wait_locks.push_back(lock);
-    }
-  }
-  
-  /* No one is holding a lock on this record when we reach here */
-  if (wait_locks.size() > 0) /* Queue is not empty */
-  {
-    bool new_wait_lock = wait_locks.back()->ranking == -1;
-    if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
-        locks_to_grant.size() == 0) /* No batch in queue */
-    {
-      if (wait_locks.size() > TraceTool::max_num_locks)
-      {
-        TraceTool::max_num_locks = wait_locks.size();
-      }
-      LVM_schedule(wait_locks, locks_to_grant);
-    }
-  }
-}
-
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2926,19 +2866,19 @@ lock_rec_dequeue_from_page(
       if (lock_get_wait(lock) &&
           !lock_rec_has_to_wait_in_queue(lock))
       {
-        //          trx_t *trx = lock->trx;
-        //          if (rand() % 100 < 20 ||
-        //              trx->type == ORDER_STATUS ||
-        //              trx->type == DELIVERY ||
-        //              trx->type == STOCK_LEVEL)
-        //          {
-        //            long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
-        //            long wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
-        //            long work = time_so_far - wait;
-        //            long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-        //            lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
-        //                                                                           num_of_wait_locks, 0, trx->transaction_id);
-        //          }
+//        trx_t *trx = lock->trx;
+//        if (rand() % 100 < 20 ||
+//            trx->type == ORDER_STATUS ||
+//            trx->type == DELIVERY ||
+//            trx->type == STOCK_LEVEL)
+//        {
+//          long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+//          long wait = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
+//          long work = time_so_far - wait;
+//          long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
+//          lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work, wait, num_locks,
+//                                                                         num_of_wait_locks, 0, trx->transaction_id);
+//        }
         lock_grant(lock);
       }
     }

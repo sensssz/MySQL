@@ -74,7 +74,7 @@ struct lock_t {
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
     bool            in_batch;
-    int             ranking;
+    double          ranking;
     long            time_so_far;
     long            process_time;
     long            original_time_so_far;

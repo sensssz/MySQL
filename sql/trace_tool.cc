@@ -52,9 +52,9 @@ __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
 
-long TraceTool::num_trans = 0;
-double TraceTool::mean_latency = 0;
-double TraceTool::var_latency = 0;
+long TraceTool::num_trans[TRX_TYPES] = {0};
+double TraceTool::mean_latency[TRX_TYPES] = {0};
+double TraceTool::var_latency[TRX_TYPES] = {0};
 __thread long TraceTool::current_trx_wait = 0;
 double TraceTool::mean_work_of_all = 0;
 double TraceTool::mean_wait_of_all = 0;
@@ -264,9 +264,9 @@ void *TraceTool::check_write_log(void *arg)
       /* Reset the global transaction ID. */
       transaction_id = 0;
       
-      num_trans = 0;
-      mean_latency = 0;
-      var_latency = 0;
+      memset(num_trans, 0, TRX_TYPES);
+      memset(mean_latency, 0, TRX_TYPES);
+      memset(var_latency, 0, TRX_TYPES);
       mean_work_of_all = 0;
       mean_wait_of_all = 0;
       total_wait_locks = 0;
@@ -394,16 +394,22 @@ void TraceTool::end_query()
 Sumbits the total wait time of a transaction. */
 void TraceTool::update_ctv(long latency)
 {
-  ++num_trans;
-  double old_mean = mean_latency;
-  double old_variance = var_latency;
-  mean_latency = old_mean + (latency - old_mean) / num_trans;
-  var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
+  ++num_trans[type];
+  double old_mean = mean_latency[type];
+  double old_variance = var_latency[type];
+  mean_latency[type] = old_mean + (latency - old_mean) / num_trans[type];
+  var_latency[type] = old_variance + (latency - old_mean) * (latency - mean_latency[type]);
+  
+  ++num_trans[TRX_TYPES - 1];
+  old_mean = mean_latency[TRX_TYPES - 1];
+  old_variance = var_latency[TRX_TYPES - 1];
+  mean_latency[TRX_TYPES - 1] = old_mean + (latency - old_mean) / num_trans[TRX_TYPES - 1];
+  var_latency[TRX_TYPES - 1] = old_variance + (latency - old_mean) * (latency - mean_latency[TRX_TYPES - 1]);
 
   long wait_time = current_trx_wait;
   long work_time = latency - wait_time;
-  mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans;
-  mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans;
+  mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans[TRX_TYPES - 1];
+  mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans[TRX_TYPES - 1];
 }
 
 void TraceTool::end_transaction()
