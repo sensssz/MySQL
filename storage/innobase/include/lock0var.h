@@ -32,8 +32,7 @@ Find the lock that gives minimum CTV. */
 UNIV_INTERN
 lock_t *
 LVM_schedule(
-  vector<lock_t *> &waiting_locks,  /*!< waiting locks */
-  vector<lock_t *> &locks_to_grant);/*!< locks to grant */
+             vector<lock_t *> &waiting_locks);  /*!< waiting locks */
 
 /*************************************************************//**
 Clean up resources. */
