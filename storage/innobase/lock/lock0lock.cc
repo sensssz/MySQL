@@ -2828,8 +2828,8 @@ lock_rec_dequeue_from_page(
       return;
   }
   
-  ulint rec_fold = lock_rec_fold(space, page_no);
   vector<lock_t *> candidates;
+  vector<lock_t *> locks_to_grant;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2842,7 +2842,6 @@ lock_rec_dequeue_from_page(
     }
    
     lock_t *first_wait_lock = NULL;
-    bool has_granted_lock = false;
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
          lock = lock_rec_get_next(heap_no, lock))
@@ -2853,27 +2852,17 @@ lock_rec_dequeue_from_page(
         {
           first_wait_lock = lock;
         }
-        if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
-        {
-          candidates.push_back(lock);
-        }
+        candidates.push_back(lock);
       }
       else
       {
-        has_granted_lock = true;
+        candidates.clear();
+        break;
       }
     }
     
-    lock_t *lock_to_grant = LVM_schedule(candidates);
-    if (lock_to_grant != NULL)
-    {
-      if (!has_granted_lock ||
-          lock_get_mode(lock_to_grant) == LOCK_S)
-      {
-        lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
-        lock_grant(lock_to_grant);
-      }
-    }
+    LVM_schedule(candidates, locks_to_grant);
+    locks_grant(locks_to_grant, space, page_no, heap_no, in_lock->trx);
     
     /* Find other locks that can also be granted. */
     for (lock = lock_rec_get_first(space, page_no, heap_no);
@@ -2887,6 +2876,7 @@ lock_rec_dequeue_from_page(
       }
     }
     candidates.clear();
+    locks_to_grant.clear();
   }
 }
 

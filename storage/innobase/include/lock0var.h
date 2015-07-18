@@ -30,9 +30,10 @@ estimate(
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
-lock_t *
+void
 LVM_schedule(
-             vector<lock_t *> &waiting_locks);  /*!< waiting locks */
+  vector<lock_t *> &waiting_locks,  /*!< waiting locks */
+  vector<lock_t *> &locks_to_grant);
 
 /*************************************************************//**
 Clean up resources. */

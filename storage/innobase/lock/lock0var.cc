@@ -51,8 +51,8 @@ estimate(
     case PAYMENT:
       result =  payment_estimate(parameters);
 //    case ORDER_STATUS:
-    case DELIVERY:
-      return delivery_estimate(parameters);
+//    case DELIVERY:
+//      return delivery_estimate(parameters);
     case STOCK_LEVEL:
       result = stock_level_estimate(parameters);
     default:
@@ -87,20 +87,29 @@ wpt_tardy(
   return (average_process + 2 * max(lock->time_so_far - deadline + lock->process_time)) / lock->process_time;
 }
 
+enum lock_mode
+lock_get_mode(
+  const lock_t* lock) /*!< in: lock */
+{
+  return(static_cast<enum lock_mode>(lock->type_mode & LOCK_MODE_MASK));
+}
+
 /*************************************************************//**
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
-lock_t *
+void
 LVM_schedule(
-  vector<lock_t *> &wait_locks)  /*!< waiting locks */
+  vector<lock_t *> &wait_locks,  /*!< waiting locks */
+  vector<lock_t *> &locks_to_grant)
 {
   if (wait_locks.size() == 0)
   {
-    return NULL;
+    return;
   }
   if (wait_locks.size() == 1)
   {
-    return wait_locks[0];
+    locks_to_grant.push_back(wait_locks[0]);
+    return;
   }
   
   timespec now = TraceTool::get_time();
@@ -114,20 +123,20 @@ LVM_schedule(
     long wait_so_far = trx->total_wait_time + TraceTool::difftime(lock->wait_start, now);
     long work_so_far = lock->time_so_far - wait_so_far;
     long num_locks = UT_LIST_GET_LEN(trx->lock.trx_locks);
-    work_wait parameters = TraceTool::get_instance()->parameters(work_so_far, wait_so_far, num_locks,
+    work_wait parameters = TraceTool::get_instance()->parameters_necessary(work_so_far, wait_so_far, num_locks,
                                                                            wait_locks.size(), trx->transaction_id);
     lock->process_time = estimate(parameters, trx->type, lock_get_type(lock));
     average_process += lock->process_time;
     
-    if ((rand() % 100 < 20 ||
-         trx->type == ORDER_STATUS ||
-         trx->type == DELIVERY ||
-         trx->type == STOCK_LEVEL) &&
-        trx->is_user_trx)
-    {
-      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
-                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
-    }
+//    if ((rand() % 100 < 20 ||
+//         trx->type == ORDER_STATUS ||
+//         trx->type == DELIVERY ||
+//         trx->type == STOCK_LEVEL) &&
+//        trx->is_user_trx)
+//    {
+//      lock->time_at_grant = TraceTool::get_instance()->add_work_wait(work_so_far, wait_so_far, num_locks,
+//                                                                     wait_locks.size(), lock->process_time, trx->transaction_id);
+//    }
   }
   estimate_mutex_exit();
   
@@ -159,7 +168,18 @@ LVM_schedule(
     }
   }
   
-  return lock;
+  locks_to_grant.push_back(lock);
+  if (lock_get_mode(lock) == LOCK_S)
+  {
+    for (ulint index = 0, size = wait_locks.size(); index < size; ++index)
+    {
+      lock_t *candidate = wait_locks[index];
+      if (candidate->process_time < lock->process_time)
+      {
+        locks_to_grant.push_back(candidate);
+      }
+    }
+  }
 }
 
 /*************************************************************//**
