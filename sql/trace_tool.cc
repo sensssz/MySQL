@@ -55,8 +55,6 @@ __thread transaction_type TraceTool::type = NONE;
 long TraceTool::num_trans[TRX_TYPES] = {0};
 double TraceTool::mean_latency[TRX_TYPES] = {0};
 double TraceTool::var_latency[TRX_TYPES] = {0};
-vector<long> TraceTool::time_so_far;
-vector<long> TraceTool::trx_ids;
 
 deque<buf_page_t *> TraceTool::pages_to_make_young;
 deque<ib_uint32_t> TraceTool::space_ids;
@@ -461,16 +459,5 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
-  ofstream remaining("remaining");
-  for (ulint index = 0, size = trx_ids.size(); index < size; ++index)
-  {
-    long trx_id = trx_ids[index];
-    long latency = function_times.back()[trx_id];
-    long remaining_time = latency - time_so_far[index];
-    remaining << "rem" << trx_id << "=" << remaining_time << endl;
-  }
-  remaining.close();
-  time_so_far.clear();
-  trx_ids.clear();
   write_latency("latency/");
 }

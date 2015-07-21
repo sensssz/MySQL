@@ -2862,88 +2862,88 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-//  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-//       lock != NULL;
-//       lock = lock_rec_get_next_on_page(lock))
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock))
+  {
+    if (lock_get_wait(lock) &&
+        !lock_rec_has_to_wait_in_queue(lock))
+    {
+      
+      lock_grant(lock);
+    }
+  }
+  
+//  /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
+//  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+//  if (first_lock_on_page == NULL)
 //  {
-//    if (lock_get_wait(lock) &&
-//        !lock_rec_has_to_wait_in_queue(lock))
-//    {
-//      
-//      lock_grant(lock);
-//    }
+//      return;
 //  }
-  
-  /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-  if (first_lock_on_page == NULL)
-  {
-      return;
-  }
-  
-  ulint rec_fold = lock_rec_fold(space, page_no);
-  vector<lock_t *> wait_locks;
-  
-  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-       heap_no < n_bits; ++heap_no)
-  {
-    /* Not a lock on this record. */
-    if (!lock_rec_get_nth_bit(in_lock, heap_no))
-    {
-      continue;
-    }
-   
-    lock_t *first_wait_lock = NULL;
-    double min_heuristic = std::numeric_limits<double>::max();
-    lock_t *lock_to_grant = NULL;
-    timespec now = TraceTool::get_time();
-    var_mutex_enter();
-    for (lock = lock_rec_get_first(space, page_no, heap_no);
-         lock != NULL;
-         lock = lock_rec_get_next(heap_no, lock))
-    {
-      if (lock_get_wait(lock))
-      {
-        wait_locks.push_back(lock);
-        if (first_wait_lock == NULL)
-        {
-          first_wait_lock = lock;
-        }
-        
-        long time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-        double time_left = TraceTool::mean_latency[lock->trx->type] - time_so_far;
-        if (time_left < min_heuristic)
-        {
-          min_heuristic = time_left;
-          lock_to_grant = lock;
-        }
-      }
-      else
-      {
-        lock_to_grant = NULL;
-        break;
-      }
-    }
-    var_mutex_exit();
-    
-    if (lock_to_grant != NULL)
-    {
-      lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
-      lock_grant(lock_to_grant);
-    }
-    for (lock = lock_rec_get_first(space, page_no, heap_no);
-         lock != NULL;
-         lock = lock_rec_get_next(heap_no, lock))
-    {
-      if (lock_get_wait(lock) &&
-          !lock_rec_has_to_wait_in_queue(lock))
-      {
-        lock_grant(lock);
-      }
-    }
-    wait_locks.clear();
-  }
+//  
+//  ulint rec_fold = lock_rec_fold(space, page_no);
+//  vector<lock_t *> wait_locks;
+//  
+//  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+//  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+//       heap_no < n_bits; ++heap_no)
+//  {
+//    /* Not a lock on this record. */
+//    if (!lock_rec_get_nth_bit(in_lock, heap_no))
+//    {
+//      continue;
+//    }
+//   
+//    lock_t *first_wait_lock = NULL;
+//    double min_heuristic = std::numeric_limits<double>::max();
+//    lock_t *lock_to_grant = NULL;
+//    timespec now = TraceTool::get_time();
+//    var_mutex_enter();
+//    for (lock = lock_rec_get_first(space, page_no, heap_no);
+//         lock != NULL;
+//         lock = lock_rec_get_next(heap_no, lock))
+//    {
+//      if (lock_get_wait(lock))
+//      {
+//        wait_locks.push_back(lock);
+//        if (first_wait_lock == NULL)
+//        {
+//          first_wait_lock = lock;
+//        }
+//        
+//        long time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+//        double time_left = TraceTool::mean_latency[lock->trx->type] - time_so_far;
+//        if (time_left < min_heuristic)
+//        {
+//          min_heuristic = time_left;
+//          lock_to_grant = lock;
+//        }
+//      }
+//      else
+//      {
+//        lock_to_grant = NULL;
+//        break;
+//      }
+//    }
+//    var_mutex_exit();
+//    
+//    if (lock_to_grant != NULL)
+//    {
+//      lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
+//      lock_grant(lock_to_grant);
+//    }
+//    for (lock = lock_rec_get_first(space, page_no, heap_no);
+//         lock != NULL;
+//         lock = lock_rec_get_next(heap_no, lock))
+//    {
+//      if (lock_get_wait(lock) &&
+//          !lock_rec_has_to_wait_in_queue(lock))
+//      {
+//        lock_grant(lock);
+//      }
+//    }
+//    wait_locks.clear();
+//  }
 }
 
 /*************************************************************//**
