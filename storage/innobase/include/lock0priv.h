@@ -77,10 +77,8 @@ struct lock_t {
     double          ranking;
     long            time_so_far;
     long            process_time;
-    long            original_time_so_far;
-    long            original_process;
-    bool            marked;
-    long           *time_at_grant;
+    double          slack;
+    long            *time_at_grant;
     timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {

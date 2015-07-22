@@ -1895,9 +1895,6 @@ lock_rec_create(
   lock->in_batch = false;
   lock->time_so_far = 0;
   lock->process_time = 0;
-  lock->original_time_so_far = 0;
-  lock->original_process = 0;
-  lock->marked = false;
   lock->time_at_grant = NULL;
 
   /* Reset to zero the bitmap which resides immediately after the
