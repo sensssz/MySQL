@@ -73,13 +73,9 @@ struct lock_t {
 					wait flag, ORed */
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
-    bool            in_batch;
-    int             ranking;
     long            time_so_far;
     long            process_time;
-    long            original_time_so_far;
-    long            original_process;
-    bool            marked;
+    bool            has_to_wait;
     long           *time_at_grant;
     timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */

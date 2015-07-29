@@ -54,7 +54,6 @@ __thread transaction_type TraceTool::type = NONE;
 
 long TraceTool::num_trans[TRX_TYPES] = {0};
 double TraceTool::mean_latency[TRX_TYPES] = {0};
-double TraceTool::var_latency[TRX_TYPES] = {0};
 
 deque<buf_page_t *> TraceTool::pages_to_make_young;
 deque<ib_uint32_t> TraceTool::space_ids;
@@ -201,9 +200,8 @@ void *TraceTool::check_write_log(void *arg)
       /* Reset the global transaction ID. */
       transaction_id = 0;
       
-      memset(num_trans, 0, TRX_TYPES);
-      memset(mean_latency, 0, TRX_TYPES);
-      memset(var_latency, 0, TRX_TYPES);
+      memset(num_trans, 0, TRX_TYPES * sizeof(long));
+      memset(mean_latency, 0, TRX_TYPES * sizeof(double));
       
       /* Dump data in the old instance to log files and
          reclaim memory. */
@@ -325,23 +323,19 @@ void TraceTool::end_query()
 Sumbits the total wait time of a transaction. */
 void TraceTool::update_ctv(long latency)
 {
+  var_mutex_enter();
   ++num_trans[type];
   double old_mean = mean_latency[type];
-  double old_variance = var_latency[type];
   mean_latency[type] = old_mean + (latency - old_mean) / num_trans[type];
-  var_latency[type] = old_variance + (latency - old_mean) * (latency - mean_latency[type]);
   
   ++num_trans[TRX_TYPES - 1];
   old_mean = mean_latency[TRX_TYPES - 1];
-  old_variance = var_latency[TRX_TYPES - 1];
   mean_latency[TRX_TYPES - 1] = old_mean + (latency - old_mean) / num_trans[TRX_TYPES - 1];
-  var_latency[TRX_TYPES - 1] = old_variance + (latency - old_mean) * (latency - mean_latency[TRX_TYPES - 1]);
+  var_mutex_exit();
 }
 
 void TraceTool::end_transaction()
 {
-  new_transaction = true;
-  type = NONE;
 #ifdef LATENCY
   timespec now = get_time();
   long latency = difftime(trans_start, now);
@@ -351,8 +345,14 @@ void TraceTool::end_transaction()
   {
     transaction_start_times[current_transaction_id] = 0;
   }
+  else
+  {
+    update_ctv(latency);
+  }
   pthread_rwlock_unlock(&data_lock);
 #endif
+  new_transaction = true;
+  type = NONE;
 }
 
 void TraceTool::add_record(int function_index, long duration)
@@ -459,5 +459,13 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
+  ofstream remaining("remaining");
+  for (ulint index = 0, size = trx_ids.size(); index < size; ++index)
+  {
+    long trx_id = trx_ids[index];
+    long latency = function_times.back()[trx_id];
+    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
+  }
+  remaining.close();
   write_latency("latency/");
 }

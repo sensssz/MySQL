@@ -455,35 +455,11 @@ hash_delete(
   ulint rec_fold);
 
 static
-lock_t *
-lock_rec_find_first_wait(
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no);
-
-static
 void
 lock_rec_move_to_front(
   lock_t *lock_to_move,
   lock_t *first_wait_lock,
   ulint rec_fold);
-
-static
-void
-locks_grant(
-  vector<lock_t *> &locks_to_grant,
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no,
-  trx_t *trx);
-
-static
-void
-lock_next_to_grant(
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no,
-  vector<lock_t *> &locks_to_grant);
 
 /*********************************************************************//**
 Gets the nth bit of a record lock.
@@ -910,7 +886,6 @@ lock_reset_lock_and_trx_wait(
 
   lock->trx->lock.wait_lock = NULL;
   lock->type_mode &= ~LOCK_WAIT;
-  lock->ranking = -1;
 }
 
 /*********************************************************************//**
@@ -1891,13 +1866,9 @@ lock_rec_create(
   lock->un_member.rec_lock.n_bits = n_bytes * 8;
   lock->wait_start = TraceTool::get_time();
   lock->trx->type = TraceTool::type;
-  lock->ranking = -1;
-  lock->in_batch = false;
+  lock->has_to_wait = false;
   lock->time_so_far = 0;
   lock->process_time = 0;
-  lock->original_time_so_far = 0;
-  lock->original_process = 0;
-  lock->marked = false;
   lock->time_at_grant = NULL;
 
   /* Reset to zero the bitmap which resides immediately after the
@@ -1935,45 +1906,6 @@ lock_rec_create(
   MONITOR_INC(MONITOR_NUM_RECLOCK);
 
   return(lock);
-}
-
-static
-void
-rec_get_wait_granted_locks(
-  /*============*/
-  const buf_block_t*  block,  /*!< in: buffer block containing
-          the record */
-  ulint     heap_no,      /*!< in: heap number of the record */
-  vector<lock_t *> &wait_locks,  /*!< out: list of wait locks */
-  vector<lock_t *> &granted_locks, /*!< out: list of granted locks */
-  bool  &has_batch)   /*!< out: true if there is a batch in the queue */
-{
-  ulint size = 0;
-  for (lock_t *lock = lock_rec_get_first(block, heap_no);
-       lock != NULL;
-       lock = lock_rec_get_next(heap_no, lock))
-  {
-    if (lock_get_wait(lock))
-    {
-      if (size < MAX_BATCH_SIZE)
-      {
-        wait_locks.push_back(lock);
-        ++size;
-      }
-      if (lock->ranking != -1)
-      {
-        has_batch = true;
-      }
-    }
-    else
-    {
-      if (lock->in_batch)
-      {
-        has_batch = true;
-      }
-      granted_locks.push_back(lock);
-    }
-  }
 }
 
 /*********************************************************************//**
@@ -2687,26 +2619,6 @@ hash_delete(
 }
 
 static
-lock_t *
-lock_rec_find_first_wait(
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no)
-{
-  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
-       lock != NULL;
-       lock = lock_rec_get_next(heap_no, lock))
-  {
-    if (lock_get_wait(lock))
-    {
-      return lock;
-    }
-  }
-  
-  return NULL;
-}
-
-static
 void
 lock_rec_move_to_front(
   lock_t *lock_to_move,
@@ -2733,92 +2645,6 @@ lock_rec_move_to_front(
         cell->node = lock_to_move;
       }
       lock_to_move->hash = first_wait_lock;
-    }
-  }
-}
-
-static
-void
-locks_grant(
-  vector<lock_t *> &locks_to_grant,
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no,
-  trx_t *trx)
-{
-  if (locks_to_grant.size() > 0)
-  {
-    ulint rec_fold = lock_rec_fold(space_id, page_no);
-    
-    lock_t *first_wait_lock = lock_rec_find_first_wait(space_id, page_no, heap_no);
-    for (ulint index = 0, size = locks_to_grant.size(); index < size; ++index)
-    {
-      lock_t *lock = locks_to_grant[index];
-      if (lock->trx != trx)
-      {
-        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-        lock_grant(lock);
-      }
-      else
-      {
-        lock_reset_lock_and_trx_wait(lock);
-      }
-    }
-  }
-}
-
-static
-void
-lock_next_to_grant(
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no,
-  vector<lock_t *> &locks_to_grant)
-{
-  int smallest_ranking = INT_MAX;
-  vector<lock_t *> wait_locks;
-  ulint size = 0;
-  
-  for (lock_t *lock = lock_rec_get_first(space_id, page_no, heap_no);
-       lock != NULL;
-       lock = lock_rec_get_next(heap_no, lock))
-  {
-    /* If there is still any lock on this record, we will not
-      grant other locks */
-    if (!lock_get_wait(lock))
-    {
-      locks_to_grant.clear();
-      return;
-    }
-    else
-    {
-      if (lock->ranking != -1 &&
-          lock->ranking < smallest_ranking)
-      {
-        smallest_ranking = lock->ranking;
-        locks_to_grant.clear();
-        locks_to_grant.push_back(lock);
-      }
-      else if (lock->ranking == smallest_ranking)
-      {
-        locks_to_grant.push_back(lock);
-      }
-      if (size < MAX_BATCH_SIZE)
-      {
-        ++size;
-      }
-      wait_locks.push_back(lock);
-    }
-  }
-  
-  /* No one is holding a lock on this record when we reach here */
-  if (wait_locks.size() > 0) /* Queue is not empty */
-  {
-    bool new_wait_lock = wait_locks.back()->ranking == -1;
-    if ((!HARD_BOUNDARY && new_wait_lock) ||           /* Use soft boundary */
-        locks_to_grant.size() == 0) /* No batch in queue */
-    {
-      LVM_schedule(wait_locks, locks_to_grant);
     }
   }
 }
@@ -2897,7 +2723,11 @@ lock_rec_dequeue_from_page(
     double min_heuristic = std::numeric_limits<double>::max();
     lock_t *lock_to_grant = NULL;
     timespec now = TraceTool::get_time();
+//    ofstream &log = TraceTool::get_instance()->get_log();
     var_mutex_enter();
+    double mean_latency[6];
+    memcpy(mean_latency, TraceTool::mean_latency, 6 * sizeof(double));
+    var_mutex_exit();
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
          lock = lock_rec_get_next(heap_no, lock))
@@ -2912,8 +2742,8 @@ lock_rec_dequeue_from_page(
         
         if (!lock_rec_has_to_wait_in_queue(lock))
         {
-          long time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          double time_left = TraceTool::mean_latency[lock->trx->type] - time_so_far;
+          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+          double time_left = mean_latency[lock->trx->type] - lock->time_so_far;
           if (time_left < min_heuristic)
           {
             min_heuristic = time_left;
@@ -2922,23 +2752,41 @@ lock_rec_dequeue_from_page(
         }
       }
     }
-    var_mutex_exit();
     
     if (lock_to_grant != NULL)
     {
       lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
       lock_grant(lock_to_grant);
       
+//      for (ulint index = 0; index < 6; ++index)
+//      {
+//        log << mean_latency[index] << ",";
+//      }
+//      log << endl;
+//      lock = lock_to_grant;
+//      log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
+//          << lock_get_mode_str(lock) << endl;
+//      TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
+//      TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
+      
       /* Find other locks that can also be granted. */
       for (ulint index = 0, size = wait_locks.size();
            index < size; ++index)
       {
         lock = wait_locks[index];
-        if (!lock_rec_has_to_wait_in_queue(lock))
+        if (lock != lock_to_grant &&
+            !lock_rec_has_to_wait_in_queue(lock))
         {
           lock_grant(lock);
+          
+//          log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
+//              << lock_get_mode_str(lock) << endl;
+//          TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
+//          TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
         }
       }
+      
+//      log << endl;
     }
     wait_locks.clear();
   }
@@ -4102,7 +3950,7 @@ lock_get_first_lock(
   }
 
   ut_a(lock != NULL);
-  ut_a(lock != ctx->wait_lock);
+//  ut_a(lock != ctx->wait_lock);
   ut_ad(lock_get_type_low(lock) == lock_get_type_low(ctx->wait_lock));
 
   return(lock);
@@ -4445,7 +4293,7 @@ lock_deadlock_check_and_resolve(
       if (!srv_read_only_mode) {
         lock_deadlock_joining_trx_print(trx, lock);
       }
-
+      
       MONITOR_INC(MONITOR_DEADLOCK);
 
     } else if (victim_trx_id != 0 && victim_trx_id != trx->id) {

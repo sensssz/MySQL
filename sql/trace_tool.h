@@ -108,9 +108,10 @@ public:
     static long num_trans[TRX_TYPES];       /*!< Number of successfully submitted transactions. */
     static double mean_latency[TRX_TYPES];  /*!< Mean of total wait time of successfully committed
                                              transactions*/
-    static double var_latency[TRX_TYPES];   /*!< Mean of total wait time of successfully committed
-                                             transactions*/
     static pthread_mutex_t var_mutex;
+    
+    vector<long> time_so_far;
+    vector<long> trx_ids;
     
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
