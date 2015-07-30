@@ -2707,7 +2707,9 @@ lock_rec_dequeue_from_page(
   }
   
   ulint rec_fold = lock_rec_fold(space, page_no);
-  vector<lock_t *> wait_locks;
+//  vector<lock_t *> wait_locks;
+  ofstream &log = TraceTool::get_instance()->get_log();
+  list<lock_t *> wait_locks;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2720,14 +2722,11 @@ lock_rec_dequeue_from_page(
     }
    
     lock_t *first_wait_lock = NULL;
-    double min_heuristic = std::numeric_limits<double>::max();
-    lock_t *lock_to_grant = NULL;
     timespec now = TraceTool::get_time();
-//    ofstream &log = TraceTool::get_instance()->get_log();
-    var_mutex_enter();
+    
     double mean_latency[6];
     memcpy(mean_latency, TraceTool::mean_latency, 6 * sizeof(double));
-    var_mutex_exit();
+    
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
          lock = lock_rec_get_next(heap_no, lock))
@@ -2739,56 +2738,84 @@ lock_rec_dequeue_from_page(
         {
           first_wait_lock = lock;
         }
-        
-        if (!lock_rec_has_to_wait_in_queue(lock))
-        {
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-          double time_left = mean_latency[lock->trx->type] - lock->time_so_far;
-          if (time_left < min_heuristic)
-          {
-            min_heuristic = time_left;
-            lock_to_grant = lock;
-          }
-        }
+        lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+        lock->process_time = mean_latency[lock->trx->type] - lock->time_so_far;
       }
     }
     
-    if (lock_to_grant != NULL)
+    bool has_grantable = wait_locks.size() > 0;
+    while (has_grantable)
     {
-      lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
-      lock_grant(lock_to_grant);
+      has_grantable = false;
+      double min_heuristic = std::numeric_limits<double>::max();
+      list<lock_t *>::iterator lock_to_grant = wait_locks.end();
       
-//      for (ulint index = 0; index < 6; ++index)
-//      {
-//        log << mean_latency[index] << ",";
-//      }
-//      log << endl;
-//      lock = lock_to_grant;
-//      log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
-//          << lock_get_mode_str(lock) << endl;
-//      TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
-//      TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
-      
-      /* Find other locks that can also be granted. */
-      for (ulint index = 0, size = wait_locks.size();
-           index < size; ++index)
+      for (list<lock_t *>::iterator iter = wait_locks.begin();
+           iter != wait_locks.end(); ++iter)
       {
-        lock = wait_locks[index];
-        if (lock != lock_to_grant &&
-            !lock_rec_has_to_wait_in_queue(lock))
+        lock = *iter;
+        lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
+        if (!lock->has_to_wait)
         {
-          lock_grant(lock);
-          
-//          log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
-//              << lock_get_mode_str(lock) << endl;
-//          TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
-//          TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
+          has_grantable = true;
+          if (lock->process_time < min_heuristic)
+          {
+            min_heuristic = lock->process_time;
+            lock_to_grant = iter;
+          }
+        }
+        else
+        {
+          iter = wait_locks.erase(iter);
+          --iter;
         }
       }
       
-//      log << endl;
+      if (lock_to_grant != wait_locks.end())
+      {
+        lock_rec_move_to_front(*lock_to_grant, first_wait_lock, rec_fold);
+        lock_grant(*lock_to_grant);
+        wait_locks.erase(lock_to_grant);
+      }
     }
     wait_locks.clear();
+    
+//    if (lock_to_grant != NULL)
+//    {
+//      lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
+//      lock_grant(lock_to_grant);
+//      
+////      ofstream &log = TraceTool::get_instance()->get_log();
+////      for (ulint index = 0; index < 6; ++index)
+////      {
+////        log << mean_latency[index] << ",";
+////      }
+////      log << endl;
+////      lock = lock_to_grant;
+////      log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
+////          << lock_get_mode_str(lock) << endl;
+////      TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
+////      TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
+//      
+//      /* Find other locks that can also be granted. */
+//      for (ulint index = 0, size = wait_locks.size();
+//           index < size; ++index)
+//      {
+//        lock = wait_locks[index];
+//        if (lock != lock_to_grant &&
+//            !lock_rec_has_to_wait_in_queue(lock))
+//        {
+//          lock_grant(lock);
+//          
+////          log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
+////              << lock_get_mode_str(lock) << endl;
+////          TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
+////          TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
+//        }
+//      }
+//      
+////      log << endl;
+//    }
   }
 }
 
