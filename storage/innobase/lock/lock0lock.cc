@@ -2707,8 +2707,6 @@ lock_rec_dequeue_from_page(
   }
   
   ulint rec_fold = lock_rec_fold(space, page_no);
-//  vector<lock_t *> wait_locks;
-  ofstream &log = TraceTool::get_instance()->get_log();
   list<lock_t *> wait_locks;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
@@ -2724,9 +2722,6 @@ lock_rec_dequeue_from_page(
     lock_t *first_wait_lock = NULL;
     timespec now = TraceTool::get_time();
     
-    double mean_latency[6];
-    memcpy(mean_latency, TraceTool::mean_latency, 6 * sizeof(double));
-    
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
          lock = lock_rec_get_next(heap_no, lock))
@@ -2739,7 +2734,6 @@ lock_rec_dequeue_from_page(
           first_wait_lock = lock;
         }
         lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-        lock->process_time = mean_latency[lock->trx->type] - lock->time_so_far;
       }
     }
     
@@ -2747,7 +2741,7 @@ lock_rec_dequeue_from_page(
     while (has_grantable)
     {
       has_grantable = false;
-      double min_heuristic = std::numeric_limits<double>::max();
+      double min_heuristic = 0;
       list<lock_t *>::iterator lock_to_grant = wait_locks.end();
       
       for (list<lock_t *>::iterator iter = wait_locks.begin();
@@ -2758,9 +2752,9 @@ lock_rec_dequeue_from_page(
         if (!lock->has_to_wait)
         {
           has_grantable = true;
-          if (lock->process_time < min_heuristic)
+          if (lock->time_so_far > min_heuristic)
           {
-            min_heuristic = lock->process_time;
+            min_heuristic = lock->time_so_far;
             lock_to_grant = iter;
           }
         }

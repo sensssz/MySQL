@@ -345,10 +345,6 @@ void TraceTool::end_transaction()
   {
     transaction_start_times[current_transaction_id] = 0;
   }
-  else
-  {
-    update_ctv(latency);
-  }
   pthread_rwlock_unlock(&data_lock);
 #endif
   new_transaction = true;
@@ -459,13 +455,5 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
-  ofstream remaining("remaining");
-  for (ulint index = 0, size = trx_ids.size(); index < size; ++index)
-  {
-    long trx_id = trx_ids[index];
-    long latency = function_times.back()[trx_id];
-    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
-  }
-  remaining.close();
   write_latency("latency/");
 }
