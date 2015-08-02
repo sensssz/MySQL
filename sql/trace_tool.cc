@@ -455,5 +455,14 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
+  ofstream remaining("remaining");
+  for (ulint index = 0; index < time_so_far.size(); ++index)
+  {
+    long trx_id = trx_ids[index];
+    long latency = function_times.back()[trx_id];
+    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
+  }
+  remaining.close();
+  
   write_latency("latency/");
 }

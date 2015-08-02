@@ -2649,6 +2649,15 @@ lock_rec_move_to_front(
   }
 }
 
+static
+bool
+lock_rec_compare(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  return lock1->time_so_far > lock2->time_so_far;
+}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2707,7 +2716,7 @@ lock_rec_dequeue_from_page(
   }
   
   ulint rec_fold = lock_rec_fold(space, page_no);
-  list<lock_t *> wait_locks;
+  vector<lock_t *> wait_locks;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2721,6 +2730,8 @@ lock_rec_dequeue_from_page(
    
     lock_t *first_wait_lock = NULL;
     timespec now = TraceTool::get_time();
+//    ofstream &log = TraceTool::get_instance()->get_log();
+//    bool logged = false;
     
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
@@ -2737,79 +2748,33 @@ lock_rec_dequeue_from_page(
       }
     }
     
-    bool has_grantable = wait_locks.size() > 0;
-    while (has_grantable)
+    sort(wait_locks.begin(), wait_locks.end(), lock_rec_compare);
+    for (ulint index = 0; index < wait_locks.size(); ++index)
     {
-      has_grantable = false;
-      double min_heuristic = 0;
-      list<lock_t *>::iterator lock_to_grant = wait_locks.end();
+      lock_t *lock = wait_locks[index];
       
-      for (list<lock_t *>::iterator iter = wait_locks.begin();
-           iter != wait_locks.end(); ++iter)
+      if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock))
       {
-        lock = *iter;
-        lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
-        if (!lock->has_to_wait)
-        {
-          has_grantable = true;
-          if (lock->time_so_far > min_heuristic)
-          {
-            min_heuristic = lock->time_so_far;
-            lock_to_grant = iter;
-          }
-        }
-        else
-        {
-          iter = wait_locks.erase(iter);
-          --iter;
-        }
+        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        lock_grant(lock);
+        
+//        lock = *lock_to_grant;
+//        log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
+//            << lock_get_mode_str(lock) << endl;
+//        TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
+//        TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
+//        logged = true;
       }
-      
-      if (lock_to_grant != wait_locks.end())
+      else
       {
-        lock_rec_move_to_front(*lock_to_grant, first_wait_lock, rec_fold);
-        lock_grant(*lock_to_grant);
-        wait_locks.erase(lock_to_grant);
+        break;
       }
     }
-    wait_locks.clear();
-    
-//    if (lock_to_grant != NULL)
+//    if (logged)
 //    {
-//      lock_rec_move_to_front(lock_to_grant, first_wait_lock, rec_fold);
-//      lock_grant(lock_to_grant);
-//      
-////      ofstream &log = TraceTool::get_instance()->get_log();
-////      for (ulint index = 0; index < 6; ++index)
-////      {
-////        log << mean_latency[index] << ",";
-////      }
-////      log << endl;
-////      lock = lock_to_grant;
-////      log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
-////          << lock_get_mode_str(lock) << endl;
-////      TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
-////      TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
-//      
-//      /* Find other locks that can also be granted. */
-//      for (ulint index = 0, size = wait_locks.size();
-//           index < size; ++index)
-//      {
-//        lock = wait_locks[index];
-//        if (lock != lock_to_grant &&
-//            !lock_rec_has_to_wait_in_queue(lock))
-//        {
-//          lock_grant(lock);
-//          
-////          log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
-////              << lock_get_mode_str(lock) << endl;
-////          TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
-////          TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
-//        }
-//      }
-//      
-////      log << endl;
+//      log << endl;
 //    }
+    wait_locks.clear();
   }
 }
 
