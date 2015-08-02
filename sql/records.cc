@@ -378,6 +378,7 @@ static int rr_handle_error(READ_RECORD *info, int error)
 static int rr_quick(READ_RECORD *info)
 {
     int tmp;
+    TraceTool::path_count++;
     while ((tmp= info->select->quick->get_next()))
     {
         if (info->thd->killed || (tmp != HA_ERR_RECORD_DELETED))
@@ -386,6 +387,7 @@ static int rr_quick(READ_RECORD *info)
             break;
         }
     }
+    TraceTool::path_count--;
     return tmp;
 }
 

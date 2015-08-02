@@ -355,6 +355,7 @@ SET(INNOBASE_SOURCES
 	lock/lock0iter.cc
 	lock/lock0lock.cc
 	lock/lock0wait.cc
+  lock/lock0var.cc
 	log/log0log.cc
 	log/log0recv.cc
 	mach/mach0data.cc

@@ -43,6 +43,10 @@ Created 5/7/1996 Heikki Tuuri
 extern ibool	lock_print_waits;
 #endif /* UNIV_DEBUG */
 
+extern ulint MIN_BATCH_SIZE;
+extern ulint MAX_BATCH_SIZE;
+extern ibool HARD_BOUNDARY;
+
 /*********************************************************************//**
 Gets the size of a lock struct.
 @return	size in bytes */

@@ -1144,7 +1144,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
 #endif
 
   TraceTool::get_instance()->start_new_query();
-  TraceTool::is_commit = false;
+  
   /* DTRACE instrumentation, begin */
   MYSQL_COMMAND_START(thd->thread_id, command,
                       &thd->security_ctx->priv_user[0],
@@ -1316,6 +1316,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
                       &thd->security_ctx->priv_user[0],
                       (char *) thd->security_ctx->host_or_ip);
     char *packet_end= thd->query() + thd->query_length();
+    TraceTool::get_instance()->set_query(thd->query());
 
     if (opt_log_raw)
       general_log_write(thd, command, thd->query(), thd->query_length());
@@ -1788,10 +1789,6 @@ done:
   free_root(thd->mem_root,MYF(MY_KEEP_PREALLOC));
   
   TraceTool::get_instance()->end_query();
-  if (TraceTool::is_commit)
-  {
-    TraceTool::get_instance()->end_transaction();
-  }
 
   /* DTRACE instrumentation, end */
   if (MYSQL_QUERY_DONE_ENABLED() || MYSQL_COMMAND_DONE_ENABLED())
@@ -4297,13 +4294,15 @@ end_with_restore_list:
                       (thd->variables.completion_type == 2 &&
                        lex->tx_release != TVL_NO));
     bool commit = trans_commit(thd);
+    if (!TraceTool::is_commit)
+    {
+      TraceTool::is_commit = true;
+      TraceTool::commit_successful = false;
+    }
     if (commit)
     {
-      TraceTool::get_instance()->get_log() << "Commit failed" << endl;
-      TraceTool::commit_successful = false;
       goto error;
     }
-    TraceTool::commit_successful = true;
     thd->mdl_context.release_transactional_locks();
     /* Begin transaction with the same isolation level. */
     if (tx_chain)
@@ -4333,7 +4332,13 @@ end_with_restore_list:
     bool tx_release= (lex->tx_release == TVL_YES ||
                       (thd->variables.completion_type == 2 &&
                        lex->tx_release != TVL_NO));
-    if (trans_rollback(thd))
+    bool rollback = trans_rollback(thd);
+    if (!TraceTool::is_commit)
+    {
+      TraceTool::is_commit = true;
+      TraceTool::commit_successful = false;
+    }
+    if (rollback)
       goto error;
     thd->mdl_context.release_transactional_locks();
     /* Begin transaction with the same isolation level. */

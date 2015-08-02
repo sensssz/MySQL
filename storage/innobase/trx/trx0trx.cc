@@ -48,6 +48,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "srv0mon.h"
 #include "ut0vec.h"
 
+#include "trace_tool.h"
+
 #include<set>
 
 /** Set of table_id */
@@ -121,6 +123,8 @@ trx_create(void)
 	trx->check_unique_secondary = TRUE;
 
 	trx->dict_operation = TRX_DICT_OP_NONE;
+  
+  trx->is_user_trx = false;
 
 	mutex_create(trx_undo_mutex_key, &trx->undo_mutex, SYNC_TRX_UNDO);
 
@@ -192,6 +196,7 @@ trx_allocate_for_mysql(void)
 
 	mutex_enter(&trx_sys->mutex);
 
+  trx->is_user_trx = true;
 	ut_d(trx->in_mysql_trx_list = TRUE);
 	UT_LIST_ADD_FIRST(mysql_trx_list, trx_sys->mysql_trx_list, trx);
 
@@ -564,7 +569,8 @@ trx_resurrect_insert(
 	/* trx_start_low() is not called with resurrect, so need to initialize
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
-	    || trx->state == TRX_STATE_PREPARED) {
+      || trx->state == TRX_STATE_PREPARED) {
+    trx->trx_start_time = TraceTool::get_time();
 		trx->start_time = ut_time();
 	}
 
@@ -658,7 +664,8 @@ trx_resurrect_update(
 	/* trx_start_low() is not called with resurrect, so need to initialize
 	start time here.*/
 	if (trx->state == TRX_STATE_ACTIVE
-	    || trx->state == TRX_STATE_PREPARED) {
+      || trx->state == TRX_STATE_PREPARED) {
+    trx->trx_start_time = TraceTool::get_time();
 		trx->start_time = ut_time();
 	}
 
@@ -852,6 +859,15 @@ trx_start_low(
 		trx->rseg = trx_assign_rseg_low(
 			srv_undo_logs, srv_undo_tablespaces);
 	}
+  
+  if (trx->is_user_trx)
+  {
+    trx->trx_start_time = TraceTool::get_time();
+    trx->total_wait_time = 0;
+    trx->type = NONE;
+    trx->transaction_id = TraceTool::current_transaction_id;
+    trx->queued = false;
+  }
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
 	read_view_open_now: */
@@ -869,8 +885,8 @@ trx_start_low(
 	lock_print_info_all_transactions() will have a consistent view. */
 
 	trx->state = TRX_STATE_ACTIVE;
-
-	trx->id = trx_sys_get_new_trx_id();
+  
+  trx->id = trx_sys_get_new_trx_id();
 
 	ut_ad(!trx->in_rw_trx_list);
 	ut_ad(!trx->in_ro_trx_list);
@@ -1338,7 +1354,7 @@ trx_commit_low(
 			or NULL if trx made no modifications */
 {
 	lsn_t	lsn;
-
+  
 	assert_trx_nonlocking_or_in_list(trx);
 	ut_ad(!trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY));
 	ut_ad(!mtr || mtr->state == MTR_ACTIVE);
@@ -1392,7 +1408,7 @@ trx_commit_low(
 	} else {
 		lsn = 0;
 	}
-
+  
 	trx_commit_in_memory(trx, lsn);
 }
 
@@ -1404,6 +1420,11 @@ trx_commit(
 /*=======*/
 	trx_t*	trx)	/*!< in/out: transaction */
 {
+  /* This marks a transaction commit. */
+  if (trx->is_user_trx)
+  {
+    TraceTool::is_commit = true;
+  }
 	mtr_t	local_mtr;
 	mtr_t*	mtr;
 

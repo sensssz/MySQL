@@ -66,6 +66,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "ibuf0ibuf.h"
 #include "srv0start.h"
 #include "srv0srv.h"
+#include "lock0var.h"
 #ifndef UNIV_HOTBACKUP
 # include "trx0rseg.h"
 # include "os0proc.h"
@@ -94,6 +95,7 @@ Created 2/16/1996 Heikki Tuuri
 # include "os0sync.h"
 # include "zlib.h"
 # include "ut0crc32.h"
+#include "trace_tool.h"
 
 /** Log sequence number immediately after startup */
 UNIV_INTERN lsn_t	srv_start_lsn;
@@ -1529,7 +1531,9 @@ innobase_start_or_create_for_mysql(void)
 
 	if (srv_read_only_mode) {
 		ib_logf(IB_LOG_LEVEL_INFO, "Started in read only mode");
-	}
+  }
+  
+  indi_init();
 
 #ifdef HAVE_DARWIN_THREADS
 # ifdef F_FULLFSYNC
@@ -3090,6 +3094,8 @@ innobase_shutdown_for_mysql(void)
 
 	srv_was_started = FALSE;
 	srv_start_has_been_called = FALSE;
+  
+  delete TraceTool::get_instance();
 
 	return(DB_SUCCESS);
 }

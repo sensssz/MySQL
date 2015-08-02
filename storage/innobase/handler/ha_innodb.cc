@@ -3432,7 +3432,7 @@ innobase_end(
         mysql_mutex_destroy(&commit_cond_m);
         mysql_cond_destroy(&commit_cond);
     }
-
+  
     DBUG_RETURN(err);
 }
 
@@ -3509,8 +3509,8 @@ innobase_start_trx_and_assign_read_view(
     trx_start_if_not_started_xa(trx);
 
     /* Assign a read view if the transaction does not have it yet.
-    Do this only if transaction is using REPEATABLE READ isolation
-    level. */
+    Do this only if transaction is using REPEATABLE READ or SERIALIZABLE 
+    SNAPSHOT isolation level. */
     trx->isolation_level = innobase_map_isolation_level(
                                thd_get_trx_isolation(thd));
 
@@ -12272,11 +12272,25 @@ ha_innobase::external_lock(
     }
 
     if (lock_type == F_WRLCK) {
-
+        
         /* If this is a SELECT, then it is in UPDATE TABLE ...
         or SELECT ... FOR UPDATE */
         prebuilt->select_lock_type = LOCK_X;
         prebuilt->stored_select_lock_type = LOCK_X;
+
+//        if (trx->isolation_level == TRX_ISO_SNAPSHOT_SERIALIZABLE &&
+//            (thd_sql_command(thd) == SQLCOM_UPDATE
+//             || thd_sql_command(thd) == SQLCOM_INSERT
+//             || thd_sql_command(thd) == SQLCOM_REPLACE
+//             || thd_sql_command(thd) == SQLCOM_DELETE)) {
+//            prebuilt->select_lock_type = LOCK_NONE;
+//            prebuilt->stored_select_lock_type = LOCK_NONE;
+//        } else {
+//            /* If this is a SELECT, then it is in UPDATE TABLE ...
+//            or SELECT ... FOR UPDATE */
+//            prebuilt->select_lock_type = LOCK_X;
+//            prebuilt->stored_select_lock_type = LOCK_X;
+//        }
     }
 
     if (lock_type != F_UNLCK) {
@@ -16920,7 +16934,10 @@ int
 ha_innobase::multi_range_read_next(
     char**		range_info)
 {
-    return(ds_mrr.dsmrr_next(range_info));
+    TraceTool::path_count++;
+    int result = ds_mrr.dsmrr_next(range_info);
+    TraceTool::path_count--;
+    return result;
 }
 
 ha_rows

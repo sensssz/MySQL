@@ -39,6 +39,8 @@ those functions in lock/ */
 #include "trx0types.h"
 #include "ut0lst.h"
 
+#define MAX_STARVATION 4
+
 /** A table lock */
 struct lock_table_t {
 	dict_table_t*	table;		/*!< database table in dictionary
@@ -71,8 +73,11 @@ struct lock_t {
 					wait flag, ORed */
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
-    lock_request*   request;
-    ulint       trx_waiting;
+    long            time_so_far;
+    long            process_time;
+    bool            has_to_wait;
+    long           *time_at_grant;
+    timespec        wait_start;
 	dict_index_t*	index;		/*!< index for a record lock */
 	union {
 		lock_table_t	tab_lock;/*!< table lock */

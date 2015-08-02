@@ -1,1 +1,0 @@
-cd /Users/sens/Developer/mysql-5.6.23/project && '/usr/local/Cellar/cmake/3.0.1/bin/cpack' -G TGZ --config CPackConfig.cmake

@@ -30,8 +30,6 @@
 #include "sql_cache.h"
 #include "structs.h"                            /* SHOW_COMP_OPTION */
 
-#include "trace_tool.h"
-
 #include <my_global.h>
 #include <my_compare.h>
 #include <ft_global.h>

@@ -70,6 +70,7 @@ SET(SQL_SHARED_SOURCES
   keycaches.cc
   lock.cc
   log.cc
+  m5p.cc
   mdl.cc
   mf_iocache.cc
   my_decimal.cc
