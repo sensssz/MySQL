@@ -10,10 +10,9 @@
 #include <cassert>
 
 #define NUM_CORES 2
-#define TARGET_PATH_COUNT 14
+#define TARGET_PATH_COUNT 13
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define WORK_WAIT
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -53,23 +52,15 @@ __thread bool TraceTool::new_transaction = true;
 __thread timespec TraceTool::trans_start;
 __thread transaction_type TraceTool::type = NONE;
 
-long TraceTool::num_trans = 0;
-double TraceTool::mean_latency = 0;
-double TraceTool::var_latency = 0;
-double TraceTool::mean_work_of_all = 0;
-double TraceTool::mean_wait_of_all = 0;
-long TraceTool::total_wait_locks = 0;
-long TraceTool::total_granted_locks= 0;
-double TraceTool::cpu_usage = 0;
-ulint TraceTool::max_num_locks = 0;
-pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t TraceTool::work_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t TraceTool::last_second_mutex = PTHREAD_MUTEX_INITIALIZER;
+long TraceTool::num_trans[TRX_TYPES] = {0};
+double TraceTool::mean_latency[TRX_TYPES] = {0};
 
 deque<buf_page_t *> TraceTool::pages_to_make_young;
 deque<ib_uint32_t> TraceTool::space_ids;
 deque<ib_uint32_t> TraceTool::page_nos;
+
 pthread_mutex_t TraceTool::buf_page_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -101,7 +92,8 @@ void TRACE_FUNCTION_END()
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &function_end);
-    TraceTool::get_instance()->add_record(0, TraceTool::difftime(function_start, function_end));
+    long duration = TraceTool::difftime(function_start, function_end);
+    TraceTool::get_instance()->add_record(0, duration);
   }
 #endif
 }
@@ -123,7 +115,8 @@ bool TRACE_END(int index)
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &call_end);
-    TraceTool::get_instance()->add_record(index, TraceTool::difftime(call_start, call_end));
+    long duration = TraceTool::difftime(call_start, call_end);
+    TraceTool::get_instance()->add_record(index, duration);
   }
 #endif
   return false;
@@ -155,16 +148,12 @@ TraceTool *TraceTool::get_instance()
 
 TraceTool::TraceTool() : function_times()
 {
-  previous_user = 0;
-  previous_nice = 0;
-  previous_system = 0;
-  previous_idle = 0;
   /* Open the log file in append mode so that it won't be overwritten */
   log_file.open("logs/trace.log");
 #if defined(MONITOR) || defined(WORK_WAIT)
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
 #else
-  const int number_of_functions = NUMBER_OF_FUNCTIONS + 2;
+  const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -177,9 +166,6 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
-#ifdef WORK_WAIT
-  work_waits.reserve(5000000);
-#endif
   
   srand(time(0));
 }
@@ -189,49 +175,6 @@ bool TraceTool::should_monitor()
   return path_count == TARGET_PATH_COUNT;
 }
 
-double TraceTool::get_cpu_usage()
-{
-  ulint total_user = 0;
-  ulint total_nice = 0;
-  ulint total_system = 0;
-  ulint total_idle = 0;
-  ulint per_core_user = 0;
-  ulint per_core_nice = 0;
-  ulint per_core_system = 0;
-  ulint per_core_idle = 0;
-  double usage = 0;
-  ifstream stat("/proc/stat");
-  string garbage;
-  getline(stat, garbage);
-  for (ulint index = 0; index < NUM_CORES; ++index)
-  {
-    stat >> garbage >> per_core_user >> per_core_nice >> per_core_system >> per_core_idle;
-    getline(stat, garbage);
-    total_user += per_core_user;
-    total_nice += per_core_nice;
-    total_system += per_core_system;
-    total_idle += per_core_idle;
-  }
-  stat.close();
-  
-  if (previous_user > 0)
-  {
-    ulint user_delta = total_user - previous_user;
-    ulint nice_delta = total_nice - previous_nice;
-    ulint system_delta = total_system - previous_system;
-    ulint idle_delta = total_idle - previous_idle;
-    double sum = user_delta + nice_delta + system_delta + idle_delta;
-    usage = (sum - idle_delta) / sum;
-  }
-  
-  previous_user = total_user;
-  previous_nice = total_nice;
-  previous_system = total_system;
-  previous_idle = total_idle;
-  
-  return usage;
-}
-
 void *TraceTool::check_write_log(void *arg)
 {
   /* Runs in an infinite loop and for every 5 seconds,
@@ -239,10 +182,7 @@ void *TraceTool::check_write_log(void *arg)
      dump data to log files. */
   while (true)
   {
-    sleep(1);
-#ifdef WORK_WAIT
-    cpu_usage = instance->get_cpu_usage();
-#endif
+    sleep(5);
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
@@ -253,10 +193,6 @@ void *TraceTool::check_write_log(void *arg)
       src.close();
       dst.close();
       
-      ofstream max_lock("max_lock");
-      max_lock << max_num_locks << endl;
-      max_lock.close();
-      
       /* Create a new TraceTool instnance. */
       TraceTool *old_instace = instance;
       instance = new TraceTool;
@@ -264,15 +200,8 @@ void *TraceTool::check_write_log(void *arg)
       /* Reset the global transaction ID. */
       transaction_id = 0;
       
-      num_trans = 0;
-      mean_latency = 0;
-      var_latency = 0;
-      mean_work_of_all = 0;
-      mean_wait_of_all = 0;
-      total_wait_locks = 0;
-      total_granted_locks= 0;
-      cpu_usage = 0;
-      max_num_locks = 0;
+      memset(num_trans, 0, TRX_TYPES * sizeof(long));
+      memset(mean_latency, 0, TRX_TYPES * sizeof(double));
       
       /* Dump data in the old instance to log files and
          reclaim memory. */
@@ -394,22 +323,19 @@ void TraceTool::end_query()
 Sumbits the total wait time of a transaction. */
 void TraceTool::update_ctv(long latency)
 {
-  ++num_trans;
-  double old_mean = mean_latency;
-  double old_variance = var_latency;
-  mean_latency = old_mean + (latency - old_mean) / num_trans;
-  var_latency = old_variance + (latency - old_mean) * (latency - mean_latency);
-
-  long wait_time = function_times[0][current_transaction_id];
-  long work_time = latency - wait_time;
-  mean_work_of_all = mean_work_of_all + (work_time - mean_work_of_all) / num_trans;
-  mean_wait_of_all = mean_wait_of_all + (wait_time - mean_wait_of_all) / num_trans;
+  var_mutex_enter();
+  ++num_trans[type];
+  double old_mean = mean_latency[type];
+  mean_latency[type] = old_mean + (latency - old_mean) / num_trans[type];
+  
+  ++num_trans[TRX_TYPES - 1];
+  old_mean = mean_latency[TRX_TYPES - 1];
+  mean_latency[TRX_TYPES - 1] = old_mean + (latency - old_mean) / num_trans[TRX_TYPES - 1];
+  var_mutex_exit();
 }
 
 void TraceTool::end_transaction()
 {
-  new_transaction = true;
-  type = NONE;
 #ifdef LATENCY
   timespec now = get_time();
   long latency = difftime(trans_start, now);
@@ -420,19 +346,9 @@ void TraceTool::end_transaction()
     transaction_start_times[current_transaction_id] = 0;
   }
   pthread_rwlock_unlock(&data_lock);
-  if (commit_successful)
-  {
-    pthread_mutex_lock(&var_mutex);
-    update_ctv(latency);
-    pthread_mutex_unlock(&var_mutex);
-    
-    pthread_mutex_lock(&last_second_mutex);
-    ulint now_in_seconds = time(NULL);
-    last_second_commit_times.push_back(now_in_seconds);
-    last_second_transaction_ids.push_back(current_transaction_id);
-    pthread_mutex_unlock(&last_second_mutex);
-  }
 #endif
+  new_transaction = true;
+  type = NONE;
 }
 
 void TraceTool::add_record(int function_index, long duration)
@@ -444,270 +360,6 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);
-}
-
-long *TraceTool::add_work_wait(long work_so_far, long wait_so_far, long num_locks,
-                              long num_of_wait_locks, double prediction, ulint transaction_id)
-{
-  work_wait record;
-  record.work_so_far = work_so_far;
-  record.wait_so_far = wait_so_far;
-  record.num_locks_so_far = num_locks;
-  record.num_of_wait_locks = num_of_wait_locks;
-  record.total_wait_locks = total_wait_locks;
-  record.total_granted_locks = total_granted_locks;
-  record.mean_work_of_all = mean_work_of_all;
-  record.mean_wait_of_all = mean_wait_of_all;
-  record.cpu_usage = cpu_usage;
-  record.avg_latency_of_same_past_second = 0;
-  record.avg_work_of_same_past_second = 0;
-  record.avg_wait_of_same_past_second = 0;
-  record.avg_latency_of_all_past_second = 0;
-  record.avg_latency_of_same_past_5_seconds = 0;
-  record.avg_latency_of_same_last_20 = 0;
-  record.max_latency_of_same_last_50 = 0;
-  record.avg_latency_of_trx_hold_locks = 0;
-  record.prediction = prediction;
-  record.transaction_id = transaction_id;
-  
-  transaction_type type = transaction_types[transaction_id];
-  long num_trx_of_all_past_second = 0;
-  long num_trx_of_same_past_second = 0;
-  long num_trx_of_same_past_5_seconds = 0;
-  long num_trx_of_same_last_20 = 0;
-  ulint now = time(NULL);
-  bool past_second = true;
-  bool past_5_seconds = true;
-  
-  long size = last_second_commit_times.size();
-  for (long index = size - 1; index >= 0; --index)
-  {
-    ulint commit_time = last_second_commit_times[index];
-    past_second = now - commit_time <= 2;
-    past_5_seconds = now - commit_time <= 6;
-    
-    ulint trx_id = last_second_transaction_ids[index];
-    long latency = function_times.back()[trx_id];
-    transaction_type trx_type = transaction_types[trx_id];
-    
-    if (past_second)
-    {
-      record.avg_latency_of_all_past_second += latency;
-      ++num_trx_of_all_past_second;
-      if (type == trx_type)
-      {
-        long wait_time = function_times[0][trx_id];
-        long work_time = latency - wait_time;
-        record.avg_latency_of_same_past_second += latency;
-        record.avg_work_of_same_past_second += work_time;
-        record.avg_wait_of_same_past_second += wait_time;
-        ++num_trx_of_same_past_second;
-      }
-    }
-    if (past_5_seconds &&
-        type == trx_type)
-    {
-      record.avg_latency_of_same_past_5_seconds += latency;
-      ++num_trx_of_same_past_5_seconds;
-    }
-    if (size - index < 21)
-    {
-      record.avg_latency_of_same_last_20 += latency;
-      ++num_trx_of_same_last_20;
-    }
-    if (size - index < 51 &&
-        latency > record.max_latency_of_same_last_50)
-    {
-      record.max_latency_of_same_last_50 = latency;
-    }
-    
-    if (!past_5_seconds && !(size - index < 51))
-    {
-      break;
-    }
-  }
-  
-  if (num_trx_of_all_past_second > 0)
-  {
-    record.avg_latency_of_all_past_second /= num_trx_of_all_past_second;
-  }
-  if (num_trx_of_same_past_second > 0)
-  {
-    record.avg_latency_of_same_past_second /= num_trx_of_same_past_second;
-    record.avg_work_of_same_past_second /= num_trx_of_same_past_second;
-    record.avg_wait_of_same_past_second /= num_trx_of_same_past_second;
-  }
-  if (num_trx_of_same_past_5_seconds > 0)
-  {
-    record.avg_latency_of_same_past_5_seconds /= num_trx_of_same_past_5_seconds;
-  }
-  if (num_trx_of_same_last_20 > 0)
-  {
-    record.avg_latency_of_same_last_20 /= num_trx_of_same_last_20;
-  }
-  
-  long *time_so_far = NULL;
-  pthread_mutex_lock(&work_wait_mutex);
-  work_waits.push_back(record);
-  time_so_far = &(work_waits.back().time_so_far);
-  pthread_mutex_unlock(&work_wait_mutex);
-  
-  return time_so_far;
-}
-
-work_wait TraceTool::parameters_necessary(long work_so_far, long wait_so_far, long num_locks,
-                                          long num_of_wait_locks, ulint transaction_id)
-{
-  work_wait record;
-  record.work_so_far = work_so_far;
-  record.wait_so_far = wait_so_far;
-  record.num_locks_so_far = num_locks;
-  record.num_of_wait_locks = num_of_wait_locks;
-  record.total_wait_locks = total_wait_locks;
-  record.mean_wait_of_all = mean_wait_of_all;
-  record.cpu_usage = cpu_usage;
-  record.avg_latency_of_same_past_second = 0;
-  record.transaction_id = transaction_id;
-  
-  transaction_type type = transaction_types[transaction_id];
-  double num_trx_of_same_past_second = 0;
-  ulint now = time(NULL);
-  
-  long size = last_second_commit_times.size();
-  for (long index = size - 1; index >= 0; --index)
-  {
-    ulint commit_time = last_second_commit_times[index];
-    
-    ulint trx_id = last_second_transaction_ids[index];
-    long latency = function_times.back()[trx_id];
-    transaction_type trx_type = transaction_types[trx_id];
-    
-    if (now - commit_time > 2)
-    {
-      break;
-    }
-    
-    if (type == trx_type)
-    {
-      long wait_time = function_times[0][trx_id];
-      long work_time = latency - wait_time;
-      record.avg_latency_of_same_past_second += latency;
-      record.avg_work_of_same_past_second += work_time;
-      record.avg_wait_of_same_past_second += wait_time;
-      ++num_trx_of_same_past_second;
-    }
-  }
-  
-  if (num_trx_of_same_past_second > 0)
-  {
-    record.avg_latency_of_same_past_second /= num_trx_of_same_past_second;
-    record.avg_work_of_same_past_second /= num_trx_of_same_past_second;
-    record.avg_wait_of_same_past_second /= num_trx_of_same_past_second;
-  }
-  
-  return record;
-}
-
-work_wait TraceTool::parameters(long work_so_far, long wait_so_far, long num_locks,
-                              long num_of_wait_locks, ulint transaction_id)
-{
-  work_wait record;
-  record.work_so_far = work_so_far;
-  record.wait_so_far = wait_so_far;
-  record.num_locks_so_far = num_locks;
-  record.num_of_wait_locks = num_of_wait_locks;
-  record.total_wait_locks = total_wait_locks;
-  record.total_granted_locks = total_granted_locks;
-  record.mean_work_of_all = mean_work_of_all;
-  record.mean_wait_of_all = mean_wait_of_all;
-  record.cpu_usage = cpu_usage;
-  record.avg_latency_of_same_past_second = 0;
-  record.avg_work_of_same_past_second = 0;
-  record.avg_wait_of_same_past_second = 0;
-  record.avg_latency_of_all_past_second = 0;
-  record.avg_latency_of_same_past_5_seconds = 0;
-  record.avg_latency_of_same_last_20 = 0;
-  record.max_latency_of_same_last_50 = 0;
-  record.avg_latency_of_trx_hold_locks = 0;
-  record.transaction_id = transaction_id;
-  
-  transaction_type type = transaction_types[transaction_id];
-  long num_trx_of_all_past_second = 0;
-  long num_trx_of_same_past_second = 0;
-  long num_trx_of_same_past_5_seconds = 0;
-  long num_trx_of_same_last_20 = 0;
-  ulint now = time(NULL);
-  bool past_second = true;
-  bool past_5_seconds = true;
-  
-  long size = last_second_commit_times.size();
-  for (long index = size - 1; index >= 0; --index)
-  {
-    ulint commit_time = last_second_commit_times[index];
-    past_second = now - commit_time <= 2;
-    past_5_seconds = now - commit_time <= 6;
-    
-    ulint trx_id = last_second_transaction_ids[index];
-    long latency = function_times.back()[trx_id];
-    transaction_type trx_type = transaction_types[trx_id];
-    
-    if (past_second)
-    {
-      record.avg_latency_of_all_past_second += latency;
-      ++num_trx_of_all_past_second;
-      if (type == trx_type)
-      {
-        long wait_time = function_times[0][trx_id];
-        long work_time = latency - wait_time;
-        record.avg_latency_of_same_past_second += latency;
-        record.avg_work_of_same_past_second += work_time;
-        record.avg_wait_of_same_past_second += wait_time;
-        ++num_trx_of_same_past_second;
-      }
-    }
-    if (past_5_seconds &&
-        type == trx_type)
-    {
-      record.avg_latency_of_same_past_5_seconds += latency;
-      ++num_trx_of_same_past_5_seconds;
-    }
-    if (size - index < 21)
-    {
-      record.avg_latency_of_same_last_20 += latency;
-      ++num_trx_of_same_last_20;
-    }
-    if (size - index < 51 &&
-        latency > record.max_latency_of_same_last_50)
-    {
-      record.max_latency_of_same_last_50 = latency;
-    }
-    
-    if (!past_5_seconds && !(size - index < 51))
-    {
-      break;
-    }
-  }
-  
-  if (num_trx_of_all_past_second > 0)
-  {
-    record.avg_latency_of_all_past_second /= num_trx_of_all_past_second;
-  }
-  if (num_trx_of_same_past_second > 0)
-  {
-    record.avg_latency_of_same_past_second /= num_trx_of_same_past_second;
-    record.avg_work_of_same_past_second /= num_trx_of_same_past_second;
-    record.avg_wait_of_same_past_second /= num_trx_of_same_past_second;
-  }
-  if (num_trx_of_same_past_5_seconds > 0)
-  {
-    record.avg_latency_of_same_past_5_seconds /= num_trx_of_same_past_5_seconds;
-  }
-  if (num_trx_of_same_last_20 > 0)
-  {
-    record.avg_latency_of_same_last_20 /= num_trx_of_same_last_20;
-  }
-  
-  return record;
 }
 
 void TraceTool::write_latency(string dir)
@@ -801,200 +453,16 @@ void TraceTool::write_latency(string dir)
   stock_level_log.close();
 }
 
-void TraceTool::write_accuracy()
-{
-  ofstream tpcc("work_wait/accuracy/tpcc");
-  ofstream new_order("work_wait/accuracy/new_order");
-  ofstream payment("work_wait/accuracy/payment");
-  ofstream order_status("work_wait/accuracy/order_status");
-  ofstream delivery("work_wait/accuracy/delivery");
-  ofstream stock_level("work_wait/accuracy/stock_level");
-  for (ulint index = 0, size = work_waits.size();
-       index < size; ++index)
-  {
-    work_wait &record = work_waits[index];
-    if (transaction_start_times[record.transaction_id] > 0)
-    {
-      transaction_type type = transaction_types[record.transaction_id];
-      long latency = (long) function_times.back()[record.transaction_id];
-      long total_wait = (long) function_times[0][record.transaction_id];
-      long total_work = latency - total_wait;
-      long actual_remaining = latency - record.time_so_far;
-      
-      if (latency < total_wait ||
-          total_wait < record.wait_so_far ||
-          total_work < record.work_so_far ||
-          latency < record.time_so_far)
-      {
-        continue;
-      }
-      ut_a(latency > total_wait);
-      ut_a(total_wait >= record.wait_so_far);
-      ut_a(total_work > record.work_so_far);
-      
-      stringstream line;
-      
-      line << record.prediction << "," << actual_remaining << endl;
-      tpcc << line.str().c_str();
-      switch (type)
-      {
-        case NEW_ORDER:
-          new_order << line.str().c_str();
-          break;
-        case PAYMENT:
-          payment << line.str().c_str();
-          break;
-        case ORDER_STATUS:
-          order_status << line.str().c_str();
-          break;
-        case DELIVERY:
-          delivery << line.str().c_str();
-          break;
-        case STOCK_LEVEL:
-          stock_level << line.str().c_str();
-          break;
-        default:
-          break;
-      }
-      
-      line.str("");
-    }
-  }
-  tpcc.close();
-  new_order.close();
-  payment.close();
-  order_status.close();
-  delivery.close();
-  stock_level.close();
-}
-
-void TraceTool::write_work_wait()
-{
-  ofstream tpcc("work_wait/tpcc.csv");
-  ofstream new_order("work_wait/new_order.csv");
-  ofstream payment("work_wait/payment.csv");
-  ofstream order_status("work_wait/order_status.csv");
-  ofstream delivery("work_wait/delivery.csv");
-  ofstream stock_level("work_wait/stock_level.csv");
-  
-//  string attributes("work_so_far,wait_so_far,"
-//                    "number_of_locks_so_far,number_of_wait_locks_in_current_queue,"
-//                    "number_of_all_wait_locks,number_of_all_granted_locks,"
-//                    "mean_work_time_of_all_trx,mean_wait_time_of_all_trx,"
-//                    "cpu_usage,mean_latency_of_trx_of_this_type_over_the_past_second,"
-//                    "mean_work_time_of_trx_of_this_type_over_the_past_second,"
-//                    "mean_wait_time_of_trx_of_this_type_over_the_past_second,"
-//                    "mean_latency_of_all_transactions_over_the_past_second,"
-//                    "mean_latency_of_other_transactions_of_this_type_over_the_past_5_seconds,"
-//                    "mean_latency_of_the_last_20_transactions_of_this_type,"
-//                    "max_latency_of_the_last_50_transactions_of_this_type,"
-//                    "actual_remaining");
-  
-  string attributes("work_so_far,wait_so_far,"
-                    "number_of_locks_so_far,"
-                    "number_of_all_wait_locks,"
-                    "mean_wait_time_of_all_trx,"
-                    "cpu_usage,"
-                    "mean_work_time_of_trx_of_this_type_over_the_past_second,"
-                    "mean_wait_time_of_trx_of_this_type_over_the_past_second,"
-                    "mean_latency_of_the_last_20_transactions_of_this_type,"
-                    "max_latency_of_the_last_50_transactions_of_this_type,"
-                    "actual_remaining");
-  tpcc << attributes << endl;
-  new_order << attributes << endl;
-  payment << attributes << endl;
-  order_status << attributes << endl;
-  delivery << attributes << endl;
-  stock_level << attributes << endl;
-  
-  for (ulint index = 0, size = work_waits.size();
-       index < size; ++index)
-  {
-    work_wait &record = work_waits[index];
-    if (transaction_start_times[record.transaction_id] > 0)
-    {
-      transaction_type type = transaction_types[record.transaction_id];
-      long latency = function_times.back()[record.transaction_id];
-      long total_wait = function_times[0][record.transaction_id];
-      long total_work = latency - total_wait;
-      long actual_remaining = latency - record.time_so_far;
-      
-      if (latency < total_wait ||
-          total_wait < record.wait_so_far ||
-          total_work < record.work_so_far ||
-          latency < record.time_so_far)
-      {
-        continue;
-      }
-      ut_a(latency > total_wait);
-      ut_a(total_wait >= record.wait_so_far);
-      ut_a(total_work > record.work_so_far);
-      
-      stringstream line;
-      
-//      line << record.work_so_far
-//           << "," << record.wait_so_far << "," << record.num_locks_so_far
-//           << "," << record.num_of_wait_locks << "," << record.total_wait_locks
-//           << "," << record.total_granted_locks << "," << record.mean_work_of_all
-//           << "," << record.mean_wait_of_all << "," << record.cpu_usage
-//           << "," << record.avg_latency_of_same_past_second
-//           << "," << record.avg_work_of_same_past_second
-//           << "," << record.avg_wait_of_same_past_second
-//           << "," << record.avg_latency_of_all_past_second
-//           << "," << record.avg_latency_of_same_past_5_seconds
-//           << "," << record.avg_latency_of_same_last_20
-//           << "," << record.max_latency_of_same_last_50
-//           << "," << actual_remaining << endl;
-      
-      line << record.work_so_far
-           << "," << record.wait_so_far << "," << record.num_locks_so_far
-           << "," << record.total_wait_locks
-           << "," << record.mean_wait_of_all << "," << record.cpu_usage
-           << "," << record.avg_work_of_same_past_second
-           << "," << record.avg_wait_of_same_past_second
-           << "," << record.avg_latency_of_same_last_20
-           << "," << record.max_latency_of_same_last_50
-           << "," << actual_remaining << endl;
-      
-      tpcc << line.str().c_str();
-      switch (type)
-      {
-        case NEW_ORDER:
-          new_order << line.str().c_str();
-          break;
-        case PAYMENT:
-          payment << line.str().c_str();
-          break;
-        case ORDER_STATUS:
-          order_status << line.str().c_str();
-          break;
-        case DELIVERY:
-          delivery << line.str().c_str();
-          break;
-        case STOCK_LEVEL:
-          stock_level << line.str().c_str();
-          break;
-        default:
-          break;
-      }
-      
-      line.str("");
-    }
-  }
-  
-  tpcc.close();
-  new_order.close();
-  payment.close();
-  order_status.close();
-  delivery.close();
-  stock_level.close();
-}
-
 void TraceTool::write_log()
 {
-#ifdef WORK_WAIT
-  write_work_wait();
-  write_accuracy();
-#endif
+  ofstream remaining("remaining");
+  for (ulint index = 0; index < time_so_far.size(); ++index)
+  {
+    long trx_id = trx_ids[index];
+    long latency = function_times.back()[trx_id];
+    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
+  }
+  remaining.close();
+  
   write_latency("latency/");
 }
