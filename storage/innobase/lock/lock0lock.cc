@@ -2750,7 +2750,7 @@ lock_rec_dequeue_from_page(
            iter != wait_locks.end(); ++iter)
       {
         lock = *iter;
-        lock->has_to_wait = lock_rec_has_to_wait_in_queue_no_wait_lock(lock);
+        lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
         if (!lock->has_to_wait)
         {
           has_grantable = true;
