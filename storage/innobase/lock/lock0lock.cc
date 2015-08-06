@@ -2384,13 +2384,12 @@ lock_rec_has_to_wait_in_queue_no_wait_lock(
   bit_mask = static_cast<ulint>(1 << (heap_no % 8));
 
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != wait_lock;
+       lock != wait_lock && !lock_get_wait(lock);
        lock = lock_rec_get_next_on_page_const(lock)) {
 
     const byte* p = (const byte*) &lock[1];
 
-    if (!lock_get_wait(lock)
-        && heap_no < lock_rec_get_n_bits(lock)
+    if (heap_no < lock_rec_get_n_bits(lock)
         && (p[bit_offset] & bit_mask)
         && lock_has_to_wait(wait_lock, lock)) {
 
@@ -2739,7 +2738,10 @@ lock_rec_dequeue_from_page(
       }
     }
     
+    estimate(wait_locks);
+    
     bool has_grantable = wait_locks.size() > 0;
+    long max_remaining = 0;
     while (has_grantable)
     {
       has_grantable = false;
@@ -2750,6 +2752,10 @@ lock_rec_dequeue_from_page(
            iter != wait_locks.end(); ++iter)
       {
         lock = *iter;
+        if (lock->has_to_wait)
+        {
+          continue;
+        }
         lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
         if (!lock->has_to_wait)
         {
@@ -2758,12 +2764,11 @@ lock_rec_dequeue_from_page(
           {
             min_heuristic = lock->time_so_far;
             lock_to_grant = iter;
+            if ((*lock_to_grant)->process_time > max_remaining)
+            {
+              max_remaining = (*lock_to_grant)->process_time;
+            }
           }
-        }
-        else
-        {
-          iter = wait_locks.erase(iter);
-          --iter;
         }
       }
       
@@ -2781,6 +2786,31 @@ lock_rec_dequeue_from_page(
 //        logged = true;
       }
     }
+    
+    long min_remaining = std::numeric_limits<long>::max();
+    for (list<lock_t *>::iterator iter = wait_locks.begin();
+         iter != wait_locks.end(); ++iter)
+    {
+      lock = *iter;
+      lock->has_to_wait = false;
+      if (lock->process_time < min_remaining)
+      {
+        min_remaining = lock->process_time;
+      }
+    }
+    long remaining = max_remaining + min_remaining;
+    for (list<lock_t *>::iterator iter = wait_locks.begin();
+         iter != wait_locks.end(); ++iter)
+    {
+      lock = *iter;
+      if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock) &&
+          lock->process_time < remaining)
+      {
+        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        lock_grant(lock);
+      }
+    }
+    
 //    if (logged)
 //    {
 //      log << endl;

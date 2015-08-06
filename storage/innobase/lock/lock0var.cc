@@ -38,9 +38,8 @@ indi_init()
 Find the lock that gives minimum CTV. */
 UNIV_INTERN
 void
-LVM_schedule(
-  vector<lock_t *> &wait_locks,  /*!< waiting locks */
-  vector<lock_t *> &locks_to_grant) /*!< locks to grant */
+estimate(
+  list<lock_t *> &wait_locks)  /*!< waiting locks */
 {
 }
 
