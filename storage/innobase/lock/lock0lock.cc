@@ -2720,8 +2720,8 @@ lock_rec_dequeue_from_page(
    
     lock_t *first_wait_lock = NULL;
     timespec now = TraceTool::get_time();
-    ofstream &log = TraceTool::get_instance()->get_log();
-    bool logged = false;
+//    ofstream &log = TraceTool::get_instance()->get_log();
+//    bool logged = false;
     
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
@@ -2738,6 +2738,8 @@ lock_rec_dequeue_from_page(
       }
     }
     
+    estimate(wait_locks);
+    
     bool has_grantable = wait_locks.size() > 0;
     long max_remaining = 0;
     while (has_grantable)
@@ -2750,6 +2752,10 @@ lock_rec_dequeue_from_page(
            iter != wait_locks.end(); ++iter)
       {
         lock = *iter;
+        if (lock->has_to_wait)
+        {
+          continue;
+        }
         lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
         if (!lock->has_to_wait)
         {
@@ -2763,11 +2769,6 @@ lock_rec_dequeue_from_page(
               max_remaining = (*lock_to_grant)->process_time;
             }
           }
-        }
-        else
-        {
-          iter = wait_locks.erase(iter);
-          --iter;
         }
       }
       
@@ -2785,6 +2786,31 @@ lock_rec_dequeue_from_page(
 //        logged = true;
       }
     }
+    
+    long min_remaining = std::numeric_limits<long>::max();
+    for (list<lock_t *>::iterator iter = wait_locks.begin();
+         iter != wait_locks.end(); ++iter)
+    {
+      lock = *iter;
+      lock->has_to_wait = false;
+      if (lock->process_time < min_remaining)
+      {
+        min_remaining = lock->process_time;
+      }
+    }
+    long remaining = max_remaining + min_remaining;
+    for (list<lock_t *>::iterator iter = wait_locks.begin();
+         iter != wait_locks.end(); ++iter)
+    {
+      lock = *iter;
+      if (!lock_rec_has_to_wait_in_queue_no_wait_lock(lock) &&
+          lock->process_time < remaining)
+      {
+        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        lock_grant(lock);
+      }
+    }
+    
 //    if (logged)
 //    {
 //      log << endl;
