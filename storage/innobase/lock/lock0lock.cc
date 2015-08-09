@@ -2356,48 +2356,52 @@ lock_rec_lock(
   return(DB_ERROR);
 }
 
+static
+lock_t *
+lock_rec_get_first(
+  ulint space_id,
+  ulint page_no,
+  ulint heap_no)
+{
+  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space_id, page_no);
+  if (first_lock_on_page == NULL)
+  {
+    return NULL;
+  }
+  
+  if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
+  {
+    return lock_rec_get_next(heap_no, first_lock_on_page);
+  }
+  else
+  {
+    return first_lock_on_page;
+  }
+}
+
 /*********************************************************************//**
 Checks if a waiting record lock request still has to wait in a queue.
 @return lock that is causing the wait */
 static
 const lock_t*
-lock_rec_has_to_wait_in_queue_no_wait_lock(
+lock_rec_has_to_wait_granted(
 /*==========================*/
+  vector<lock_t *> granted_locks,
   const lock_t* wait_lock)  /*!< in: waiting record lock */
 {
-  const lock_t* lock;
-  ulint   space;
-  ulint   page_no;
-  ulint   heap_no;
-  ulint   bit_mask;
-  ulint   bit_offset;
-
   ut_ad(lock_mutex_own());
   ut_ad(lock_get_wait(wait_lock));
   ut_ad(lock_get_type_low(wait_lock) == LOCK_REC);
-
-  space = wait_lock->un_member.rec_lock.space;
-  page_no = wait_lock->un_member.rec_lock.page_no;
-  heap_no = lock_rec_find_set_bit(wait_lock);
-
-  bit_offset = heap_no / 8;
-  bit_mask = static_cast<ulint>(1 << (heap_no % 8));
-
-  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != wait_lock && !lock_get_wait(lock);
-       lock = lock_rec_get_next_on_page_const(lock)) {
-
-    const byte* p = (const byte*) &lock[1];
-
-    if (heap_no < lock_rec_get_n_bits(lock)
-        && (p[bit_offset] & bit_mask)
-        && lock_has_to_wait(wait_lock, lock)) {
-
-      return(lock);
+  
+  for (ulint index = 0; index < granted_locks.size(); ++index)
+  {
+    lock_t *granted_lock = granted_locks[index];
+    if (lock_has_to_wait(wait_lock, granted_lock))
+    {
+      return granted_lock;
     }
   }
-
-  return(NULL);
+  return NULL;
 }
 
 /*********************************************************************//**
@@ -2546,29 +2550,6 @@ lock_rec_cancel(
 
 static
 lock_t *
-lock_rec_get_first(
-  ulint space_id,
-  ulint page_no,
-  ulint heap_no)
-{
-  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space_id, page_no);
-  if (first_lock_on_page == NULL)
-  {
-    return NULL;
-  }
-  
-  if (!lock_rec_get_nth_bit(first_lock_on_page, heap_no))
-  {
-    return lock_rec_get_next(heap_no, first_lock_on_page);
-  }
-  else
-  {
-    return first_lock_on_page;
-  }
-}
-
-static
-lock_t *
 find_previous(
   lock_t *lock,
   ulint rec_fold)
@@ -2707,6 +2688,7 @@ lock_rec_dequeue_from_page(
   
   ulint rec_fold = lock_rec_fold(space, page_no);
   list<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2720,8 +2702,8 @@ lock_rec_dequeue_from_page(
    
     lock_t *first_wait_lock = NULL;
     timespec now = TraceTool::get_time();
-    ofstream &log = TraceTool::get_instance()->get_log();
-    bool logged = false;
+//    ofstream &log = TraceTool::get_instance()->get_log();
+//    bool logged = false;
     
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
@@ -2736,10 +2718,13 @@ lock_rec_dequeue_from_page(
         }
         lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
       }
+      else
+      {
+        granted_locks.push_back(lock);
+      }
     }
     
     bool has_grantable = wait_locks.size() > 0;
-    long max_remaining = 0;
     while (has_grantable)
     {
       has_grantable = false;
@@ -2750,7 +2735,7 @@ lock_rec_dequeue_from_page(
            iter != wait_locks.end(); ++iter)
       {
         lock = *iter;
-        lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
+        lock->has_to_wait = lock_rec_has_to_wait_granted(granted_locks, lock);
         if (!lock->has_to_wait)
         {
           has_grantable = true;
@@ -2758,10 +2743,6 @@ lock_rec_dequeue_from_page(
           {
             min_heuristic = lock->time_so_far;
             lock_to_grant = iter;
-            if ((*lock_to_grant)->process_time > max_remaining)
-            {
-              max_remaining = (*lock_to_grant)->process_time;
-            }
           }
         }
         else
@@ -2790,6 +2771,7 @@ lock_rec_dequeue_from_page(
 //      log << endl;
 //    }
     wait_locks.clear();
+    granted_locks.clear();
   }
 }
 
