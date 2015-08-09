@@ -2629,6 +2629,15 @@ lock_rec_move_to_front(
   }
 }
 
+static
+bool
+compare_by_time_so_far(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  return lock1->time_so_far > lock_2->time_so_far;
+}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
@@ -2687,7 +2696,7 @@ lock_rec_dequeue_from_page(
   }
   
   ulint rec_fold = lock_rec_fold(space, page_no);
-  list<lock_t *> wait_locks;
+  vector<lock_t *> wait_locks;
   vector<lock_t *> granted_locks;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
@@ -2721,6 +2730,23 @@ lock_rec_dequeue_from_page(
       else
       {
         granted_locks.push_back(lock);
+      }
+    }
+    
+    sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
+    
+    for (ulint index = 0; index < wait_locks.size(); ++index)
+    {
+      lock_t *lock = wait_locks[index];
+      if (!lock_rec_has_to_wait_granted(granted_locks, lock))
+      {
+        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        lock_grant(lock);
+        granted_locks.push_back(lock);
+      }
+      else
+      {
+        break;
       }
     }
     
