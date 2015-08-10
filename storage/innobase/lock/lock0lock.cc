@@ -2756,6 +2756,7 @@ lock_rec_dequeue_from_page(
       {
         lock_rec_move_to_front(*lock_to_grant, first_wait_lock, rec_fold);
         lock_grant(*lock_to_grant);
+        granted_locks.push_back(*lock_to_grant);
         wait_locks.erase(lock_to_grant);
         
 //        lock = *lock_to_grant;
