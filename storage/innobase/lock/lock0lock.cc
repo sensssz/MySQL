@@ -2688,7 +2688,6 @@ lock_rec_dequeue_from_page(
   
   ulint rec_fold = lock_rec_fold(space, page_no);
   list<lock_t *> wait_locks;
-  vector<lock_t *> granted_locks;
   
   /* A lock object can represent multiple locks on the same page. We look at each one of them. */
   for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2702,8 +2701,6 @@ lock_rec_dequeue_from_page(
    
     lock_t *first_wait_lock = NULL;
     timespec now = TraceTool::get_time();
-//    ofstream &log = TraceTool::get_instance()->get_log();
-//    bool logged = false;
     
     for (lock = lock_rec_get_first(space, page_no, heap_no);
          lock != NULL;
@@ -2718,10 +2715,6 @@ lock_rec_dequeue_from_page(
         }
         lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
       }
-      else
-      {
-        granted_locks.push_back(lock);
-      }
     }
     
     bool has_grantable = wait_locks.size() > 0;
@@ -2735,7 +2728,8 @@ lock_rec_dequeue_from_page(
            iter != wait_locks.end(); ++iter)
       {
         lock = *iter;
-        lock->has_to_wait = lock_rec_has_to_wait_granted(granted_locks, lock);
+//        lock->has_to_wait = lock_rec_has_to_wait_granted(granted_locks, lock);
+        lock->has_to_wait = lock_rec_has_to_wait_in_queue(lock);
         if (!lock->has_to_wait)
         {
           has_grantable = true;
@@ -2756,23 +2750,10 @@ lock_rec_dequeue_from_page(
       {
         lock_rec_move_to_front(*lock_to_grant, first_wait_lock, rec_fold);
         lock_grant(*lock_to_grant);
-        granted_locks.push_back(*lock_to_grant);
         wait_locks.erase(lock_to_grant);
-        
-//        lock = *lock_to_grant;
-//        log << lock->time_so_far << ",{rem" << lock->trx->transaction_id << "}," << lock->trx->type << ","
-//            << lock_get_mode_str(lock) << endl;
-//        TraceTool::get_instance()->time_so_far.push_back(lock->time_so_far);
-//        TraceTool::get_instance()->trx_ids.push_back(lock->trx->transaction_id);
-//        logged = true;
       }
     }
-//    if (logged)
-//    {
-//      log << endl;
-//    }
     wait_locks.clear();
-    granted_locks.clear();
   }
 }
 
