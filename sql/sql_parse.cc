@@ -3313,6 +3313,7 @@ end_with_restore_list:
     DBUG_ASSERT(select_lex->offset_limit == 0);
     unit->set_limit(select_lex);
     MYSQL_UPDATE_START(thd->query());
+    TraceTool::path_count++;
     res= (up_result= mysql_update(thd, all_tables,
                                   select_lex->item_list,
                                   lex->value_list,
@@ -3322,6 +3323,7 @@ end_with_restore_list:
                                   unit->select_limit_cnt,
                                   lex->duplicates, lex->ignore,
                                   &found, &updated));
+    TraceTool::path_count--;
     MYSQL_UPDATE_DONE(res, found, updated);
     /* mysql_update return 2 if we need to switch to multi-update */
     if (up_result != 2)

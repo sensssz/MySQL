@@ -25,8 +25,6 @@
 #define READ1_MARKER "SELECT AGE FROM Snape WHERE ID = 1"
 #define READ2_MARKER "SELECT NAME FROM Snape WHERE ID = 1"
 
-#define EQUAL(struct1, struct2, field) (struct1->field == struct2->field)
-
 using std::endl;
 using std::ifstream;
 using std::ofstream;
@@ -455,14 +453,14 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
-  ofstream remaining("remaining");
-  for (ulint index = 0; index < time_so_far.size(); ++index)
-  {
-    long trx_id = trx_ids[index];
-    long latency = function_times.back()[trx_id];
-    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
-  }
-  remaining.close();
+//  ofstream remaining("remaining");
+//  for (ulint index = 0; index < time_so_far.size(); ++index)
+//  {
+//    long trx_id = trx_ids[index];
+//    long latency = function_times.back()[trx_id];
+//    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
+//  }
+//  remaining.close();
   
   write_latency("latency/");
 }

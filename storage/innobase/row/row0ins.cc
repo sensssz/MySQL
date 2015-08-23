@@ -2973,7 +2973,6 @@ row_ins_index_entry(
     } else {
         result = row_ins_sec_index_entry(index, entry, thr);
     }
-    TRACE_FUNCTION_END();
     return result;
 }
 
