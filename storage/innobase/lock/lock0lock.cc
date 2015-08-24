@@ -2677,82 +2677,82 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != NULL;
-       lock = lock_rec_get_next_on_page(lock))
+//  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+//       lock != NULL;
+//       lock = lock_rec_get_next_on_page(lock))
+//  {
+//    if (lock_get_wait(lock) &&
+//        !lock_rec_has_to_wait_in_queue(lock))
+//    {
+//      lock_grant(lock);
+//    }
+//  }
+  
+  /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
+  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+  if (first_lock_on_page == NULL)
   {
-    if (lock_get_wait(lock) &&
-        !lock_rec_has_to_wait_in_queue(lock))
-    {
-      lock_grant(lock);
-    }
+      return;
   }
   
-//  /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-//  lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-//  if (first_lock_on_page == NULL)
-//  {
-//      return;
-//  }
-//  
-//  ulint rec_fold = lock_rec_fold(space, page_no);
-//  vector<lock_t *> wait_locks;
-//  vector<lock_t *> granted_locks;
-//  
-//  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-//  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-//       heap_no < n_bits; ++heap_no)
-//  {
-//    /* Not a lock on this record. */
-//    if (!lock_rec_get_nth_bit(in_lock, heap_no))
-//    {
-//      continue;
-//    }
-//   
-//    lock_t *first_wait_lock = NULL;
-//    timespec now = TraceTool::get_time();
-////    ofstream &log = TraceTool::get_instance()->get_log();
-////    bool logged = false;
-//    
-//    for (lock = lock_rec_get_first(space, page_no, heap_no);
-//         lock != NULL;
-//         lock = lock_rec_get_next(heap_no, lock))
-//    {
-//      if (lock_get_wait(lock))
-//      {
-//        wait_locks.push_back(lock);
-//        if (first_wait_lock == NULL)
-//        {
-//          first_wait_lock = lock;
-//        }
-//        lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-//      }
-//      else
-//      {
-//        granted_locks.push_back(lock);
-//      }
-//    }
-//    
-//    sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-//    
-//    for (ulint index = 0; index < wait_locks.size(); ++index)
-//    {
-//      lock_t *lock = wait_locks[index];
-//      if (!lock_rec_has_to_wait_granted(granted_locks, lock))
-//      {
-//        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-//        lock_grant(lock);
-//        granted_locks.push_back(lock);
-//      }
-//      else
-//      {
-//        break;
-//      }
-//    }
-//    
-//    wait_locks.clear();
-//    granted_locks.clear();
-//  }
+  ulint rec_fold = lock_rec_fold(space, page_no);
+  vector<lock_t *> wait_locks;
+  vector<lock_t *> granted_locks;
+  
+  /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+  for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+       heap_no < n_bits; ++heap_no)
+  {
+    /* Not a lock on this record. */
+    if (!lock_rec_get_nth_bit(in_lock, heap_no))
+    {
+      continue;
+    }
+   
+    lock_t *first_wait_lock = NULL;
+    timespec now = TraceTool::get_time();
+//    ofstream &log = TraceTool::get_instance()->get_log();
+//    bool logged = false;
+    
+    for (lock = lock_rec_get_first(space, page_no, heap_no);
+         lock != NULL;
+         lock = lock_rec_get_next(heap_no, lock))
+    {
+      if (lock_get_wait(lock))
+      {
+        wait_locks.push_back(lock);
+        if (first_wait_lock == NULL)
+        {
+          first_wait_lock = lock;
+        }
+        lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+      }
+      else
+      {
+        granted_locks.push_back(lock);
+      }
+    }
+    
+    sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
+    
+    for (ulint index = 0; index < wait_locks.size(); ++index)
+    {
+      lock_t *lock = wait_locks[index];
+      if (!lock_rec_has_to_wait_granted(granted_locks, lock))
+      {
+        lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        lock_grant(lock);
+        granted_locks.push_back(lock);
+      }
+      else
+      {
+        break;
+      }
+    }
+    
+    wait_locks.clear();
+    granted_locks.clear();
+  }
 }
 
 /*************************************************************//**
