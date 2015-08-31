@@ -2721,7 +2721,7 @@ lock_rec_dequeue_from_page(
     while (has_grantable)
     {
       has_grantable = false;
-      double min_heuristic = 0;
+      double max_heuristic = 0;
       list<lock_t *>::iterator lock_to_grant = wait_locks.end();
       
       for (list<lock_t *>::iterator iter = wait_locks.begin();
@@ -2733,9 +2733,9 @@ lock_rec_dequeue_from_page(
         if (!lock->has_to_wait)
         {
           has_grantable = true;
-          if (lock->time_so_far > min_heuristic)
+          if (lock->time_so_far > max_heuristic)
           {
-            min_heuristic = lock->time_so_far;
+            max_heuristic = lock->time_so_far;
             lock_to_grant = iter;
           }
         }
