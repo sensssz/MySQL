@@ -2638,6 +2638,24 @@ compare_by_time_so_far(
   return lock1->time_so_far > lock2->time_so_far;
 }
 
+//static
+//void
+//insertion_sort(
+//  vector<lock_t *> &locks) {
+//  if (locks.size() < 2) {
+//    return;
+//  }
+//  for (int sorted = 1; sorted < locks.size(); ++sorted) {
+//    lock_t *lock = locks[sorted];
+//    int previous = sorted - 1;
+//    while (previous >= 0 && lock->time_so_far > locks[previous]->time_so_far) {
+//      locks[previous + 1] = locks[previous];
+//      --previous;
+//    }
+//    locks[previous + 1] = lock;
+//  }
+//}
+
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
 grants locks to other transactions in the queue if they now are entitled
