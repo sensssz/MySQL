@@ -867,6 +867,7 @@ trx_start_low(
     trx->type = NONE;
     trx->transaction_id = TraceTool::current_transaction_id;
     trx->queued = false;
+    trx->num_waits = 0;
   }
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in
@@ -1410,6 +1411,7 @@ trx_commit_low(
 	}
   
   trx_commit_in_memory(trx, lsn);
+//  TraceTool::get_instance()->add_record(0, trx->num_waits);
 }
 
 /****************************************************************//**

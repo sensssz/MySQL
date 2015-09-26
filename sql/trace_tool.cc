@@ -10,9 +10,10 @@
 #include <cassert>
 
 #define NUM_CORES 2
-#define TARGET_PATH_COUNT 13
+#define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -295,8 +296,9 @@ void TraceTool::set_query(const char *new_query)
     }
     else
     {
-      type = NONE;
-      commit_successful = false;
+//      type = NONE;
+//      commit_successful = false;
+      type = NEW_ORDER;
     }
     
     pthread_rwlock_rdlock(&data_lock);
@@ -461,6 +463,12 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
+//  ofstream num_locks("latency/times");
+//  for (ulint index = 0; index < time_so_far.size(); ++index) {
+//    num_locks << time_so_far[index] << endl;
+//  }
+//  num_locks.close();
+//  time_so_far.clear();
   
   write_latency("latency/");
 }

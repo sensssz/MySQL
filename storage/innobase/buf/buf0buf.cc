@@ -1847,6 +1847,7 @@ buf_page_make_young(
 /*================*/
 	buf_page_t*	bpage)	/*!< in: buffer block of a file page */
 {
+//  TRACE_FUNCTION_START();
 	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
 
 	buf_pool_mutex_enter(buf_pool);
@@ -1856,6 +1857,51 @@ buf_page_make_young(
 	buf_LRU_make_block_young(bpage);
 
 	buf_pool_mutex_exit(buf_pool);
+//  TRACE_FUNCTION_END();
+  
+//  buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
+//  unsigned spin_rounds = 0;
+//  bool locked = false;
+//  while (!(locked = (ib_mutex_test_and_set(&buf_pool->mutex) == 0)) && spin_rounds < SYNC_SPIN_ROUNDS)
+//  {
+//    ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
+//    ++spin_rounds;
+//  }
+//  
+//  if (!locked)
+//  {
+//    pthread_mutex_lock(&TraceTool::buf_page_mutex);
+//    TraceTool::pages_to_make_young.push_back(bpage);
+//    TraceTool::space_ids.push_back(bpage->space);
+//    TraceTool::page_nos.push_back(bpage->offset);
+//    pthread_mutex_unlock(&TraceTool::buf_page_mutex);
+//  }
+//  else
+//  {
+//    ut_a(buf_page_in_file(bpage));
+//    
+//    pthread_mutex_lock(&TraceTool::buf_page_mutex);
+//    while (TraceTool::pages_to_make_young.size() > 0)
+//    {
+//      buf_page_t *page = TraceTool::pages_to_make_young.front();
+//      ib_uint32_t space_id = TraceTool::space_ids.front();
+//      ib_uint32_t page_no = TraceTool::page_nos.front();
+//      
+//      if (space_id == page->space && page_no == page->offset && buf_page_in_file(page))
+//      {
+//        buf_LRU_make_block_young(page);
+//      }
+//      
+//      TraceTool::pages_to_make_young.pop_front();
+//      TraceTool::space_ids.pop_front();
+//      TraceTool::page_nos.pop_front();
+//    }
+//    pthread_mutex_unlock(&TraceTool::buf_page_mutex);
+//    
+//    buf_LRU_make_block_young(bpage);
+//    
+//    buf_pool_mutex_exit(buf_pool);
+//  }
 }
 
 /********************************************************************//**
