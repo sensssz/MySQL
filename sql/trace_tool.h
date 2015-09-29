@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <cstdlib>
 #include <string>
+#include <stdint.h>
 
 #define TRX_TYPES 6
 
@@ -90,6 +91,8 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
+    uint32_t x, y, z, w;
+    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
@@ -141,6 +144,8 @@ public:
     /********************************************************************//**
     Get the current tiem in microsecond. */
     static ulint now_micro();
+    
+    uint64_t rand();
     
     /********************************************************************//**
     Retruns the log file for outputing debug information. */

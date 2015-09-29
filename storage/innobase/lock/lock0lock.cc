@@ -2671,16 +2671,17 @@ lock_rec_dequeue_from_page(
 					get their lock requests granted,
 					if they are now qualified to it */
 {
-  TraceTool::path_count = 42;
-  TRACE_FUNCTION_START();
-//  double probability = 0.2;
-//  bool FIFO = (rand() % 100) < probability * 100;
-  bool FIFO = false;
+  timespec function_start;
+  timespec function_end;
+  clock_gettime(CLOCK_REALTIME, &function_start);
+  int exec_times[] = {3808, 4420, 4758, 4916, 4981, 5034, 5094, 5181, 5235, 5941};
+  int random = TraceTool::get_instance()->rand() % 10;
   
 	ulint		space;
 	ulint		page_no;
 	lock_t*		lock;
 	trx_lock_t*	trx_lock;
+  bool FIFO = false;
 
 	ut_ad(lock_mutex_own());
 	ut_ad(lock_get_type_low(in_lock) == LOCK_REC);
@@ -2734,11 +2735,11 @@ lock_rec_dequeue_from_page(
       {
         continue;
       }
-     
+      
       lock_t *first_wait_lock = NULL;
       timespec now = TraceTool::get_time();
-  //    ofstream &log = TraceTool::get_instance()->get_log();
-  //    bool logged = false;
+      //    ofstream &log = TraceTool::get_instance()->get_log();
+      //    bool logged = false;
       
       for (lock = lock_rec_get_first(space, page_no, heap_no);
            lock != NULL;
@@ -2780,9 +2781,20 @@ lock_rec_dequeue_from_page(
       granted_locks.clear();
     }
   }
-  
-  TRACE_FUNCTION_END();
-  TraceTool::path_count = 0;
+  clock_gettime(CLOCK_REALTIME, &function_end);
+  long time = TraceTool::difftime(function_start, function_end);
+  long exec = exec_times[random];
+  long wait_time = exec - time;
+  if (wait_time > 0) {
+    timespec sleep_time;
+    sleep_time.tv_sec = 0;
+    sleep_time.tv_nsec = wait_time;
+    timespec remaining;
+    nanosleep(&sleep_time, &remaining);
+    TraceTool::get_instance()->add_record(0, exec);
+  } else {
+    TraceTool::get_instance()->add_record(0, time);
+  }
 }
 
 /*************************************************************//**

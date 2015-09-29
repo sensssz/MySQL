@@ -13,6 +13,7 @@
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
+#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -166,6 +167,10 @@ TraceTool::TraceTool() : function_times()
   transaction_types.push_back(NONE);
   
   srand(time(0));
+  x = rand();
+  y = rand();
+  z = rand();
+  w = rand();
 }
 
 bool TraceTool::should_monitor()
@@ -227,6 +232,14 @@ ulint TraceTool::now_micro()
   timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
   return now.tv_sec * 1000000 + now.tv_nsec / 1000;
+}
+
+uint64_t TraceTool::rand() {
+  uint32_t t = x ^ (x << 11);
+  x = y;
+  y = z;
+  z = w;
+  return w = w ^ (w >> 19) ^ t ^ (t >> 8);
 }
 
 /********************************************************************//**
@@ -462,12 +475,12 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
-//  ofstream num_locks("latency/times");
-//  for (ulint index = 0; index < time_so_far.size(); ++index) {
-//    num_locks << time_so_far[index] << endl;
-//  }
-//  num_locks.close();
-//  time_so_far.clear();
+  ofstream exec_time("latency/exec_time");
+  for (ulint index = 0; index < time_so_far.size(); ++index) {
+    exec_time << time_so_far[index] << endl;
+  }
+  exec_time.close();
+  time_so_far.clear();
   
   write_latency("latency/");
 }
