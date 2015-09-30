@@ -13,7 +13,6 @@
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -475,12 +474,12 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
-  ofstream exec_time("latency/exec_time");
-  for (ulint index = 0; index < time_so_far.size(); ++index) {
-    exec_time << time_so_far[index] << endl;
-  }
-  exec_time.close();
-  time_so_far.clear();
+//  ofstream exec_time("latency/exec_time");
+//  for (ulint index = 0; index < time_so_far.size(); ++index) {
+//    exec_time << time_so_far[index] << endl;
+//  }
+//  exec_time.close();
+//  time_so_far.clear();
   
   write_latency("latency/");
 }
