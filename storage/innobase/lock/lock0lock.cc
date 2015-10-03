@@ -2760,6 +2760,7 @@ lock_rec_dequeue_from_page(
       }
       
       sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
+      TraceTool::get_instance()->time_so_far.push_back(wait_locks.size());
       
       for (ulint index = 0; index < wait_locks.size(); ++index)
       {
