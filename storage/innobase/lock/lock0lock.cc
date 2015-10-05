@@ -53,6 +53,11 @@ Created 5/7/1996 Heikki Tuuri
 #include <set>
 
 #include "trace_tool.h"
+#include <unordered_map>
+#include <algorithm>
+
+using std::unordered_map;
+using std::sort;
 
 ulint MIN_BATCH_SIZE = 2;
 ulint MAX_BATCH_SIZE = 5;
@@ -2673,8 +2678,6 @@ lock_rec_dequeue_from_page(
 {
   TraceTool::path_count = 42;
   TRACE_FUNCTION_START();
-//  double probability = 0.2;
-//  bool FIFO = (rand() % 100) < probability * 100;
   bool FIFO = false;
   
 	ulint		space;
@@ -2724,63 +2727,27 @@ lock_rec_dequeue_from_page(
     ulint rec_fold = lock_rec_fold(space, page_no);
     vector<lock_t *> wait_locks;
     vector<lock_t *> granted_locks;
+    timespec now = TraceTool::get_time();
+    lock_t *first_wait_lock = NULL;
     
-    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-         heap_no < n_bits; ++heap_no)
+    for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+         lock != NULL;
+         lock = lock_rec_get_next_on_page(lock))
     {
-      /* Not a lock on this record. */
-      if (!lock_rec_get_nth_bit(in_lock, heap_no))
+      if (lock_get_wait(lock))
       {
-        continue;
+        wait_locks.push_back(lock);
+        if (first_wait_lock == NULL) {
+          first_wait_lock = lock;
+        }
+        lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+      } else {
+        granted_locks.push_back(lock);
       }
-     
-      lock_t *first_wait_lock = NULL;
-      timespec now = TraceTool::get_time();
-  //    ofstream &log = TraceTool::get_instance()->get_log();
-  //    bool logged = false;
-      
-      for (lock = lock_rec_get_first(space, page_no, heap_no);
-           lock != NULL;
-           lock = lock_rec_get_next(heap_no, lock))
-      {
-        if (lock_get_wait(lock))
-        {
-          wait_locks.push_back(lock);
-          if (first_wait_lock == NULL)
-          {
-            first_wait_lock = lock;
-          }
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-        }
-        else
-        {
-          granted_locks.push_back(lock);
-        }
-      }
-      
-      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      TraceTool::get_instance()->time_so_far.push_back(wait_locks.size());
-      
-      for (ulint index = 0; index < wait_locks.size(); ++index)
-      {
-        lock_t *lock = wait_locks[index];
-        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
-        {
-          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-          lock_grant(lock);
-          granted_locks.push_back(lock);
-        }
-        else
-        {
-          break;
-        }
-      }
-      
-      wait_locks.clear();
-      granted_locks.clear();
     }
+    sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
   }
+  
   
   TRACE_FUNCTION_END();
   TraceTool::path_count = 0;
