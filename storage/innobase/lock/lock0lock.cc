@@ -2676,12 +2676,13 @@ lock_rec_dequeue_from_page(
   clock_gettime(CLOCK_REALTIME, &function_start);
   int exec_times[] = {3808, 4420, 4758, 4916, 4981, 5034, 5094, 5181, 5235, 5941};
   int random = TraceTool::get_instance()->rand() % 10;
+//  TRACE_FUNCTION_END();
   
 	ulint		space;
 	ulint		page_no;
 	lock_t*		lock;
 	trx_lock_t*	trx_lock;
-  bool FIFO = false;
+  bool FIFO = true;
 
 	ut_ad(lock_mutex_own());
 	ut_ad(lock_get_type_low(in_lock) == LOCK_REC);
@@ -2718,7 +2719,7 @@ lock_rec_dequeue_from_page(
     lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
     if (first_lock_on_page == NULL)
     {
-      TRACE_FUNCTION_END();
+//      TRACE_FUNCTION_END();
       return;
     }
     
