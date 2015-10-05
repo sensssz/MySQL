@@ -917,6 +917,7 @@ struct lock_sys_t{
 						locks */
 	hash_table_t*	rec_hash;		/*!< hash table of the record
 						locks */
+    lock_t      *wait_locks;
 	ib_mutex_t	wait_mutex;		/*!< Mutex protecting the
 						next two fields */
 	srv_slot_t*	waiting_threads;	/*!< Array  of user threads

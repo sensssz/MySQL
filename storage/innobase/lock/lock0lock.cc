@@ -1803,6 +1803,60 @@ lock_number_of_rows_locked(
 
 /*============== RECORD LOCK CREATION AND QUEUE MANAGEMENT =============*/
 
+static
+bool
+is_before(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  timespec *time1 = &lock1->trx->trx_start_time;
+  timespec *time2 = &lock2->trx->trx_start_time;
+  if (time1->tv_sec < time2->tv_sec) {
+    return true;
+  } else if (time1->tv_sec > time2->tv_sec) {
+    return false;
+  } else {
+    return time1->tv_nsec <= time2->tv_nsec;
+  }
+}
+
+static
+void
+lock_insert(
+  lock_t *lock_to_insert,
+  ulint rec_fold)
+{
+  hash_table_t* table = lock_sys->rec_hash;
+  HASH_ASSERT_OWN(table, rec_fold)
+  
+  hash_cell_t* cell = hash_get_nth_cell(table, hash_calc_hash(rec_fold, table));
+  lock_to_insert->hash = NULL;
+  
+  if (cell->node == NULL) {
+    cell->node = lock_to_insert;
+  } else if (!lock_get_wait(lock_to_insert)){
+    lock_to_insert = (lock_t *) cell->node;
+    cell->node = lock_to_insert;
+  } else {
+    lock_t *lock = (lock_t *) cell->node;
+    
+    // Go pass all granted locks
+    while (lock->hash != NULL &&
+           !lock_get_wait((lock_t *)lock->hash)) {
+      lock = (lock_t *) lock->hash;
+    }
+    
+    // Find place to insert in the wait locks
+    while (lock->hash != NULL &&
+           is_before((lock_t *)lock->hash, lock_to_insert)) {
+      lock = (lock_t *) lock->hash;
+    }
+    
+    lock_to_insert->hash = lock->hash;
+    lock->hash = lock_to_insert;
+  }
+}
+
 /*********************************************************************//**
 Creates a new record lock and inserts it to the lock queue. Does NOT check
 for deadlocks or lock compatibility!
@@ -1900,6 +1954,7 @@ lock_rec_create(
 
     lock_set_lock_and_trx_wait(lock, trx);
   }
+//  lock_insert(lock, lock_rec_fold(space, page_no));
 
   UT_LIST_ADD_LAST(trx_locks, trx->lock.trx_locks, lock);
 
@@ -2391,22 +2446,41 @@ static
 const lock_t*
 lock_rec_has_to_wait_granted(
 /*==========================*/
-  vector<lock_t *> granted_locks,
   const lock_t* wait_lock)  /*!< in: waiting record lock */
 {
+  const lock_t* lock;
+  ulint   space;
+  ulint   page_no;
+  ulint   heap_no;
+  ulint   bit_mask;
+  ulint   bit_offset;
+  
   ut_ad(lock_mutex_own());
   ut_ad(lock_get_wait(wait_lock));
   ut_ad(lock_get_type_low(wait_lock) == LOCK_REC);
   
-  for (ulint index = 0; index < granted_locks.size(); ++index)
-  {
-    lock_t *granted_lock = granted_locks[index];
-    if (lock_has_to_wait(wait_lock, granted_lock))
-    {
-      return granted_lock;
+  space = wait_lock->un_member.rec_lock.space;
+  page_no = wait_lock->un_member.rec_lock.page_no;
+  heap_no = lock_rec_find_set_bit(wait_lock);
+  
+  bit_offset = heap_no / 8;
+  bit_mask = static_cast<ulint>(1 << (heap_no % 8));
+  
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       !lock_get_wait(lock);
+       lock = lock_rec_get_next_on_page_const(lock)) {
+    
+    const byte* p = (const byte*) &lock[1];
+    
+    if (heap_no < lock_rec_get_n_bits(lock)
+        && (p[bit_offset] & bit_mask)
+        && lock_has_to_wait(wait_lock, lock)) {
+      
+      return(lock);
     }
   }
-  return NULL;
+  
+  return(NULL);
 }
 
 /*********************************************************************//**
@@ -2554,112 +2628,32 @@ lock_rec_cancel(
 }
 
 static
-lock_t *
-find_previous(
-  lock_t *lock,
-  ulint rec_fold)
-{
-  lock_t *previous;
-  
-  HASH_ASSERT_OWN(lock_sys->rec_hash, rec_fold)
-  hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
-        hash_calc_hash(rec_fold, lock_sys->rec_hash));
-  previous = (lock_t *) cell->node;
-  if (previous == lock)
-  {
-    return NULL;
-  }
-  while (previous->hash != lock)
-  {
-    previous = (lock_t *) previous->hash;
-  }
-  return previous;
-}
-
-static
-void
-hash_delete(
-  lock_t *lock,
-  ulint rec_fold)
-{
-  lock_t *node;
-  
-  HASH_ASSERT_OWN(lock_sys->rec_hash, rec_fold)
-  hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
-        hash_calc_hash(rec_fold, lock_sys->rec_hash));
-  node = (lock_t *) cell->node;
-  if (node == lock)
-  {
-    cell->node = lock->hash;
-  }
-  else
-  {
-    while (node->hash != lock)
-    {
-      node = (lock_t *) node->hash;
-      ut_a(node);
-    }
-    node->hash = lock->hash;
-  }
-}
-
-static
 void
 lock_rec_move_to_front(
   lock_t *lock_to_move,
-  lock_t *first_wait_lock,
+  lock_t *previous,
   ulint rec_fold)
 {
-  if (lock_to_move != NULL &&
-      first_wait_lock != NULL &&
-      first_wait_lock != lock_to_move)
+  hash_table_t* table = lock_sys->rec_hash;
+  HASH_ASSERT_OWN(table, rec_fold)
+  hash_cell_t* cell = hash_get_nth_cell(table, hash_calc_hash(rec_fold, table));
+  lock_t *lock = previous;
+  if (lock == NULL) {
+    lock = (lock_t *) cell->node;
+  }
+  if (lock != lock_to_move)
   {
-    // Move the target lock before the first wait lock.
-    lock_t *first_lock_previous = find_previous(first_wait_lock, rec_fold);
-    if (lock_to_move != first_lock_previous)
+    while (lock->hash != lock_to_move)
     {
-      hash_delete(lock_to_move, rec_fold);
-      if (first_lock_previous != NULL)
-      {
-        first_lock_previous->hash = lock_to_move;
-      }
-      else
-      {
-        hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
-                                              hash_calc_hash(rec_fold, lock_sys->rec_hash));
-        cell->node = lock_to_move;
-      }
-      lock_to_move->hash = first_wait_lock;
+      lock = (lock_t *) lock->hash;
     }
+    // Remove it
+    lock->hash = lock_to_move->hash;
+    // Add it to the head of the list
+    lock->hash = cell->node;
+    cell->node = lock;
   }
 }
-
-static
-bool
-compare_by_time_so_far(
-  lock_t *lock1,
-  lock_t *lock2)
-{
-  return lock1->time_so_far > lock2->time_so_far;
-}
-
-//static
-//void
-//insertion_sort(
-//  vector<lock_t *> &locks) {
-//  if (locks.size() < 2) {
-//    return;
-//  }
-//  for (int sorted = 1; sorted < locks.size(); ++sorted) {
-//    lock_t *lock = locks[sorted];
-//    int previous = sorted - 1;
-//    while (previous >= 0 && lock->time_so_far > locks[previous]->time_so_far) {
-//      locks[previous + 1] = locks[previous];
-//      --previous;
-//    }
-//    locks[previous + 1] = lock;
-//  }
-//}
 
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
@@ -2678,7 +2672,7 @@ lock_rec_dequeue_from_page(
 {
   TraceTool::path_count = 42;
   TRACE_FUNCTION_START();
-  bool FIFO = false;
+  bool FIFO = true;
   
 	ulint		space;
 	ulint		page_no;
@@ -2691,13 +2685,14 @@ lock_rec_dequeue_from_page(
 
 	trx_lock = &in_lock->trx->lock;
 
-	space = in_lock->un_member.rec_lock.space;
+  space = in_lock->un_member.rec_lock.space;
 	page_no = in_lock->un_member.rec_lock.page_no;
 
 	in_lock->index->table->n_rec_locks--;
+  
+  ulint rec_fold = lock_rec_fold(space, page_no);
 
-	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
-		    lock_rec_fold(space, page_no), in_lock);
+	HASH_DELETE(lock_t, hash, lock_sys->rec_hash, rec_fold, in_lock);
 
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
@@ -2716,36 +2711,19 @@ lock_rec_dequeue_from_page(
       }
     }
   } else {
-    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-    if (first_lock_on_page == NULL)
-    {
-      TRACE_FUNCTION_END();
-      return;
-    }
-    
-    ulint rec_fold = lock_rec_fold(space, page_no);
-    vector<lock_t *> wait_locks;
-    vector<lock_t *> granted_locks;
-    timespec now = TraceTool::get_time();
-    lock_t *first_wait_lock = NULL;
-    
+    lock_t *previous = NULL;
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
          lock != NULL;
+         previous = lock,
          lock = lock_rec_get_next_on_page(lock))
     {
-      if (lock_get_wait(lock))
+      if (lock_get_wait(lock) &&
+          !lock_rec_has_to_wait_granted(lock))
       {
-        wait_locks.push_back(lock);
-        if (first_wait_lock == NULL) {
-          first_wait_lock = lock;
-        }
-        lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-      } else {
-        granted_locks.push_back(lock);
+        lock_grant(lock);
+        lock_rec_move_to_front(lock, previous, rec_fold);
       }
     }
-    sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
   }
   
   
