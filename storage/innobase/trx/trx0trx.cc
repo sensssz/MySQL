@@ -1411,7 +1411,7 @@ trx_commit_low(
 	}
   
   trx_commit_in_memory(trx, lsn);
-//  TraceTool::get_instance()->add_record(0, trx->num_waits);
+//  TraceTool::get_instance()->add_record(3, trx->num_waits);
 }
 
 /****************************************************************//**

@@ -2673,9 +2673,7 @@ lock_rec_dequeue_from_page(
 {
   TraceTool::path_count = 42;
   TRACE_FUNCTION_START();
-//  double probability = 0.2;
-//  bool FIFO = (rand() % 100) < probability * 100;
-  bool FIFO = false;
+  bool FIFO = true;
   
 	ulint		space;
 	ulint		page_no;
@@ -2702,22 +2700,27 @@ lock_rec_dequeue_from_page(
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
   if (FIFO) {
+    int num_wait_locks = 0;
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
          lock != NULL;
          lock = lock_rec_get_next_on_page(lock))
     {
-      if (lock_get_wait(lock) &&
-          !lock_rec_has_to_wait_in_queue(lock))
+      if (lock_get_wait(lock))
       {
-        lock_grant(lock);
+        ++num_wait_locks;
+        if (!lock_rec_has_to_wait_in_queue(lock)) {
+          lock_grant(lock);
+        }
       }
     }
+    TRACE_FUNCTION_END();
+    TraceTool::path_count = 0;
+//    TraceTool::get_instance()->num_wait_locks.push_back(num_wait_locks);
   } else {
     /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
     lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
     if (first_lock_on_page == NULL)
     {
-      TRACE_FUNCTION_END();
       return;
     }
     
@@ -2760,7 +2763,6 @@ lock_rec_dequeue_from_page(
       }
       
       sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      TraceTool::get_instance()->time_so_far.push_back(wait_locks.size());
       
       for (ulint index = 0; index < wait_locks.size(); ++index)
       {
@@ -2781,9 +2783,6 @@ lock_rec_dequeue_from_page(
       granted_locks.clear();
     }
   }
-  
-  TRACE_FUNCTION_END();
-  TraceTool::path_count = 0;
 }
 
 /*************************************************************//**
@@ -4913,6 +4912,9 @@ lock_release(
 
   max_trx_id = trx_sys_get_max_trx_id();
 
+  ulint locks_total = 0;
+  ulint read_locks = 0;
+  ulint write_locks = 0;
   for (lock = UT_LIST_GET_LAST(trx->lock.trx_locks);
        lock != NULL;
        lock = UT_LIST_GET_LAST(trx->lock.trx_locks)) {
@@ -4930,6 +4932,13 @@ lock_release(
         ut_ad(trx->dict_operation != TRX_DICT_OP_NONE);
       }
 #endif /* UNIV_DEBUG */
+      if (lock_get_mode(lock) == LOCK_S) {
+        read_locks++;
+        locks_total++;
+      } else if (lock_get_mode(lock) == LOCK_X) {
+        write_locks++;
+        locks_total++;
+      }
 
       lock_rec_dequeue_from_page(lock);
     } else {
@@ -4976,6 +4985,10 @@ lock_release(
 
     ++count;
   }
+  
+  TraceTool::get_instance()->add_record(0, locks_total);
+//  TraceTool::get_instance()->add_record(1, read_locks);
+//  TraceTool::get_instance()->add_record(2, write_locks);
 
   /* We don't remove the locks one by one from the vector for
   efficiency reasons. We simply reset it because we would have

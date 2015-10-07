@@ -8,12 +8,12 @@
 #include <sstream>
 #include <cstdlib>
 #include <cassert>
+#include <ctime>
 
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -33,6 +33,7 @@ using std::vector;
 using std::stringstream;
 using std::sort;
 using std::getline;
+using std::time_t;
 
 ulint transaction_id = 0;
 
@@ -154,17 +155,19 @@ TraceTool::TraceTool() : function_times()
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
+  vector<long> function_time;
+  function_time.push_back(0);
   for (int index = 0; index < number_of_functions; index++)
   {
-    vector<long> function_time;
-    function_time.reserve(500000);
-    function_time.push_back(0);
     function_times.push_back(function_time);
+    function_times[index].reserve(500000);
   }
   transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
+  num_wait_locks.reserve(7500000);
+  num_waiters.reserve(7500000);
   
   srand(time(0));
 }
@@ -249,6 +252,7 @@ void TraceTool::start_new_query()
   {
     trans_start = get_time();
     commit_successful = true;
+    time_t func_start = time(NULL);
     /* Use a write lock here because we are appending content to the vector. */
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
@@ -257,11 +261,18 @@ void TraceTool::start_new_query()
          iterator != function_times.end();
          ++iterator)
     {
+      if (iterator->capacity() < iterator->size() + 1) {
+        log_file << iterator->capacity() << "," << iterator->size() + 1 << endl;
+      }
       iterator->push_back(0);
     }
     transaction_start_times.push_back(0);
     transaction_types.push_back(NONE);
     pthread_rwlock_unlock(&data_lock);
+    double seconds = std::difftime(time(NULL), func_start);
+    if (seconds > 1) {
+      log_file << "start_trx: " << seconds << endl;
+    }
   }
   pthread_mutex_lock(&last_query_mutex);
   clock_gettime(CLOCK_REALTIME, &global_last_query);
@@ -357,9 +368,14 @@ void TraceTool::add_record(int function_index, long duration)
   {
     current_transaction_id = 0;
   }
+  time_t func_start = time(NULL);
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);
+  double seconds = std::difftime(time(NULL), func_start);
+  if (seconds > 1) {
+    log_file << "end_trx: " << seconds << endl;
+  }
 }
 
 void TraceTool::write_latency(string dir)
@@ -463,12 +479,18 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
-  ofstream num_locks("latency/num_locks");
-  for (ulint index = 0; index < time_so_far.size(); ++index) {
-    num_locks << time_so_far[index] << endl;
+  ofstream waiters("latency/num_waiters");
+  for (ulint index = 0; index < num_waiters.size(); ++index) {
+    waiters << num_waiters[index] << endl;
   }
-  num_locks.close();
-  time_so_far.clear();
+  waiters.close();
+  num_waiters.clear();
+  ofstream locks("latency/num_waits_schedule");
+  for (ulint index = 0; index < num_wait_locks.size(); ++index) {
+    locks << num_wait_locks[index] << endl;
+  }
+  locks.close();
+  num_wait_locks.clear();
   
   write_latency("latency/");
 }

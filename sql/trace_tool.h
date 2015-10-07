@@ -110,8 +110,8 @@ public:
                                              transactions*/
     static pthread_mutex_t var_mutex;
     
-    vector<long> time_so_far;
-    vector<long> trx_ids;
+    vector<int> num_wait_locks;
+    vector<int> num_waiters;
     
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
