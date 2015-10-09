@@ -1613,16 +1613,22 @@ lock_rec_other_has_conflicting(
 
   is_supremum = (heap_no == PAGE_HEAP_NO_SUPREMUM);
 
+  const lock_t *conflict = NULL;
+  int num_waiters = 0;
   for (lock = lock_rec_get_first(block, heap_no);
        lock != NULL;
        lock = lock_rec_get_next_const(heap_no, lock)) {
 
-    if (lock_rec_has_to_wait(trx, mode, lock, is_supremum)) {
-      return(lock);
+    if (!conflict && lock_rec_has_to_wait(trx, mode, lock, is_supremum)) {
+      conflict = lock;
+    }
+    if (lock_get_wait(lock)) {
+      num_waiters++;
     }
   }
 
-  return(NULL);
+  TraceTool::get_instance()->num_waiters.push_back(num_waiters);
+  return(conflict);
 }
 
 /*********************************************************************//**
@@ -2029,6 +2035,7 @@ lock_rec_enqueue_waiting(
 #endif /* UNIV_DEBUG */
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
+  ++trx->num_waits;
   
   return(DB_LOCK_WAIT);
 }
@@ -2296,6 +2303,7 @@ lock_rec_lock_slow(
       LOCK_REC | mode, block, heap_no, index, trx, TRUE);
 
     err = DB_SUCCESS_LOCKED_REC;
+    TraceTool::get_instance()->num_waiters.push_back(0);
   }
 
   trx_mutex_exit(trx);
@@ -2344,8 +2352,10 @@ lock_rec_lock(
   common cases */
   switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr)) {
   case LOCK_REC_SUCCESS:
+    TraceTool::get_instance()->num_waiters.push_back(0);
     return(DB_SUCCESS);
   case LOCK_REC_SUCCESS_CREATED:
+    TraceTool::get_instance()->num_waiters.push_back(0);
     return(DB_SUCCESS_LOCKED_REC);
   case LOCK_REC_FAIL:
     return(lock_rec_lock_slow(impl, mode, block,
@@ -2715,7 +2725,7 @@ lock_rec_dequeue_from_page(
     }
     TRACE_FUNCTION_END();
     TraceTool::path_count = 0;
-//    TraceTool::get_instance()->num_wait_locks.push_back(num_wait_locks);
+    TraceTool::get_instance()->num_wait_locks.push_back(num_wait_locks);
   } else {
     /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
     lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
@@ -4912,9 +4922,9 @@ lock_release(
 
   max_trx_id = trx_sys_get_max_trx_id();
 
-  ulint locks_total = 0;
-  ulint read_locks = 0;
-  ulint write_locks = 0;
+//  int locks_total = 0;
+//  int read_locks = 0;
+//  int write_locks = 0;
   for (lock = UT_LIST_GET_LAST(trx->lock.trx_locks);
        lock != NULL;
        lock = UT_LIST_GET_LAST(trx->lock.trx_locks)) {
@@ -4932,13 +4942,13 @@ lock_release(
         ut_ad(trx->dict_operation != TRX_DICT_OP_NONE);
       }
 #endif /* UNIV_DEBUG */
-      if (lock_get_mode(lock) == LOCK_S) {
-        read_locks++;
-        locks_total++;
-      } else if (lock_get_mode(lock) == LOCK_X) {
-        write_locks++;
-        locks_total++;
-      }
+//      if (lock_get_mode(lock) == LOCK_S) {
+//        read_locks++;
+//        locks_total++;
+//      } else if (lock_get_mode(lock) == LOCK_X) {
+//        write_locks++;
+//        locks_total++;
+//      }
 
       lock_rec_dequeue_from_page(lock);
     } else {
@@ -4986,7 +4996,7 @@ lock_release(
     ++count;
   }
   
-  TraceTool::get_instance()->add_record(0, locks_total);
+//  TraceTool::get_instance()->add_record(0, locks_total);
 //  TraceTool::get_instance()->add_record(1, read_locks);
 //  TraceTool::get_instance()->add_record(2, write_locks);
 

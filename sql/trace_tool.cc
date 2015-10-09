@@ -12,7 +12,7 @@
 
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 42
-#define NUMBER_OF_FUNCTIONS 0
+#define NUMBER_OF_FUNCTIONS 1
 #define LATENCY
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
@@ -92,7 +92,7 @@ void TRACE_FUNCTION_END()
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &function_end);
-    long duration = TraceTool::difftime(function_start, function_end);
+    int duration = TraceTool::difftime(function_start, function_end);
     TraceTool::get_instance()->add_record(0, duration);
   }
 #endif
@@ -115,7 +115,7 @@ bool TRACE_END(int index)
   if (TraceTool::should_monitor())
   {
     clock_gettime(CLOCK_REALTIME, &call_end);
-    long duration = TraceTool::difftime(call_start, call_end);
+    int duration = TraceTool::difftime(call_start, call_end);
     TraceTool::get_instance()->add_record(index, duration);
   }
 #endif
@@ -155,7 +155,7 @@ TraceTool::TraceTool() : function_times()
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
-  vector<long> function_time;
+  vector<int> function_time;
   function_time.push_back(0);
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -179,15 +179,17 @@ bool TraceTool::should_monitor()
 
 void *TraceTool::check_write_log(void *arg)
 {
+  int period = 5;
   /* Runs in an infinite loop and for every 5 seconds,
      check if there's any query comes in. If not, then
      dump data to log files. */
   while (true)
   {
-    sleep(5);
+    sleep(period);
     timespec now = get_time();
-    if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
+    if (now.tv_sec - global_last_query.tv_sec >= period && transaction_id > 0)
     {
+      instance->log_file.close();
       /* Create a back up of the debug log file in case it's overwritten. */
       std::ifstream src("logs/trace.log", std::ios::binary);
       std::ofstream dst("logs/trace.bak", std::ios::binary);
@@ -252,27 +254,19 @@ void TraceTool::start_new_query()
   {
     trans_start = get_time();
     commit_successful = true;
-    time_t func_start = time(NULL);
     /* Use a write lock here because we are appending content to the vector. */
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
-    for (vector<vector<long> >::iterator iterator = function_times.begin();
+    for (vector<vector<int> >::iterator iterator = function_times.begin();
          iterator != function_times.end();
          ++iterator)
     {
-      if (iterator->capacity() < iterator->size() + 1) {
-        log_file << iterator->capacity() << "," << iterator->size() + 1 << endl;
-      }
       iterator->push_back(0);
     }
     transaction_start_times.push_back(0);
     transaction_types.push_back(NONE);
     pthread_rwlock_unlock(&data_lock);
-    double seconds = std::difftime(time(NULL), func_start);
-    if (seconds > 1) {
-      log_file << "start_trx: " << seconds << endl;
-    }
   }
   pthread_mutex_lock(&last_query_mutex);
   clock_gettime(CLOCK_REALTIME, &global_last_query);
@@ -368,14 +362,9 @@ void TraceTool::add_record(int function_index, long duration)
   {
     current_transaction_id = 0;
   }
-  time_t func_start = time(NULL);
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);
-  double seconds = std::difftime(time(NULL), func_start);
-  if (seconds > 1) {
-    log_file << "end_trx: " << seconds << endl;
-  }
 }
 
 void TraceTool::write_latency(string dir)
@@ -425,7 +414,7 @@ void TraceTool::write_latency(string dir)
   }
   
   int function_index = 0;
-  for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+  for (vector<vector<int> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)
@@ -457,9 +446,11 @@ void TraceTool::write_latency(string dir)
       }
     }
     function_index++;
-    iterator->clear();
+    vector<int>().swap(*iterator);
   }
-  function_times.clear();
+  vector<vector<int> >().swap(function_times);
+  vector<ulint>().swap(transaction_start_times);
+  vector<transaction_type>().swap(transaction_types);
   pthread_rwlock_unlock(&data_lock);
   tpcc_log.close();
   new_order_log.close();
