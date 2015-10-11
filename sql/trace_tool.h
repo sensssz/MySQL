@@ -113,6 +113,9 @@ public:
     vector<int> num_wait_locks;
     vector<int> num_waiters;
     
+    ulint num_waits;
+    ulint total_locks;
+    
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
     static deque<ib_uint32_t> page_nos;

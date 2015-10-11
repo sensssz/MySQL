@@ -1207,12 +1207,96 @@ lock_rec_get_next_on_page_const(
 Gets the first or next record lock on a page.
 @return next lock, NULL if none exists */
 UNIV_INLINE
+const lock_t*
+lock_rec_get_next_on_page_const(
+/*============================*/
+  const lock_t* lock, /*!< in: a record lock */
+  long  &len)
+{
+  ulint space;
+  ulint page_no;
+
+  ut_ad(lock_mutex_own());
+  ut_ad(lock_get_type_low(lock) == LOCK_REC);
+
+  space = lock->un_member.rec_lock.space;
+  page_no = lock->un_member.rec_lock.page_no;
+
+  for (;;) {
+    lock = static_cast<const lock_t*>(HASH_GET_NEXT(hash, lock));
+
+    ++len;
+    if (!lock) {
+
+      break;
+    }
+
+    if ((lock->un_member.rec_lock.space == space)
+        && (lock->un_member.rec_lock.page_no == page_no)) {
+
+      break;
+    }
+  }
+
+  return(lock);
+}
+
+/*********************************************************************//**
+Gets the first or next record lock on a page.
+@return next lock, NULL if none exists */
+UNIV_INLINE
+lock_t*
+lock_rec_get_next_on_page(
+/*======================*/
+  lock_t* lock, /*!< in: a record lock */
+  long    &len)
+{
+  return((lock_t*) lock_rec_get_next_on_page_const(lock, len));
+}
+
+/*********************************************************************//**
+Gets the first or next record lock on a page.
+@return next lock, NULL if none exists */
+UNIV_INLINE
 lock_t*
 lock_rec_get_next_on_page(
 /*======================*/
   lock_t* lock) /*!< in: a record lock */
 {
   return((lock_t*) lock_rec_get_next_on_page_const(lock));
+}
+
+/*********************************************************************//**
+Gets the first record lock on a page, where the page is identified by its
+file address.
+@return first lock, NULL if none exists */
+UNIV_INLINE
+lock_t*
+lock_rec_get_first_on_page_addr(
+/*============================*/
+  ulint space,  /*!< in: space */
+  ulint page_no,/*!< in: page number */
+  long  &len)
+{
+  lock_t* lock;
+
+  ut_ad(lock_mutex_own());
+
+  for (lock = static_cast<lock_t*>(
+      HASH_GET_FIRST(lock_sys->rec_hash,
+               lock_rec_hash(space, page_no)));
+        lock != NULL;
+        lock = static_cast<lock_t*>(HASH_GET_NEXT(hash, lock))) {
+
+    ++len;
+    if (lock->un_member.rec_lock.space == space
+        && lock->un_member.rec_lock.page_no == page_no) {
+
+      break;
+    }
+  }
+
+  return(lock);
 }
 
 /*********************************************************************//**
@@ -1627,7 +1711,7 @@ lock_rec_other_has_conflicting(
     }
   }
 
-  TraceTool::get_instance()->num_waiters.push_back(num_waiters);
+//  TraceTool::get_instance()->num_waiters.push_back(num_waiters);
   return(conflict);
 }
 
@@ -2294,6 +2378,7 @@ lock_rec_lock_slow(
 
     err = lock_rec_enqueue_waiting(
       mode, conflict_lock, block, heap_no, index, thr);
+    ++TraceTool::get_instance()->num_waits;
 
   } else if (!impl) {
     /* Set the requested lock on the record, note that
@@ -2303,7 +2388,7 @@ lock_rec_lock_slow(
       LOCK_REC | mode, block, heap_no, index, trx, TRUE);
 
     err = DB_SUCCESS_LOCKED_REC;
-    TraceTool::get_instance()->num_waiters.push_back(0);
+//    TraceTool::get_instance()->num_waiters.push_back(0);
   }
 
   trx_mutex_exit(trx);
@@ -2352,16 +2437,17 @@ lock_rec_lock(
   common cases */
   switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr)) {
   case LOCK_REC_SUCCESS:
-    TraceTool::get_instance()->num_waiters.push_back(0);
+//    TraceTool::get_instance()->num_waiters.push_back(0);
     return(DB_SUCCESS);
   case LOCK_REC_SUCCESS_CREATED:
-    TraceTool::get_instance()->num_waiters.push_back(0);
+//    TraceTool::get_instance()->num_waiters.push_back(0);
     return(DB_SUCCESS_LOCKED_REC);
   case LOCK_REC_FAIL:
     return(lock_rec_lock_slow(impl, mode, block,
             heap_no, index, thr));
   }
-
+  
+  ++TraceTool::get_instance()->total_locks;
   ut_error;
   return(DB_ERROR);
 }
@@ -2469,6 +2555,7 @@ lock_grant(
 {
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
+  --TraceTool::get_instance()->num_waits;
   
   timespec now = TraceTool::get_time();
   trx_t *trx = lock->trx;
@@ -2674,6 +2761,69 @@ static
 void
 lock_rec_dequeue_from_page(
 /*=======================*/
+	lock_t*		in_lock,	/*!< in: record lock object: all
+					record locks which are contained in
+					this lock object are removed;
+					transactions waiting behind will
+					get their lock requests granted,
+					if they are now qualified to it */
+  long &len)
+{
+  TraceTool::path_count = 42;
+  TRACE_FUNCTION_START();
+  
+	ulint		space;
+	ulint		page_no;
+	lock_t*		lock;
+	trx_lock_t*	trx_lock;
+
+	ut_ad(lock_mutex_own());
+	ut_ad(lock_get_type_low(in_lock) == LOCK_REC);
+	/* We may or may not be holding in_lock->trx->mutex here. */
+
+	trx_lock = &in_lock->trx->lock;
+
+	space = in_lock->un_member.rec_lock.space;
+	page_no = in_lock->un_member.rec_lock.page_no;
+
+	in_lock->index->table->n_rec_locks--;
+  
+  --TraceTool::get_instance()->total_locks;
+	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
+		    lock_rec_fold(space, page_no), in_lock);
+  bool use_fifo = (double) TraceTool::get_instance()->num_waits / (double) TraceTool::get_instance()->total_locks > 0.1;
+
+	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
+
+	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
+	MONITOR_DEC(MONITOR_NUM_RECLOCK);
+  
+  if (use_fifo) {
+    for (lock = lock_rec_get_first_on_page_addr(space, page_no, len);
+         lock != NULL;
+         lock = lock_rec_get_next_on_page(lock, len))
+    {
+      if (lock_get_wait(lock) &&
+          !lock_rec_has_to_wait_in_queue(lock))
+      {
+        lock_grant(lock);
+      }
+    }
+  } else {
+  }
+//  TraceTool::get_instance()->num_waiters.push_back(len);
+  TRACE_FUNCTION_END();
+  TraceTool::path_count = 0;
+}
+
+/*************************************************************//**
+Removes a record lock request, waiting or granted, from the queue and
+grants locks to other transactions in the queue if they now are entitled
+to a lock. NOTE: all record locks contained in in_lock are removed. */
+static
+void
+lock_rec_dequeue_from_page(
+/*=======================*/
 	lock_t*		in_lock)	/*!< in: record lock object: all
 					record locks which are contained in
 					this lock object are removed;
@@ -2683,7 +2833,6 @@ lock_rec_dequeue_from_page(
 {
   TraceTool::path_count = 42;
   TRACE_FUNCTION_START();
-  bool FIFO = true;
   
 	ulint		space;
 	ulint		page_no;
@@ -2709,90 +2858,34 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  if (FIFO) {
-    int num_wait_locks = 0;
+//  int num_locks = 0;
+//  for (ulint index = 0, size = lock_rec_get_n_bits(in_lock);
+//       index < size; ++index) {
+//    if (lock_rec_get_nth_bit(in_lock, index)) {
+//      ++num_locks;
+//    }
+//  }
+//  
+//  TraceTool::get_instance()->num_wait_locks.push_back(num_locks);
+  
+//    int num_wait_locks = 0;
+    int num_released = 0;
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
          lock != NULL;
          lock = lock_rec_get_next_on_page(lock))
     {
       if (lock_get_wait(lock))
       {
-        ++num_wait_locks;
+//        ++num_wait_locks;
         if (!lock_rec_has_to_wait_in_queue(lock)) {
+          ++num_released;
           lock_grant(lock);
         }
       }
     }
     TRACE_FUNCTION_END();
     TraceTool::path_count = 0;
-    TraceTool::get_instance()->num_wait_locks.push_back(num_wait_locks);
-  } else {
-    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-    if (first_lock_on_page == NULL)
-    {
-      return;
-    }
-    
-    ulint rec_fold = lock_rec_fold(space, page_no);
-    vector<lock_t *> wait_locks;
-    vector<lock_t *> granted_locks;
-    
-    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-         heap_no < n_bits; ++heap_no)
-    {
-      /* Not a lock on this record. */
-      if (!lock_rec_get_nth_bit(in_lock, heap_no))
-      {
-        continue;
-      }
-     
-      lock_t *first_wait_lock = NULL;
-      timespec now = TraceTool::get_time();
-  //    ofstream &log = TraceTool::get_instance()->get_log();
-  //    bool logged = false;
-      
-      for (lock = lock_rec_get_first(space, page_no, heap_no);
-           lock != NULL;
-           lock = lock_rec_get_next(heap_no, lock))
-      {
-        if (lock_get_wait(lock))
-        {
-          wait_locks.push_back(lock);
-          if (first_wait_lock == NULL)
-          {
-            first_wait_lock = lock;
-          }
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-        }
-        else
-        {
-          granted_locks.push_back(lock);
-        }
-      }
-      
-      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      
-      for (ulint index = 0; index < wait_locks.size(); ++index)
-      {
-        lock_t *lock = wait_locks[index];
-        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
-        {
-          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-          lock_grant(lock);
-          granted_locks.push_back(lock);
-        }
-        else
-        {
-          break;
-        }
-      }
-      
-      wait_locks.clear();
-      granted_locks.clear();
-    }
-  }
+    TraceTool::get_instance()->num_waiters.push_back(num_released);
 }
 
 /*************************************************************//**
@@ -4925,6 +5018,7 @@ lock_release(
 //  int locks_total = 0;
 //  int read_locks = 0;
 //  int write_locks = 0;
+//  bool first = false;
   for (lock = UT_LIST_GET_LAST(trx->lock.trx_locks);
        lock != NULL;
        lock = UT_LIST_GET_LAST(trx->lock.trx_locks)) {
@@ -4944,12 +5038,19 @@ lock_release(
 #endif /* UNIV_DEBUG */
 //      if (lock_get_mode(lock) == LOCK_S) {
 //        read_locks++;
-//        locks_total++;
 //      } else if (lock_get_mode(lock) == LOCK_X) {
 //        write_locks++;
-//        locks_total++;
 //      }
+//      locks_total++;
 
+//      if (first) {
+//        long len = 0;
+//        lock_rec_dequeue_from_page(lock, len);
+//        TraceTool::get_instance()->add_record(0, len);
+//        first = false;
+//      } else {
+//        lock_rec_dequeue_from_page(lock);
+//      }
       lock_rec_dequeue_from_page(lock);
     } else {
       dict_table_t* table;
