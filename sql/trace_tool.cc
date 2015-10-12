@@ -168,6 +168,8 @@ TraceTool::TraceTool() : function_times()
   transaction_types.push_back(NONE);
   num_wait_locks.reserve(7500000);
   num_waiters.reserve(7500000);
+  num_waits = 0;
+  total_locks = 0;
   
   srand(time(0));
 }

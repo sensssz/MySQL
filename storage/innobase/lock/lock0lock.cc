@@ -2120,6 +2120,7 @@ lock_rec_enqueue_waiting(
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
   ++trx->num_waits;
+  ++TraceTool::get_instance()->num_waits;
   
   return(DB_LOCK_WAIT);
 }
@@ -2366,6 +2367,7 @@ lock_rec_lock_slow(
 
     /* The trx already has a strong enough lock on rec: do
     nothing */
+    --TraceTool::get_instance()->total_locks;
 
   } else if ((conflict_lock = lock_rec_other_has_conflicting(
       static_cast<enum lock_mode>(mode),
@@ -2378,7 +2380,6 @@ lock_rec_lock_slow(
 
     err = lock_rec_enqueue_waiting(
       mode, conflict_lock, block, heap_no, index, thr);
-    ++TraceTool::get_instance()->num_waits;
 
   } else if (!impl) {
     /* Set the requested lock on the record, note that
@@ -2432,6 +2433,9 @@ lock_rec_lock(
         || mode - (LOCK_MODE_MASK & mode) == LOCK_REC_NOT_GAP
         || mode - (LOCK_MODE_MASK & mode) == 0);
   ut_ad(dict_index_is_clust(index) || !dict_index_is_online_ddl(index));
+  
+  ulint &total_locks = TraceTool::get_instance()->total_locks;
+  ++total_locks;
 
   /* We try a simplified and faster subroutine for the most
   common cases */
@@ -2446,8 +2450,6 @@ lock_rec_lock(
     return(lock_rec_lock_slow(impl, mode, block,
             heap_no, index, thr));
   }
-  
-  ++TraceTool::get_instance()->total_locks;
   ut_error;
   return(DB_ERROR);
 }
@@ -2555,7 +2557,11 @@ lock_grant(
 {
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
-  --TraceTool::get_instance()->num_waits;
+  
+  ulint &num_waits = TraceTool::get_instance()->num_waits;
+  if (num_waits > 0) {
+    --num_waits;
+  }
   
   timespec now = TraceTool::get_time();
   trx_t *trx = lock->trx;
@@ -2788,30 +2794,24 @@ lock_rec_dequeue_from_page(
 
 	in_lock->index->table->n_rec_locks--;
   
-  --TraceTool::get_instance()->total_locks;
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), in_lock);
-  bool use_fifo = (double) TraceTool::get_instance()->num_waits / (double) TraceTool::get_instance()->total_locks > 0.1;
 
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  if (use_fifo) {
-    for (lock = lock_rec_get_first_on_page_addr(space, page_no, len);
-         lock != NULL;
-         lock = lock_rec_get_next_on_page(lock, len))
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no, len);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock, len))
+  {
+    if (lock_get_wait(lock) &&
+        !lock_rec_has_to_wait_in_queue(lock))
     {
-      if (lock_get_wait(lock) &&
-          !lock_rec_has_to_wait_in_queue(lock))
-      {
-        lock_grant(lock);
-      }
+      lock_grant(lock);
     }
-  } else {
   }
-//  TraceTool::get_instance()->num_waiters.push_back(len);
   TRACE_FUNCTION_END();
   TraceTool::path_count = 0;
 }
@@ -2856,8 +2856,15 @@ lock_rec_dequeue_from_page(
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
-	MONITOR_DEC(MONITOR_NUM_RECLOCK);
+  MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
+  ulint &total_locks = TraceTool::get_instance()->total_locks;
+  ulint &num_waits = TraceTool::get_instance()->num_waits;
+  --total_locks;
+  
+  bool use_fifo = ((double) num_waits) / total_locks < 0.00001;
+  
+//  TraceTool::get_instance()->get_log() << total_locks << "," << num_waits << "," << use_fifo << endl;
 //  int num_locks = 0;
 //  for (ulint index = 0, size = lock_rec_get_n_bits(in_lock);
 //       index < size; ++index) {
@@ -2869,7 +2876,8 @@ lock_rec_dequeue_from_page(
 //  TraceTool::get_instance()->num_wait_locks.push_back(num_locks);
   
 //    int num_wait_locks = 0;
-    int num_released = 0;
+//  int num_released = 0;
+  if (use_fifo) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
          lock != NULL;
          lock = lock_rec_get_next_on_page(lock))
@@ -2878,14 +2886,80 @@ lock_rec_dequeue_from_page(
       {
 //        ++num_wait_locks;
         if (!lock_rec_has_to_wait_in_queue(lock)) {
-          ++num_released;
+//          ++num_released;
           lock_grant(lock);
         }
       }
     }
-    TRACE_FUNCTION_END();
-    TraceTool::path_count = 0;
-    TraceTool::get_instance()->num_waiters.push_back(num_released);
+    //  TraceTool::get_instance()->num_waiters.push_back(num_released);
+  } else {
+    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
+    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+    if (first_lock_on_page == NULL)
+    {
+      TRACE_FUNCTION_END();
+      return;
+    }
+    
+    ulint rec_fold = lock_rec_fold(space, page_no);
+    vector<lock_t *> wait_locks;
+    vector<lock_t *> granted_locks;
+    
+    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+         heap_no < n_bits; ++heap_no)
+    {
+      /* Not a lock on this record. */
+      if (!lock_rec_get_nth_bit(in_lock, heap_no))
+      {
+        continue;
+      }
+     
+      lock_t *first_wait_lock = NULL;
+      timespec now = TraceTool::get_time();
+      
+      for (lock = lock_rec_get_first(space, page_no, heap_no);
+           lock != NULL;
+           lock = lock_rec_get_next(heap_no, lock))
+      {
+        if (lock_get_wait(lock))
+        {
+          wait_locks.push_back(lock);
+          if (first_wait_lock == NULL)
+          {
+            first_wait_lock = lock;
+          }
+          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+        }
+        else
+        {
+          granted_locks.push_back(lock);
+        }
+      }
+      
+      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
+      
+      for (ulint index = 0; index < wait_locks.size(); ++index)
+      {
+        lock_t *lock = wait_locks[index];
+        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
+        {
+          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+          lock_grant(lock);
+          granted_locks.push_back(lock);
+        }
+//        else
+//        {
+//          break;
+//        }
+      }
+      
+      wait_locks.clear();
+      granted_locks.clear();
+    }
+  }
+  TRACE_FUNCTION_END();
+  TraceTool::path_count = 0;
 }
 
 /*************************************************************//**
