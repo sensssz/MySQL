@@ -13,7 +13,6 @@
 #define TARGET_PATH_COUNT 42
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
-#define MONITOR
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
 #define PAYMENT_MARKER "UPDATE WAREHOUSE SET W_YTD = W_YTD"
@@ -154,17 +153,19 @@ TraceTool::TraceTool() : function_times()
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
+  vector<int> function_time;
+  function_time.push_back(0);
   for (int index = 0; index < number_of_functions; index++)
   {
-    vector<long> function_time;
-    function_time.reserve(500000);
-    function_time.push_back(0);
     function_times.push_back(function_time);
+    function_times[index].reserve(500000);
   }
   transaction_start_times.reserve(500000);
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
+  num_waits = 0;
+  total_locks = 0;
   
   srand(time(0));
 }
@@ -253,7 +254,7 @@ void TraceTool::start_new_query()
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
-    for (vector<vector<long> >::iterator iterator = function_times.begin();
+    for (vector<vector<int> >::iterator iterator = function_times.begin();
          iterator != function_times.end();
          ++iterator)
     {
@@ -409,7 +410,7 @@ void TraceTool::write_latency(string dir)
   }
   
   int function_index = 0;
-  for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+  for (vector<vector<int> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)
@@ -463,12 +464,12 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
-  ofstream num_locks("latency/num_locks");
-  for (ulint index = 0; index < time_so_far.size(); ++index) {
-    num_locks << time_so_far[index] << endl;
-  }
-  num_locks.close();
-  time_so_far.clear();
+//  ofstream num_locks("latency/num_locks");
+//  for (ulint index = 0; index < time_so_far.size(); ++index) {
+//    num_locks << time_so_far[index] << endl;
+//  }
+//  num_locks.close();
+//  time_so_far.clear();
   
   write_latency("latency/");
 }

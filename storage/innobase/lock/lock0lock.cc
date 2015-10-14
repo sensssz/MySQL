@@ -2029,6 +2029,7 @@ lock_rec_enqueue_waiting(
 #endif /* UNIV_DEBUG */
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
+  ++TraceTool::get_instance()->num_waits;
   
   return(DB_LOCK_WAIT);
 }
@@ -2275,6 +2276,7 @@ lock_rec_lock_slow(
 
     /* The trx already has a strong enough lock on rec: do
     nothing */
+    --TraceTool::get_instance()->total_locks;
 
   } else if ((conflict_lock = lock_rec_other_has_conflicting(
       static_cast<enum lock_mode>(mode),
@@ -2339,6 +2341,8 @@ lock_rec_lock(
         || mode - (LOCK_MODE_MASK & mode) == LOCK_REC_NOT_GAP
         || mode - (LOCK_MODE_MASK & mode) == 0);
   ut_ad(dict_index_is_clust(index) || !dict_index_is_online_ddl(index));
+  
+  ++TraceTool::get_instance()->total_locks;
 
   /* We try a simplified and faster subroutine for the most
   common cases */
@@ -2459,6 +2463,11 @@ lock_grant(
 {
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
+  
+  ulint &num_waits = TraceTool::get_instance()->num_waits;
+  if (num_waits > 0) {
+    --num_waits;
+  }
   
   timespec now = TraceTool::get_time();
   trx_t *trx = lock->trx;
@@ -2675,7 +2684,6 @@ lock_rec_dequeue_from_page(
   TRACE_FUNCTION_START();
 //  double probability = 0.2;
 //  bool FIFO = (rand() % 100) < probability * 100;
-  bool FIFO = false;
   
 	ulint		space;
 	ulint		page_no;
@@ -2699,7 +2707,12 @@ lock_rec_dequeue_from_page(
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
-	MONITOR_DEC(MONITOR_NUM_RECLOCK);
+  MONITOR_DEC(MONITOR_NUM_RECLOCK);
+  
+  ulint &total_locks = TraceTool::get_instance()->total_locks;
+  ulint num_waits = TraceTool::get_instance()->num_waits;
+  --total_locks;
+  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
@@ -2737,8 +2750,6 @@ lock_rec_dequeue_from_page(
      
       lock_t *first_wait_lock = NULL;
       timespec now = TraceTool::get_time();
-  //    ofstream &log = TraceTool::get_instance()->get_log();
-  //    bool logged = false;
       
       for (lock = lock_rec_get_first(space, page_no, heap_no);
            lock != NULL;
@@ -2760,7 +2771,6 @@ lock_rec_dequeue_from_page(
       }
       
       sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      TraceTool::get_instance()->time_so_far.push_back(wait_locks.size());
       
       for (ulint index = 0; index < wait_locks.size(); ++index)
       {
@@ -2771,10 +2781,10 @@ lock_rec_dequeue_from_page(
           lock_grant(lock);
           granted_locks.push_back(lock);
         }
-        else
-        {
-          break;
-        }
+//        else
+//        {
+//          break;
+//        }
       }
       
       wait_locks.clear();

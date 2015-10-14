@@ -85,7 +85,7 @@ private:
     
     ofstream log_file;                      /*!< An log file for outputing debug messages. */
     
-    vector<vector<long> > function_times;  /*!< Stores the running time of the child functions
+    vector<vector<int> > function_times;  /*!< Stores the running time of the child functions
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
@@ -112,6 +112,9 @@ public:
     
     vector<long> time_so_far;
     vector<long> trx_ids;
+    
+    ulint num_waits;
+    ulint total_locks;
     
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
