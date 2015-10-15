@@ -442,9 +442,9 @@ void TraceTool::write_latency(string dir)
       }
     }
     function_index++;
-    iterator->clear();
+    vector<int>().swap(*iterator);
   }
-  function_times.clear();
+  vector<vector<int> >().swap(function_times);
   pthread_rwlock_unlock(&data_lock);
   tpcc_log.close();
   new_order_log.close();
