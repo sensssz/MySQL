@@ -2746,6 +2746,8 @@ lock_rec_dequeue_from_page(
       }
      
       lock_t *first_wait_lock = NULL;
+      time_on_loop = 0;
+      inner_time_total = 0;
       
       clock_gettime(CLOCK_REALTIME, &loop_start);
       for (lock = lock_rec_get_first(space, page_no, heap_no);

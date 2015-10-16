@@ -110,8 +110,8 @@ public:
                                              transactions*/
     static pthread_mutex_t var_mutex;
     
-    vector<long> time_on_loops;
-    vector<long> time_on_others;
+    vector<int> time_on_loops;
+    vector<int> time_on_others;
     
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
