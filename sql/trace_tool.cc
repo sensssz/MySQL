@@ -164,8 +164,6 @@ TraceTool::TraceTool() : function_times()
   transaction_start_times.push_back(0);
   transaction_types.reserve(500000);
   transaction_types.push_back(NONE);
-  num_waits = 0;
-  total_locks = 0;
   
   srand(time(0));
 }
@@ -456,20 +454,20 @@ void TraceTool::write_latency(string dir)
 
 void TraceTool::write_log()
 {
-//  ofstream remaining("remaining");
-//  for (ulint index = 0; index < time_so_far.size(); ++index)
-//  {
-//    long trx_id = trx_ids[index];
-//    long latency = function_times.back()[trx_id];
-//    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
-//  }
-//  remaining.close();
-//  ofstream num_locks("latency/num_locks");
-//  for (ulint index = 0; index < time_so_far.size(); ++index) {
-//    num_locks << time_so_far[index] << endl;
-//  }
-//  num_locks.close();
-//  time_so_far.clear();
+  ofstream time_on_loop("latency/time_on_loops");
+  for (ulint index = 0; index < time_on_loops.size(); ++index)
+  {
+    time_on_loop << time_on_loops[index] << endl;
+  }
+  time_on_loop.close();
+  ofstream time_on_other("latency/time_on_others");
+  for (ulint index = 0; index < time_on_others.size(); ++index) {
+    time_on_other << time_on_others[index] << endl;
+  }
+  time_on_other.close();
+  
+  time_on_loops.clear();
+  time_on_other.clear();
   
   write_latency("latency/");
 }

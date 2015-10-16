@@ -2029,7 +2029,6 @@ lock_rec_enqueue_waiting(
 #endif /* UNIV_DEBUG */
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
-  ++TraceTool::get_instance()->num_waits;
   
   return(DB_LOCK_WAIT);
 }
@@ -2276,7 +2275,6 @@ lock_rec_lock_slow(
 
     /* The trx already has a strong enough lock on rec: do
     nothing */
-    --TraceTool::get_instance()->total_locks;
 
   } else if ((conflict_lock = lock_rec_other_has_conflicting(
       static_cast<enum lock_mode>(mode),
@@ -2341,8 +2339,6 @@ lock_rec_lock(
         || mode - (LOCK_MODE_MASK & mode) == LOCK_REC_NOT_GAP
         || mode - (LOCK_MODE_MASK & mode) == 0);
   ut_ad(dict_index_is_clust(index) || !dict_index_is_online_ddl(index));
-  
-  ++TraceTool::get_instance()->total_locks;
 
   /* We try a simplified and faster subroutine for the most
   common cases */
@@ -2463,11 +2459,6 @@ lock_grant(
 {
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
-  
-  ulint &num_waits = TraceTool::get_instance()->num_waits;
-  if (num_waits > 0) {
-    --num_waits;
-  }
   
   timespec now = TraceTool::get_time();
   trx_t *trx = lock->trx;
@@ -2684,6 +2675,12 @@ lock_rec_dequeue_from_page(
   TRACE_FUNCTION_START();
 //  double probability = 0.2;
 //  bool FIFO = (rand() % 100) < probability * 100;
+  timespec function_start;
+  timespec function_end;
+  timespec loop_start;
+  timespec loop_end;
+  timespec loop_inner_start;
+  timespec loop_inner_end;
   
 	ulint		space;
 	ulint		page_no;
@@ -2709,10 +2706,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  ulint &total_locks = TraceTool::get_instance()->total_locks;
-  ulint num_waits = TraceTool::get_instance()->num_waits;
-  --total_locks;
-  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  bool FIFO = false;
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
@@ -2726,6 +2720,7 @@ lock_rec_dequeue_from_page(
       }
     }
   } else {
+    clock_gettime(CLOCK_REALTIME, &function_start);
     /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
     lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
     if (first_lock_on_page == NULL)
@@ -2737,6 +2732,8 @@ lock_rec_dequeue_from_page(
     ulint rec_fold = lock_rec_fold(space, page_no);
     vector<lock_t *> wait_locks;
     vector<lock_t *> granted_locks;
+    int time_on_loop = 0;
+    int inner_time_total = 0;
     
     /* A lock object can represent multiple locks on the same page. We look at each one of them. */
     for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
@@ -2749,12 +2746,13 @@ lock_rec_dequeue_from_page(
       }
      
       lock_t *first_wait_lock = NULL;
-      timespec now = TraceTool::get_time();
       
+      clock_gettime(CLOCK_REALTIME, &loop_start);
       for (lock = lock_rec_get_first(space, page_no, heap_no);
            lock != NULL;
            lock = lock_rec_get_next(heap_no, lock))
       {
+        clock_gettime(CLOCK_REALTIME, &loop_inner_start);
         if (lock_get_wait(lock))
         {
           wait_locks.push_back(lock);
@@ -2762,13 +2760,17 @@ lock_rec_dequeue_from_page(
           {
             first_wait_lock = lock;
           }
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, loop_start);
         }
         else
         {
           granted_locks.push_back(lock);
         }
+        clock_gettime(CLOCK_REALTIME, &loop_inner_end);
+        inner_time_total += TraceTool::difftime(loop_inner_start, loop_inner_end);
       }
+      clock_gettime(CLOCK_REALTIME, &loop_end);
+      time_on_loop += TraceTool::difftime(loop_start, loop_end) - inner_time_total;
       
       sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
       
@@ -2790,6 +2792,11 @@ lock_rec_dequeue_from_page(
       wait_locks.clear();
       granted_locks.clear();
     }
+    clock_gettime(CLOCK_REALTIME, &function_end);
+    int duration = TraceTool::difftime(function_start, function_end);
+    int time_on_others = duration - time_on_loop;
+    TraceTool::get_instance()->time_on_loops.push_back(time_on_loop);
+    TraceTool::get_instance()->time_on_others.push_back(time_on_others);
   }
   
   TRACE_FUNCTION_END();
