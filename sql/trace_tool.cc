@@ -12,7 +12,7 @@
 
 #define NUM_CORES 2
 #define TARGET_PATH_COUNT 42
-#define NUMBER_OF_FUNCTIONS 0
+#define NUMBER_OF_FUNCTIONS 1
 #define LATENCY
 
 #define NEW_ORDER_MARKER "SELECT C_DISCOUNT, C_LAST, C_CREDIT, W_TAX  FROM CUSTOMER, WAREHOUSE WHERE"
@@ -168,8 +168,6 @@ TraceTool::TraceTool() : function_times()
   transaction_types.push_back(NONE);
   num_wait_locks.reserve(7500000);
   num_waiters.reserve(7500000);
-  num_waits = 0;
-  total_locks = 0;
   
   srand(time(0));
 }
@@ -472,18 +470,18 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
-//  ofstream waiters("latency/list_len");
-//  for (ulint index = 0; index < num_waiters.size(); ++index) {
-//    waiters << num_waiters[index] << endl;
-//  }
-//  waiters.close();
-//  num_waiters.clear();
-//  ofstream locks("latency/num_locks_per_object");
-//  for (ulint index = 0; index < num_wait_locks.size(); ++index) {
-//    locks << num_wait_locks[index] << endl;
-//  }
-//  locks.close();
-//  num_wait_locks.clear();
+  ofstream waiters("latency/num_waiters");
+  for (ulint index = 0; index < num_waiters.size(); ++index) {
+    waiters << num_waiters[index] << endl;
+  }
+  waiters.close();
+  num_waiters.clear();
+  ofstream locks("latency/num_waits_schedule");
+  for (ulint index = 0; index < num_wait_locks.size(); ++index) {
+    locks << num_wait_locks[index] << endl;
+  }
+  locks.close();
+  num_wait_locks.clear();
   
   write_latency("latency/");
 }

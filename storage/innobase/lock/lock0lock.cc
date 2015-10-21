@@ -1711,7 +1711,7 @@ lock_rec_other_has_conflicting(
     }
   }
 
-//  TraceTool::get_instance()->num_waiters.push_back(num_waiters);
+  TraceTool::get_instance()->num_waiters.push_back(num_waiters);
   return(conflict);
 }
 
@@ -2120,7 +2120,6 @@ lock_rec_enqueue_waiting(
 
   MONITOR_INC(MONITOR_LOCKREC_WAIT);
   ++trx->num_waits;
-  ++TraceTool::get_instance()->num_waits;
   
   return(DB_LOCK_WAIT);
 }
@@ -2367,7 +2366,6 @@ lock_rec_lock_slow(
 
     /* The trx already has a strong enough lock on rec: do
     nothing */
-    --TraceTool::get_instance()->total_locks;
 
   } else if ((conflict_lock = lock_rec_other_has_conflicting(
       static_cast<enum lock_mode>(mode),
@@ -2434,8 +2432,6 @@ lock_rec_lock(
         || mode - (LOCK_MODE_MASK & mode) == 0);
   ut_ad(dict_index_is_clust(index) || !dict_index_is_online_ddl(index));
   
-  ulint &total_locks = TraceTool::get_instance()->total_locks;
-  ++total_locks;
 
   /* We try a simplified and faster subroutine for the most
   common cases */
@@ -2557,11 +2553,6 @@ lock_grant(
 {
   ut_ad(lock_mutex_own());
   trx_mutex_enter(lock->trx);
-  
-  ulint &num_waits = TraceTool::get_instance()->num_waits;
-  if (num_waits > 0) {
-    --num_waits;
-  }
   
   timespec now = TraceTool::get_time();
   trx_t *trx = lock->trx;
@@ -2858,11 +2849,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  ulint &total_locks = TraceTool::get_instance()->total_locks;
-  ulint &num_waits = TraceTool::get_instance()->num_waits;
-  --total_locks;
-  
-  bool use_fifo = ((double) num_waits) / total_locks < 0.00001;
+  bool use_fifo = true;
   
 //  TraceTool::get_instance()->get_log() << total_locks << "," << num_waits << "," << use_fifo << endl;
 //  int num_locks = 0;
@@ -2875,7 +2862,7 @@ lock_rec_dequeue_from_page(
 //  
 //  TraceTool::get_instance()->num_wait_locks.push_back(num_locks);
   
-//    int num_wait_locks = 0;
+    int num_wait_locks = 0;
 //  int num_released = 0;
   if (use_fifo) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
@@ -2884,14 +2871,14 @@ lock_rec_dequeue_from_page(
     {
       if (lock_get_wait(lock))
       {
-//        ++num_wait_locks;
+        ++num_wait_locks;
         if (!lock_rec_has_to_wait_in_queue(lock)) {
 //          ++num_released;
           lock_grant(lock);
         }
       }
     }
-    //  TraceTool::get_instance()->num_waiters.push_back(num_released);
+    TraceTool::get_instance()->num_wait_locks.push_back(num_wait_locks);
   } else {
     /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
     lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
