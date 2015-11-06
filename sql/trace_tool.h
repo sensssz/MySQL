@@ -108,10 +108,18 @@ public:
     static long num_trans[TRX_TYPES];       /*!< Number of successfully submitted transactions. */
     static double mean_latency[TRX_TYPES];  /*!< Mean of total wait time of successfully committed
                                              transactions*/
+    static double var_latency[TRX_TYPES];
+    static bool recording;
     static pthread_mutex_t var_mutex;
+    
+    static double thresholds[];
+    static int num_thres;
+    static int seconds_since_start;
+    static double threshold;
     
     vector<long> time_so_far;
     vector<long> trx_ids;
+    vector<bool> choices;
     
     ulint num_waits;
     ulint total_locks;

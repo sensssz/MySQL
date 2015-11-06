@@ -32,6 +32,7 @@ using std::vector;
 using std::stringstream;
 using std::sort;
 using std::getline;
+using std::min;
 
 ulint transaction_id = 0;
 
@@ -52,6 +53,7 @@ __thread transaction_type TraceTool::type = NONE;
 
 long TraceTool::num_trans[TRX_TYPES] = {0};
 double TraceTool::mean_latency[TRX_TYPES] = {0};
+double TraceTool::var_latency[TRX_TYPES] = {0};
 
 deque<buf_page_t *> TraceTool::pages_to_make_young;
 deque<ib_uint32_t> TraceTool::space_ids;
@@ -59,6 +61,12 @@ deque<ib_uint32_t> TraceTool::page_nos;
 
 pthread_mutex_t TraceTool::buf_page_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TraceTool::var_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+double TraceTool::thresholds[] = {0.07,0.015,0.007,0.0015,0.0007,0.00015,0.00007,0.000015,0.000007,0.0000015,0.0000007,0.00000015,0.00000007,0.000000015,0.000000007,0.0000000015,0.0000000007,0.00000000015,0.00000000007};
+int TraceTool::num_thres = sizeof(TraceTool::thresholds) / sizeof(double);
+int TraceTool::seconds_since_start = 0;
+double TraceTool::threshold = TraceTool::thresholds[0];
+bool TraceTool::recording = false;
 
 static const size_t NEW_ORDER_LENGTH = strlen(NEW_ORDER_MARKER);
 static const size_t PAYMENT_LENGTH = strlen(PAYMENT_MARKER);
@@ -183,6 +191,23 @@ void *TraceTool::check_write_log(void *arg)
   while (true)
   {
     sleep(5);
+    seconds_since_start += 5;
+    int seconds_since_exp_phase = seconds_since_start - 1260;
+    if (seconds_since_exp_phase > 0) {
+      // Change it every 5 minutes
+      int thres_index = min(seconds_since_exp_phase / 600, num_thres - 1);
+      if (threshold != thresholds[thres_index]) {
+        instance->log_file << threshold << ": " << mean_latency[TRX_TYPES - 1] << ","
+                           << var_latency[TRX_TYPES - 1] / num_trans[TRX_TYPES - 1] << endl;
+        threshold = thresholds[thres_index];
+        recording = false;
+        var_mutex_enter();
+        memset(var_latency, 0, sizeof(double) * TRX_TYPES);
+        memset(mean_latency, 0, sizeof(double) * TRX_TYPES);
+        memset(num_trans, 0, sizeof(long) * TRX_TYPES);
+        var_mutex_exit();
+      }
+    }
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
@@ -200,8 +225,10 @@ void *TraceTool::check_write_log(void *arg)
       /* Reset the global transaction ID. */
       transaction_id = 0;
       
-      memset(num_trans, 0, TRX_TYPES * sizeof(long));
-      memset(mean_latency, 0, TRX_TYPES * sizeof(double));
+      memset(var_latency, 0, sizeof(double) * TRX_TYPES);
+      memset(mean_latency, 0, sizeof(double) * TRX_TYPES);
+      memset(num_trans, 0, sizeof(long) * TRX_TYPES);
+      recording = false;
       
       /* Dump data in the old instance to log files and
          reclaim memory. */
@@ -325,13 +352,27 @@ Sumbits the total wait time of a transaction. */
 void TraceTool::update_ctv(long latency)
 {
   var_mutex_enter();
-  ++num_trans[type];
-  double old_mean = mean_latency[type];
-  mean_latency[type] = old_mean + (latency - old_mean) / num_trans[type];
-  
-  ++num_trans[TRX_TYPES - 1];
-  old_mean = mean_latency[TRX_TYPES - 1];
-  mean_latency[TRX_TYPES - 1] = old_mean + (latency - old_mean) / num_trans[TRX_TYPES - 1];
+//  ++num_trans[type];
+//  double old_mean = mean_latency[type];
+//  mean_latency[type] = old_mean + (latency - old_mean) / num_trans[type];
+//  double old_var = var_latency[type];
+//  var_latency[type] = old_var + (latency - old_mean) * (latency - mean_latency[type]);
+//  
+  int total_index = TRX_TYPES - 1;
+  ++num_trans[total_index];
+  if (!recording && num_trans[total_index] == 60000) {
+    // Start recording after 2 minutes
+    num_trans[total_index] = 1;
+    mean_latency[total_index] = 0;
+    var_latency[total_index] = 0;
+    recording = true;
+  }
+  if (recording) {
+    double old_mean = mean_latency[total_index];
+    mean_latency[total_index] = old_mean + (latency - old_mean) / num_trans[total_index];
+    double old_var = var_latency[total_index];
+    var_latency[total_index] = old_var + (latency - old_mean) * (latency - mean_latency[total_index]);
+  }
   var_mutex_exit();
 }
 
@@ -345,9 +386,13 @@ void TraceTool::end_transaction()
   if (!commit_successful)
   {
     transaction_start_times[current_transaction_id] = 0;
+    latency = 0;
   }
   pthread_rwlock_unlock(&data_lock);
 #endif
+  if (commit_successful) {
+    update_ctv(latency);
+  }
   new_transaction = true;
   type = NONE;
 }
@@ -464,12 +509,12 @@ void TraceTool::write_log()
 //    remaining << "rem" << trx_id << "=" << (latency - time_so_far[index]) << endl;
 //  }
 //  remaining.close();
-//  ofstream num_locks("latency/num_locks");
-//  for (ulint index = 0; index < time_so_far.size(); ++index) {
-//    num_locks << time_so_far[index] << endl;
-//  }
-//  num_locks.close();
-//  time_so_far.clear();
+  ofstream sch_choices("latency/choices");
+  for (ulint index = 0; index < choices.size(); ++index) {
+    sch_choices << choices[index] << endl;
+  }
+  sch_choices.close();
+  choices.clear();
   
   write_latency("latency/");
 }

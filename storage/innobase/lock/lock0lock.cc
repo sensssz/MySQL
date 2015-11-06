@@ -2709,10 +2709,20 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  ulint &total_locks = TraceTool::get_instance()->total_locks;
-  ulint num_waits = TraceTool::get_instance()->num_waits;
-  --total_locks;
-  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  ulint total_locks = 0;
+  ulint num_waits = 0;
+  
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock))
+  {
+    if (lock_get_wait(lock)) {
+      ++num_waits;
+    }
+    ++total_locks;
+  }
+  
+  bool FIFO = ((double) num_waits) / total_locks < TraceTool::threshold;
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
