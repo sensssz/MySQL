@@ -471,5 +471,11 @@ void TraceTool::write_log()
 //  num_locks.close();
 //  time_so_far.clear();
   
+  ofstream schedule("latency/schedule");
+  for (ulint index = 0; index < scheduling_alg.size(); ++index) {
+    schedule << scheduling_alg[index] << endl;
+  }
+  schedule.close();
+  
   write_latency("latency/");
 }

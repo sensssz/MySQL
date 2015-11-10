@@ -116,6 +116,8 @@ public:
     ulint num_waits;
     ulint total_locks;
     
+    vector<bool> scheduling_alg;
+    
     static deque<buf_page_t *> pages_to_make_young;
     static deque<ib_uint32_t> space_ids;
     static deque<ib_uint32_t> page_nos;

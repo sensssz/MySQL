@@ -2713,6 +2713,7 @@ lock_rec_dequeue_from_page(
   ulint num_waits = TraceTool::get_instance()->num_waits;
   --total_locks;
   bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  TraceTool::get_instance()->scheduling_alg.push_back(FIFO);
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
