@@ -2664,6 +2664,42 @@ compare_by_time_so_far(
 //    locks[previous + 1] = lock;
 //  }
 //}
+static int x = 123456789;
+static int y = 362436069;
+static int z = 521288629;
+
+int abs(int number) {
+  return number < 0 ? -number : number;
+}
+
+int rand(int max) {
+  if (max <= 1) {
+    return 0;
+  }
+  
+  x ^= x << 16;
+  x ^= x >> 5;
+  x ^= x << 1;
+  
+  int t = x;
+  x = y;
+  y = z;
+  z = t ^ x ^ y;
+  
+  int abs_z = abs(z);
+  return abs_z % max;
+}
+
+void swap(
+  vector<lock_t *> &locks,
+  int index1,
+  int index2) {
+  if (index1 != index2) {
+    lock_t *temp = locks[index1];
+    locks[index1] = locks[index2];
+    locks[index2] = temp;
+  }
+}
 
 /*************************************************************//**
 Removes a record lock request, waiting or granted, from the queue and
@@ -2709,10 +2745,7 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  ulint &total_locks = TraceTool::get_instance()->total_locks;
-  ulint num_waits = TraceTool::get_instance()->num_waits;
-  --total_locks;
-  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  bool FIFO = false;
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
@@ -2749,7 +2782,6 @@ lock_rec_dequeue_from_page(
       }
      
       lock_t *first_wait_lock = NULL;
-      timespec now = TraceTool::get_time();
       
       for (lock = lock_rec_get_first(space, page_no, heap_no);
            lock != NULL;
@@ -2762,7 +2794,6 @@ lock_rec_dequeue_from_page(
           {
             first_wait_lock = lock;
           }
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
         }
         else
         {
@@ -2770,21 +2801,18 @@ lock_rec_dequeue_from_page(
         }
       }
       
-      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      
-      for (ulint index = 0; index < wait_locks.size(); ++index)
+      for (int size = wait_locks.size(); size > 0; --size)
       {
+        int index = rand(size);
         lock_t *lock = wait_locks[index];
+        swap(wait_locks, index, size - 1);
+        wait_locks.pop_back();
         if (!lock_rec_has_to_wait_granted(granted_locks, lock))
         {
           lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
           lock_grant(lock);
           granted_locks.push_back(lock);
         }
-//        else
-//        {
-//          break;
-//        }
       }
       
       wait_locks.clear();
