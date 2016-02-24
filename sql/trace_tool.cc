@@ -191,8 +191,8 @@ void *TraceTool::check_write_log(void *arg)
   {
     sleep(1);
     pthread_mutex_lock(&log_record_lock);
-    num_records.push_back(0);
-    size_records.push_back(0);
+    instance->num_records.push_back(0);
+    instance->size_records.push_back(0);
     pthread_mutex_unlock(&log_record_lock);
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
@@ -511,9 +511,9 @@ void TraceTool::write_log_records(string dir)
   num_log.open(dir + "/num");
   size_log.open(dir + "/size");
   pthread_mutex_lock(&log_record_lock);
-  for (int index = 0; index < num_records.size(); ++index) {
+  for (ulint index = 0; index < num_records.size(); ++index) {
     num_log << index << "," << num_records[index] << endl;
-    size_log << index << "," << size_records[index] / num_records[index] << endl;
+    size_log << index << "," << size_records[index] << endl;
   }
   num_records.clear();
   size_records.clear();

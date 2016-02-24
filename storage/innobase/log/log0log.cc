@@ -1446,6 +1446,8 @@ log_write_up_to(
 	ulint		loop_count	= 0;
 #endif /* UNIV_DEBUG */
 	ulint		unlock;
+  ulint   num;
+  ulint   size;
 
 	ut_ad(!srv_read_only_mode);
 
@@ -1548,13 +1550,13 @@ loop:
 
 	start_offset = log_sys->buf_next_to_write;
 	end_offset = log_sys->buf_free;
-  
-  ulint num = lsn - log_sys->write_lsn;
-  ulint size = end_offset - start_offset;
-  TraceTool::get_instance()->add_log_write(num, size);
 
 	area_start = ut_calc_align_down(start_offset, OS_FILE_LOG_BLOCK_SIZE);
-	area_end = ut_calc_align(end_offset, OS_FILE_LOG_BLOCK_SIZE);
+  area_end = ut_calc_align(end_offset, OS_FILE_LOG_BLOCK_SIZE);
+  
+  num = lsn - log_sys->write_lsn;
+  size = area_end - area_start;
+  TraceTool::get_instance()->add_log_write(num, size);
 
 	ut_ad(area_end - area_start > 0);
 
