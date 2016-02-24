@@ -108,6 +108,8 @@ public:
     static long num_trans[TRX_TYPES];       /*!< Number of successfully submitted transactions. */
     static double mean_latency[TRX_TYPES];  /*!< Mean of total wait time of successfully committed
                                              transactions*/
+    static double variance[TRX_TYPES];      /*!< Standard deviation of total wait time of successfully committed
+                                             transactions*/
     static pthread_mutex_t var_mutex;
     
     vector<long> time_so_far;
@@ -154,7 +156,7 @@ public:
 
     /********************************************************************//**
     Sumbits the total wait time of a transaction. */
-    void update_ctv(long latency);
+    int update_ctv(long latency);
     
     /********************************************************************//**
     Start a new query. This may also start a new transaction. */

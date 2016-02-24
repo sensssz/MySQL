@@ -8,9 +8,10 @@
 #include <sstream>
 #include <cstdlib>
 #include <cassert>
+#include <algorithm>
 
 #define NUM_CORES 2
-#define TARGET_PATH_COUNT 42
+#define TARGET_PATH_COUNT 0
 #define NUMBER_OF_FUNCTIONS 0
 #define LATENCY
 
@@ -32,6 +33,7 @@ using std::vector;
 using std::stringstream;
 using std::sort;
 using std::getline;
+using std::abs;
 
 ulint transaction_id = 0;
 
@@ -52,6 +54,7 @@ __thread transaction_type TraceTool::type = NONE;
 
 long TraceTool::num_trans[TRX_TYPES] = {0};
 double TraceTool::mean_latency[TRX_TYPES] = {0};
+double TraceTool::variance[TRX_TYPES] = {0};
 
 deque<buf_page_t *> TraceTool::pages_to_make_young;
 deque<ib_uint32_t> TraceTool::space_ids;
@@ -202,6 +205,7 @@ void *TraceTool::check_write_log(void *arg)
       
       memset(num_trans, 0, TRX_TYPES * sizeof(long));
       memset(mean_latency, 0, TRX_TYPES * sizeof(double));
+      memset(variance, 0, TRX_TYPES * sizeof(double));
       
       /* Dump data in the old instance to log files and
          reclaim memory. */
@@ -297,9 +301,9 @@ void TraceTool::set_query(const char *new_query)
     }
     else
     {
-//      type = NONE;
-//      commit_successful = false;
-      type = NEW_ORDER;
+      type = NONE;
+      commit_successful = false;
+//      type = NEW_ORDER;
     }
     
     pthread_rwlock_rdlock(&data_lock);
@@ -322,17 +326,38 @@ void TraceTool::end_query()
 
 /********************************************************************//**
 Sumbits the total wait time of a transaction. */
-void TraceTool::update_ctv(long latency)
+int TraceTool::update_ctv(long latency)
 {
+  long sleep_time = 0;
   var_mutex_enter();
-  ++num_trans[type];
+  long num_tran = num_trans[type];
   double old_mean = mean_latency[type];
+  double old_var = variance[type];
+  
+  if (latency < old_mean) {
+    old_var = (num_tran > 1) ? old_var / (num_tran - 1) : 0;
+    old_var = sqrt(old_var);
+    double diff = abs(old_mean - old_var);
+    if (old_mean - latency > diff) {
+      sleep_time = diff;
+      latency += diff;
+    }
+  }
+  
+  ++num_trans[type];
+  old_mean = mean_latency[type];
   mean_latency[type] = old_mean + (latency - old_mean) / num_trans[type];
+  old_var = variance[type];
+  variance[type] = old_var + (latency - old_mean) * (latency - mean_latency[type]);
   
   ++num_trans[TRX_TYPES - 1];
   old_mean = mean_latency[TRX_TYPES - 1];
   mean_latency[TRX_TYPES - 1] = old_mean + (latency - old_mean) / num_trans[TRX_TYPES - 1];
+  old_var = variance[TRX_TYPES - 1];
+  variance[TRX_TYPES - 1] = old_var + (latency - old_mean) * (latency - mean_latency[TRX_TYPES - 1]);
   var_mutex_exit();
+  
+  return sleep_time;
 }
 
 void TraceTool::end_transaction()
@@ -350,6 +375,15 @@ void TraceTool::end_transaction()
 #endif
   new_transaction = true;
   type = NONE;
+  
+  int sleep_time = update_ctv(latency);
+  if (sleep_time > 0) {
+    timespec stime;
+    timespec rem;
+    stime.tv_sec = 0;
+    stime.tv_nsec = sleep_time;
+    nanosleep(&stime, &rem);
+  }
 }
 
 void TraceTool::add_record(int function_index, long duration)

@@ -23,7 +23,7 @@ Find the lock that gives minimum CTV. */
 UNIV_INTERN
 void
 estimate(
-  list<lock_t *> &wait_locks)  /*!< waiting locks */
+ list<lock_t *> &wait_locks);  /*!< waiting locks */
 
 /*************************************************************//**
 Clean up resources. */
