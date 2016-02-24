@@ -39,6 +39,7 @@ ulint transaction_id = 0;
 
 TraceTool *TraceTool::instance = NULL;
 pthread_mutex_t TraceTool::instance_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TraceTool::log_record_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_rwlock_t TraceTool::data_lock = PTHREAD_RWLOCK_INITIALIZER;
 __thread ulint TraceTool::current_transaction_id = 0;
 
@@ -170,6 +171,9 @@ TraceTool::TraceTool() : function_times()
   num_waits = 0;
   total_locks = 0;
   
+  num_records.push_back(0);
+  size_records.push_back(0);
+  
   srand(time(0));
 }
 
@@ -185,7 +189,11 @@ void *TraceTool::check_write_log(void *arg)
      dump data to log files. */
   while (true)
   {
-    sleep(5);
+    sleep(1);
+    pthread_mutex_lock(&log_record_lock);
+    num_records.push_back(0);
+    size_records.push_back(0);
+    pthread_mutex_unlock(&log_record_lock);
     timespec now = get_time();
     if (now.tv_sec - global_last_query.tv_sec >= 5 && transaction_id > 0)
     {
@@ -376,14 +384,14 @@ void TraceTool::end_transaction()
   new_transaction = true;
   type = NONE;
   
-  int sleep_time = update_ctv(latency);
-  if (sleep_time > 0) {
-    timespec stime;
-    timespec rem;
-    stime.tv_sec = 0;
-    stime.tv_nsec = sleep_time;
-    nanosleep(&stime, &rem);
-  }
+//  int sleep_time = update_ctv(latency);
+//  if (sleep_time > 0) {
+//    timespec stime;
+//    timespec rem;
+//    stime.tv_sec = 0;
+//    stime.tv_nsec = sleep_time;
+//    nanosleep(&stime, &rem);
+//  }
 }
 
 void TraceTool::add_record(int function_index, long duration)
@@ -395,6 +403,14 @@ void TraceTool::add_record(int function_index, long duration)
   pthread_rwlock_rdlock(&data_lock);
   function_times[function_index][current_transaction_id] += duration;
   pthread_rwlock_unlock(&data_lock);
+}
+
+void TraceTool::add_log_write(ulint num, ulint size)
+{
+  pthread_mutex_lock(&log_record_lock);
+  num_records.back() += num;
+  size_records.back() += size;
+  pthread_mutex_unlock(&log_record_lock);
 }
 
 void TraceTool::write_latency(string dir)
@@ -488,6 +504,24 @@ void TraceTool::write_latency(string dir)
   stock_level_log.close();
 }
 
+void TraceTool::write_log_records(string dir)
+{
+  ofstream num_log;
+  ofstream size_log;
+  num_log.open(dir + "/num");
+  size_log.open(dir + "/size");
+  pthread_mutex_lock(&log_record_lock);
+  for (int index = 0; index < num_records.size(); ++index) {
+    num_log << index << "," << num_records[index] << endl;
+    size_log << index << "," << size_records[index] / num_records[index] << endl;
+  }
+  num_records.clear();
+  size_records.clear();
+  pthread_mutex_unlock(&log_record_lock);
+  num_log.close();
+  size_log.close();
+}
+
 void TraceTool::write_log()
 {
 //  ofstream remaining("remaining");
@@ -506,4 +540,5 @@ void TraceTool::write_log()
 //  time_so_far.clear();
   
   write_latency("latency/");
+  write_log_records("latency/");
 }

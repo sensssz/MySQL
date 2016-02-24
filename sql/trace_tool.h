@@ -90,9 +90,13 @@ private:
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
     
+    vector<ulint> num_records;
+    vector<ulint> size_records;
+    
     TraceTool();
     TraceTool(TraceTool const&){};
 public:
+    static pthread_mutex_t log_record_lock;
     static pthread_rwlock_t data_lock;      /*!< A read-write lock for protecting function_times. */
     static __thread ulint current_transaction_id;   /*!< Each thread can execute only one transaction at
                                                          a time. This is the ID of the current transactions. */
@@ -168,12 +172,15 @@ public:
     End the current transaction. */
     void end_transaction();
     
+    void add_log_write(ulint num, ulint size);
+    
     /********************************************************************//**
     Analysis the current query to find out the transaction type. */
     void set_query(const char *query);
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency(string dir);
+    void write_log_records(string dir);
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();
