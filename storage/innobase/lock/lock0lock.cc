@@ -2044,7 +2044,8 @@ lock_rec_enqueue_waiting(
   
   timespec now = TraceTool::get_time();
   ulint latency_so_far = TraceTool::difftime(trx->trx_start_time, now);
-  TraceTool::get_instance()->latencies_so_far.push_back(latency_so_far);
+  TraceTool::get_instance()->latency_enqueue.push_back(latency_so_far);
+  TraceTool::get_instance()->enqueue_ids.push_back(trx->transaction_id);
   
 //  vector<lock_t *> wait_locks;
 //  vector<lock_t *> granted_locks;
@@ -2547,8 +2548,8 @@ lock_grant(
   lock->trx->total_wait_time += wait_time;
   
   ulint latency_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-  TraceTool::get_instance()->remaining_times.push_back(latency_so_far);
-  TraceTool::get_instance()->transaction_ids.push_back(lock->trx->transaction_id);
+  TraceTool::get_instance()->latency_grant.push_back(latency_so_far);
+  TraceTool::get_instance()->grant_ids.push_back(lock->trx->transaction_id);
 
   lock_reset_lock_and_trx_wait(lock);
 
