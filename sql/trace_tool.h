@@ -121,6 +121,12 @@ public:
     static deque<ib_uint32_t> page_nos;
     static pthread_mutex_t buf_page_mutex;
     
+    vector<ulint> latency_enqueue;
+    vector<ulint> enqueue_ids;
+    
+    vector<ulint> latency_grant;
+    vector<ulint> grant_ids;
+    
     /********************************************************************//**
     The Singleton pattern. Used for getting the instance of this class. */
     static TraceTool *get_instance();
@@ -172,6 +178,9 @@ public:
     /********************************************************************//**
     Dump data about function running time and latency to log file. */
     void write_latency(string dir);
+    /********************************************************************//**
+    Dump data about function running time and latency to log file. */
+    void write_latency_remaining(string dir, vector<ulint> &latencies_so_far, vector<ulint> &ids);
     /********************************************************************//**
     Write necessary data to log files. */
     void write_log();

@@ -454,6 +454,62 @@ void TraceTool::write_latency(string dir)
   stock_level_log.close();
 }
 
+/********************************************************************//**
+Dump data about function running time and latency to log file. */
+void TraceTool::write_latency_remaining(string dir, vector<ulint> &latencies_so_far, vector<ulint> &ids)
+{
+  ofstream tpcc(dir + "tpcc");
+  ofstream new_order(dir + "new_order");
+  ofstream payment(dir + "payment");
+  ofstream order_status(dir + "order_status");
+  ofstream delivery(dir + "delivery");
+  ofstream stock_level(dir + "stock_level");
+  for (ulint index = 0, size = latencies_so_far.size();
+       index < size; ++index)
+  {
+    ulint transaction_id = ids[index];
+    ulint latency = function_times.back()[transaction_id];
+    ulint latency_so_far = latencies_so_far[index];
+    
+    if (transaction_types[transaction_id] == NONE ||
+        transaction_start_times[transaction_id] == 0 ||
+        latency < latency_so_far)
+    {
+      continue;
+    }
+    
+    ulint remaining_time = latency - latency_so_far;
+    tpcc << latency_so_far << ',' << remaining_time << endl;
+    ofstream *stream = NULL;
+    switch (transaction_types[transaction_id]) {
+      case NEW_ORDER:
+        stream = &new_order;
+        break;
+      case PAYMENT:
+        stream = &payment;
+        break;
+      case ORDER_STATUS:
+        stream = &order_status;
+        break;
+      case DELIVERY:
+        stream = &delivery;
+        break;
+      case STOCK_LEVEL:
+        stream = &stock_level;
+        break;
+      default:
+        break;
+    }
+    *stream << latency_so_far << ',' << remaining_time << endl;
+  }
+  tpcc.close();
+  new_order.close();
+  payment.close();
+  order_status.close();
+  delivery.close();
+  stock_level.close();
+}
+
 void TraceTool::write_log()
 {
 //  ofstream remaining("remaining");
@@ -470,6 +526,7 @@ void TraceTool::write_log()
 //  }
 //  num_locks.close();
 //  time_so_far.clear();
-  
+  write_latency_remaining("enqueue/", latency_enqueue, enqueue_ids);
+  write_latency_remaining("grant/", latency_grant, grant_ids);
   write_latency("latency/");
 }

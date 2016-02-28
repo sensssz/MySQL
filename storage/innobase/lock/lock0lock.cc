@@ -1980,6 +1980,11 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
+  timespec now = TraceTool::get_time();
+  ulint latency_so_far = TraceTool::difftime(trx->trx_start_time, now);
+  TraceTool::get_instance()->latency_enqueue.push_back(latency_so_far);
+  TraceTool::get_instance()->enqueue_ids.push_back(trx->transaction_id);
+  
   
   /* Release the mutex to obey the latching order.
   This is safe, because lock_deadlock_check_and_resolve()
@@ -2474,11 +2479,13 @@ lock_grant(
   ulint wait_time = TraceTool::difftime(lock->wait_start, now);
   trx->total_wait_time += wait_time;
   
-  long time_so_far = TraceTool::difftime(trx->trx_start_time, now);
+  ulint latency_so_far = TraceTool::difftime(trx->trx_start_time, now);
+  TraceTool::get_instance()->latency_grant.push_back(latency_so_far);
+  TraceTool::get_instance()->grant_ids.push_back(trx->transaction_id);
   
   if (lock->time_at_grant != NULL)
   {
-    *(lock->time_at_grant) = time_so_far;
+    *(lock->time_at_grant) = latency_so_far;
   }
 
   lock_reset_lock_and_trx_wait(lock);
@@ -2712,7 +2719,8 @@ lock_rec_dequeue_from_page(
   ulint &total_locks = TraceTool::get_instance()->total_locks;
   ulint num_waits = TraceTool::get_instance()->num_waits;
   --total_locks;
-  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+//  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  bool FIFO = true;
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
