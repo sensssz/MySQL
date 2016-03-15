@@ -27,6 +27,7 @@ Created 3/26/1996 Heikki Tuuri
 #define trx0trx_h
 
 #include <time.h>
+#include <vector>
 
 #include "univ.i"
 #include "trx0types.h"
@@ -43,6 +44,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "fts0fts.h"
 
 #include "trace_tool.h"
+
+using std::vector;
 
 /** Dummy session used currently in MySQL interface */
 extern sess_t*	trx_dummy_sess;
@@ -743,12 +746,15 @@ struct trx_t{
 	we treat all read-only transactions as non-locking.  */
 	trx_state_t	state;
     timespec    trx_start_time;
-    long       total_wait_time;
+    long        total_wait_time;
+    long long   cumulative_age;
     transaction_type    type;
     ulint       transaction_id;
     ibool       is_user_trx;
     ibool       queued;
     ulint       num_waits;
+    ulint       num_waiters;
+    timespec    last_age_calc;
 
 	trx_lock_t	lock;		/*!< Information about the transaction
 					locks and state. Protected by

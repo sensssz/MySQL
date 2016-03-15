@@ -153,7 +153,7 @@ TraceTool::TraceTool() : function_times()
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
-  vector<int> function_time;
+  vector<long> function_time;
   function_time.push_back(0);
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -254,7 +254,7 @@ void TraceTool::start_new_query()
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
-    for (vector<vector<int> >::iterator iterator = function_times.begin();
+    for (vector<vector<long> >::iterator iterator = function_times.begin();
          iterator != function_times.end();
          ++iterator)
     {
@@ -297,9 +297,9 @@ void TraceTool::set_query(const char *new_query)
     }
     else
     {
-//      type = NONE;
-//      commit_successful = false;
-      type = NEW_ORDER;
+      type = NONE;
+      commit_successful = false;
+//      type = NEW_ORDER;
     }
     
     pthread_rwlock_rdlock(&data_lock);
@@ -410,7 +410,7 @@ void TraceTool::write_latency(string dir)
   }
   
   int function_index = 0;
-  for (vector<vector<int> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+  for (vector<vector<long> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)

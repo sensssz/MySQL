@@ -73,7 +73,7 @@ struct lock_t {
 					wait flag, ORed */
 	hash_node_t	hash;		/*!< hash chain node for a record
 					lock */
-    long            time_so_far;
+    long long       time_so_far;
     long            process_time;
     bool            has_to_wait;
     long           *time_at_grant;

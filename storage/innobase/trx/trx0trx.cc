@@ -868,6 +868,9 @@ trx_start_low(
     trx->transaction_id = TraceTool::current_transaction_id;
     trx->queued = false;
     trx->num_waits = 0;
+    trx->cumulative_age = 0;
+    trx->num_waiters = 0;
+    trx->last_age_calc.tv_sec = 0;
   }
 
 	/* The initial value for trx->no: TRX_ID_MAX is used in

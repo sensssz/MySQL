@@ -54,6 +54,10 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "trace_tool.h"
 
+#include <unordered_map>
+
+using std::unordered_map;
+
 ulint MIN_BATCH_SIZE = 2;
 ulint MAX_BATCH_SIZE = 5;
 ibool HARD_BOUNDARY = true;
@@ -1980,6 +1984,38 @@ lock_rec_enqueue_waiting(
   lock = lock_rec_create(
     type_mode | LOCK_WAIT, block, heap_no, index, trx, TRUE);
   
+  timespec now = TraceTool::get_time();
+  ulint age = TraceTool::difftime(trx->trx_start_time, now);
+  
+  ulint space = buf_block_get_space(block);
+  ulint page_no = buf_block_get_page_no(block);
+  for (lock_t *lock_in_queue = lock_rec_get_first_on_page_addr(space, page_no);
+       lock_in_queue != lock;
+       lock_in_queue = lock_rec_get_next_on_page(lock_in_queue))
+  {
+    if (!lock_get_wait(lock_in_queue) &&
+        lock_rec_get_n_bits(lock_in_queue) >= heap_no &&
+        lock_rec_get_nth_bit(lock_in_queue, heap_no))
+    {
+      trx_t *lock_trx = lock_in_queue->trx;
+      // lock needs to wait for lock_in_queue
+      // No one else is waiting for it
+      if (lock_trx->last_age_calc.tv_sec == 0)
+      {
+        lock_trx->cumulative_age = age;
+        lock_trx->num_waiters = 1;
+      }
+      else
+      {
+        // Some other trx are waiting for it, compensate for the age
+        long time_since_last_age_calc = TraceTool::difftime(lock_trx->last_age_calc, now);
+        lock_trx->cumulative_age += lock_trx->num_waiters * time_since_last_age_calc;
+        lock_trx->cumulative_age += age;
+        lock_trx->num_waiters++;
+      }
+      lock_trx->last_age_calc = now;
+    }
+  }
   
   /* Release the mutex to obey the latching order.
   This is safe, because lock_deadlock_check_and_resolve()
@@ -2713,6 +2749,7 @@ lock_rec_dequeue_from_page(
   ulint num_waits = TraceTool::get_instance()->num_waits;
   --total_locks;
   bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  FIFO = false;
   
   if (FIFO) {
     for (lock = lock_rec_get_first_on_page_addr(space, page_no);
@@ -2725,16 +2762,34 @@ lock_rec_dequeue_from_page(
         lock_grant(lock);
       }
     }
-  } else {
-    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-    if (first_lock_on_page == NULL)
-    {
-      TRACE_FUNCTION_END();
-      return;
-    }
-    
+  }
+  else
+  {
     ulint rec_fold = lock_rec_fold(space, page_no);
+    
+    /*
+    unordered_map<ulint, vector<lock_t *>> wait_locks;
+    unordered_map<ulint, vector<lock_t *>> granted_locks;
+    vector<lock_t *> locks;
+    
+    ulint n_bits = lock_rec_get_n_bits(in_lock);
+    
+    for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+         lock != NULL;
+         lock = lock_rec_get_next_on_page(lock))
+    {
+      if (lock_get_wait(lock))
+      {
+        ulint heap_no = lock_rec_find_set_bit(lock);
+        if (n_bits >= heap_no &&
+            lock_rec_get_nth_bit(in_lock, heap_no));
+        {
+          wait_locks[heap_no].push_back(lock);
+        }
+      }
+    }
+     */
+    
     vector<lock_t *> wait_locks;
     vector<lock_t *> granted_locks;
     
@@ -2755,6 +2810,7 @@ lock_rec_dequeue_from_page(
            lock != NULL;
            lock = lock_rec_get_next(heap_no, lock))
       {
+        trx_t *trx = lock->trx;
         if (lock_get_wait(lock))
         {
           wait_locks.push_back(lock);
@@ -2762,7 +2818,14 @@ lock_rec_dequeue_from_page(
           {
             first_wait_lock = lock;
           }
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+          long age = TraceTool::difftime(trx->trx_start_time, now);
+          if (trx->num_waiters > 0)
+          {
+            long time_since_last_age_calc = TraceTool::difftime(trx->last_age_calc, now);
+            trx->cumulative_age += trx->num_waiters * time_since_last_age_calc;
+            trx->last_age_calc = now;
+          }
+          lock->time_so_far = age + trx->cumulative_age;
         }
         else
         {
@@ -2781,10 +2844,6 @@ lock_rec_dequeue_from_page(
           lock_grant(lock);
           granted_locks.push_back(lock);
         }
-//        else
-//        {
-//          break;
-//        }
       }
       
       wait_locks.clear();
