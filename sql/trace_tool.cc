@@ -297,9 +297,9 @@ void TraceTool::set_query(const char *new_query)
     }
     else
     {
-      type = NONE;
-      commit_successful = false;
-//      type = NEW_ORDER;
+//      type = NONE;
+//      commit_successful = false;
+      type = NEW_ORDER;
     }
     
     pthread_rwlock_rdlock(&data_lock);

@@ -2748,7 +2748,7 @@ lock_rec_dequeue_from_page(
   ulint &total_locks = TraceTool::get_instance()->total_locks;
   ulint num_waits = TraceTool::get_instance()->num_waits;
   --total_locks;
-  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  bool FIFO = ((double) num_waits) / total_locks < 0.007;
   FIFO = false;
   
   if (FIFO) {
@@ -2767,7 +2767,6 @@ lock_rec_dequeue_from_page(
   {
     ulint rec_fold = lock_rec_fold(space, page_no);
     
-    /*
     unordered_map<ulint, vector<lock_t *>> wait_locks;
     unordered_map<ulint, vector<lock_t *>> granted_locks;
     vector<lock_t *> locks;
@@ -2788,67 +2787,67 @@ lock_rec_dequeue_from_page(
         }
       }
     }
-     */
     
-    vector<lock_t *> wait_locks;
-    vector<lock_t *> granted_locks;
     
-    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-         heap_no < n_bits; ++heap_no)
-    {
-      /* Not a lock on this record. */
-      if (!lock_rec_get_nth_bit(in_lock, heap_no))
-      {
-        continue;
-      }
-     
-      lock_t *first_wait_lock = NULL;
-      timespec now = TraceTool::get_time();
-      
-      for (lock = lock_rec_get_first(space, page_no, heap_no);
-           lock != NULL;
-           lock = lock_rec_get_next(heap_no, lock))
-      {
-        trx_t *trx = lock->trx;
-        if (lock_get_wait(lock))
-        {
-          wait_locks.push_back(lock);
-          if (first_wait_lock == NULL)
-          {
-            first_wait_lock = lock;
-          }
-          long age = TraceTool::difftime(trx->trx_start_time, now);
-          if (trx->num_waiters > 0)
-          {
-            long time_since_last_age_calc = TraceTool::difftime(trx->last_age_calc, now);
-            trx->cumulative_age += trx->num_waiters * time_since_last_age_calc;
-            trx->last_age_calc = now;
-          }
-          lock->time_so_far = age + trx->cumulative_age;
-        }
-        else
-        {
-          granted_locks.push_back(lock);
-        }
-      }
-      
-      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      
-      for (ulint index = 0; index < wait_locks.size(); ++index)
-      {
-        lock_t *lock = wait_locks[index];
-        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
-        {
-          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-          lock_grant(lock);
-          granted_locks.push_back(lock);
-        }
-      }
-      
-      wait_locks.clear();
-      granted_locks.clear();
-    }
+//    vector<lock_t *> wait_locks;
+//    vector<lock_t *> granted_locks;
+//    
+//    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+//    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+//         heap_no < n_bits; ++heap_no)
+//    {
+//      /* Not a lock on this record. */
+//      if (!lock_rec_get_nth_bit(in_lock, heap_no))
+//      {
+//        continue;
+//      }
+//     
+//      lock_t *first_wait_lock = NULL;
+//      timespec now = TraceTool::get_time();
+//      
+//      for (lock = lock_rec_get_first(space, page_no, heap_no);
+//           lock != NULL;
+//           lock = lock_rec_get_next(heap_no, lock))
+//      {
+//        trx_t *trx = lock->trx;
+//        if (lock_get_wait(lock))
+//        {
+//          wait_locks.push_back(lock);
+//          if (first_wait_lock == NULL)
+//          {
+//            first_wait_lock = lock;
+//          }
+//          long age = TraceTool::difftime(trx->trx_start_time, now);
+//          if (trx->num_waiters > 0)
+//          {
+//            long time_since_last_age_calc = TraceTool::difftime(trx->last_age_calc, now);
+//            trx->cumulative_age += trx->num_waiters * time_since_last_age_calc;
+//            trx->last_age_calc = now;
+//          }
+//          lock->time_so_far = age + trx->cumulative_age;
+//        }
+//        else
+//        {
+//          granted_locks.push_back(lock);
+//        }
+//      }
+//      
+//      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
+//      
+//      for (ulint index = 0; index < wait_locks.size(); ++index)
+//      {
+//        lock_t *lock = wait_locks[index];
+//        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
+//        {
+//          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+//          lock_grant(lock);
+//          granted_locks.push_back(lock);
+//        }
+//      }
+//      
+//      wait_locks.clear();
+//      granted_locks.clear();
+//    }
   }
   
   TRACE_FUNCTION_END();
