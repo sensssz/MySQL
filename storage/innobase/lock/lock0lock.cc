@@ -1798,6 +1798,47 @@ lock_number_of_rows_locked(
 
 /*============== RECORD LOCK CREATION AND QUEUE MANAGEMENT =============*/
 
+bool
+trx_is_older(
+  lock_t *lock1,
+  lock_t *lock2)
+{
+  trx_t *trx1 = lock1->trx;
+  trx_t *trx2 = lock2->trx;
+  if (trx1->trx_start_time.tv_sec < trx2->trx_start_time.tv_sec) {
+    return true;
+  } else if (trx1->trx_start_time.tv_sec > trx2->trx_start_time.tv_sec) {
+    return false;
+  } else {
+    return trx1->trx_start_time.tv_nsec < trx2->trx_start_time.tv_nsec;
+  }
+}
+
+static
+void
+lock_rec_insert_by_age(
+  lock_t *in_lock)
+{
+  ulint space = in_lock->un_member.rec_lock.space;
+  ulint page_no = in_lock->un_member.rec_lock.page_no;
+  ulint rec_fold = lock_rec_fold(space, page_no);
+  hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+                                        hash_calc_hash(rec_fold, lock_sys->rec_hash));
+  
+  lock_t *node = (lock_t *) cell->node;
+  if (node == NULL || trx_is_older(in_lock, node)) {
+    cell->node = in_lock;
+    in_lock->hash = node;
+    return;
+  }
+  while (node != NULL && trx_is_older((lock_t *) node->hash, in_lock)) {
+    node = (lock_t *) node->hash;
+  }
+  lock_t *next = (lock_t *) node->hash;
+  node->hash = in_lock;
+  in_lock->hash = next;
+}
+
 /*********************************************************************//**
 Creates a new record lock and inserts it to the lock queue. Does NOT check
 for deadlocks or lock compatibility!
@@ -1883,8 +1924,9 @@ lock_rec_create(
 
   ut_ad(index->table->n_ref_count > 0 || !index->table->can_be_evicted);
 
-  HASH_INSERT(lock_t, hash, lock_sys->rec_hash,
-        lock_rec_fold(space, page_no), lock);
+//  HASH_INSERT(lock_t, hash, lock_sys->rec_hash,
+//        lock_rec_fold(space, page_no), lock);
+  lock_rec_insert_by_age(lock);
 
   if (!caller_owns_trx_mutex) {
     trx_mutex_enter(trx);
@@ -2700,97 +2742,109 @@ lock_rec_dequeue_from_page(
 	page_no = in_lock->un_member.rec_lock.page_no;
 
 	in_lock->index->table->n_rec_locks--;
+  
+  ulint rec_fold = lock_rec_fold(space, page_no);
 
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
-		    lock_rec_fold(space, page_no), in_lock);
+		    rec_fold, in_lock);
 
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  ulint &total_locks = TraceTool::get_instance()->total_locks;
-  ulint num_waits = TraceTool::get_instance()->num_waits;
-  --total_locks;
-  bool FIFO = ((double) num_waits) / total_locks < 0.00015;
+  std::vector<lock_t *> wait_locks;
   
-  if (FIFO) {
-    for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-         lock != NULL;
-         lock = lock_rec_get_next_on_page(lock))
-    {
-      if (lock_get_wait(lock) &&
-          !lock_rec_has_to_wait_in_queue(lock))
-      {
-        lock_grant(lock);
-      }
-    }
-  } else {
-    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
-    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
-    if (first_lock_on_page == NULL)
-    {
-      TRACE_FUNCTION_END();
-      return;
-    }
-    
-    ulint rec_fold = lock_rec_fold(space, page_no);
-    vector<lock_t *> wait_locks;
-    vector<lock_t *> granted_locks;
-    
-    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
-    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
-         heap_no < n_bits; ++heap_no)
-    {
-      /* Not a lock on this record. */
-      if (!lock_rec_get_nth_bit(in_lock, heap_no))
-      {
-        continue;
-      }
-     
-      lock_t *first_wait_lock = NULL;
-      timespec now = TraceTool::get_time();
-      
-      for (lock = lock_rec_get_first(space, page_no, heap_no);
-           lock != NULL;
-           lock = lock_rec_get_next(heap_no, lock))
-      {
-        if (lock_get_wait(lock))
-        {
-          wait_locks.push_back(lock);
-          if (first_wait_lock == NULL)
-          {
-            first_wait_lock = lock;
-          }
-          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
-        }
-        else
-        {
-          granted_locks.push_back(lock);
-        }
-      }
-      
-      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
-      
-      for (ulint index = 0; index < wait_locks.size(); ++index)
-      {
-        lock_t *lock = wait_locks[index];
-        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
-        {
-          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-          lock_grant(lock);
-          granted_locks.push_back(lock);
-        }
-//        else
-//        {
-//          break;
-//        }
-      }
-      
-      wait_locks.clear();
-      granted_locks.clear();
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != NULL;
+       lock = lock_rec_get_next_on_page(lock)) {
+    if(lock_get_wait(lock)) {
+      wait_locks.push_back(lock);
     }
   }
+  
+  if (wait_locks.size() > 0) {
+    lock_t *first_wait_lock = wait_locks[0];
+    for (auto lock : wait_locks)
+    {
+      if (lock_get_wait(lock)) {
+        if (first_wait_lock == NULL) {
+          first_wait_lock = lock;
+        }
+        if (!lock_rec_has_to_wait_in_queue(lock)) {
+          lock_grant(lock);
+          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+        }
+      }
+    }
+  }
+  
+//  if (false) {
+//    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */
+//    lock_t *first_lock_on_page = lock_rec_get_first_on_page_addr(space, page_no);
+//    if (first_lock_on_page == NULL)
+//    {
+//      TRACE_FUNCTION_END();
+//      return;
+//    }
+//    
+//    ulint rec_fold = lock_rec_fold(space, page_no);
+//    vector<lock_t *> wait_locks;
+//    vector<lock_t *> granted_locks;
+//    
+//    /* A lock object can represent multiple locks on the same page. We look at each one of them. */
+//    for (ulint heap_no = 0, n_bits = lock_rec_get_n_bits(in_lock);
+//         heap_no < n_bits; ++heap_no)
+//    {
+//      /* Not a lock on this record. */
+//      if (!lock_rec_get_nth_bit(in_lock, heap_no))
+//      {
+//        continue;
+//      }
+//     
+//      lock_t *first_wait_lock = NULL;
+//      timespec now = TraceTool::get_time();
+//      
+//      for (lock = lock_rec_get_first(space, page_no, heap_no);
+//           lock != NULL;
+//           lock = lock_rec_get_next(heap_no, lock))
+//      {
+//        if (lock_get_wait(lock))
+//        {
+//          wait_locks.push_back(lock);
+//          if (first_wait_lock == NULL)
+//          {
+//            first_wait_lock = lock;
+//          }
+//          lock->time_so_far = TraceTool::difftime(lock->trx->trx_start_time, now);
+//        }
+//        else
+//        {
+//          granted_locks.push_back(lock);
+//        }
+//      }
+//      
+//      sort(wait_locks.begin(), wait_locks.end(), compare_by_time_so_far);
+//      
+//      for (ulint index = 0; index < wait_locks.size(); ++index)
+//      {
+//        lock_t *lock = wait_locks[index];
+//        if (!lock_rec_has_to_wait_granted(granted_locks, lock))
+//        {
+//          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+//          lock_grant(lock);
+//          granted_locks.push_back(lock);
+//        }
+////        else
+////        {
+////          break;
+////        }
+//      }
+//      
+//      wait_locks.clear();
+//      granted_locks.clear();
+//    }
+//  }
   
   TRACE_FUNCTION_END();
   TraceTool::path_count = 0;
