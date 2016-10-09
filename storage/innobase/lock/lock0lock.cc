@@ -1803,6 +1803,11 @@ trx_is_older(
   lock_t *lock1,
   lock_t *lock2)
 {
+  if (lock1 == NULL) {
+    return false;
+  } else if (lock2 == NULL) {
+    return true;
+  }
   trx_t *trx1 = lock1->trx;
   trx_t *trx2 = lock2->trx;
   if (trx1->trx_start_time.tv_sec < trx2->trx_start_time.tv_sec) {
