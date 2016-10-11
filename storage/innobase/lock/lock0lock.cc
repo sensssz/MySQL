@@ -1797,9 +1797,13 @@ lock_number_of_rows_locked(
 }
 
 /*============== RECORD LOCK CREATION AND QUEUE MANAGEMENT =============*/
-
+/*********************************************************************//**
+NULL has lowest priority.
+If neither of them is wait lock, the first one has higher priority.
+If only one of them is a wait lock, it has lower priority.
+Otherwise, the one with older transaction has higher priority. */
 bool
-trx_is_older(
+has_higher_priority(
   lock_t *lock1,
   lock_t *lock2)
 {
@@ -1807,6 +1811,11 @@ trx_is_older(
     return false;
   } else if (lock2 == NULL) {
     return true;
+  }
+  if (!lock_get_wait(lock1)) {
+    return true;
+  } else if (!lock_get_wait(lock2)) {
+    return false;
   }
   trx_t *trx1 = lock1->trx;
   trx_t *trx2 = lock2->trx;
@@ -1822,7 +1831,8 @@ trx_is_older(
 static
 void
 lock_rec_insert_by_age(
-  lock_t *in_lock)
+  lock_t *in_lock,
+  bool wait)
 {
   ulint space = in_lock->un_member.rec_lock.space;
   ulint page_no = in_lock->un_member.rec_lock.page_no;
@@ -1831,12 +1841,13 @@ lock_rec_insert_by_age(
                                         hash_calc_hash(rec_fold, lock_sys->rec_hash));
   
   lock_t *node = (lock_t *) cell->node;
-  if (node == NULL || trx_is_older(in_lock, node)) {
+  // If in_lock is not a wait lock, we insert it to the head of the list.
+  if (node == NULL || !wait || has_higher_priority(in_lock, node)) {
     cell->node = in_lock;
     in_lock->hash = node;
     return;
   }
-  while (node != NULL && trx_is_older((lock_t *) node->hash, in_lock)) {
+  while (node != NULL && has_higher_priority((lock_t *) node->hash, in_lock)) {
     node = (lock_t *) node->hash;
   }
   lock_t *next = (lock_t *) node->hash;
@@ -1931,7 +1942,7 @@ lock_rec_create(
 
 //  HASH_INSERT(lock_t, hash, lock_sys->rec_hash,
 //        lock_rec_fold(space, page_no), lock);
-  lock_rec_insert_by_age(lock);
+  lock_rec_insert_by_age(lock, type_mode & LOCK_WAIT);
 
   if (!caller_owns_trx_mutex) {
     trx_mutex_enter(trx);
@@ -2499,6 +2510,52 @@ lock_rec_has_to_wait_in_queue(
   return(NULL);
 }
 
+
+
+/*********************************************************************//**
+Checks if a waiting record lock request still has to wait for the granted locks in the queue.
+@return lock that is causing the wait */
+static
+const lock_t*
+lock_rec_has_to_wait_granted(
+/*==========================*/
+  const lock_t* wait_lock)  /*!< in: waiting record lock */
+{
+  const lock_t* lock;
+  ulint   space;
+  ulint   page_no;
+  ulint   heap_no;
+  ulint   bit_mask;
+  ulint   bit_offset;
+
+  ut_ad(lock_mutex_own());
+  ut_ad(lock_get_wait(wait_lock));
+  ut_ad(lock_get_type_low(wait_lock) == LOCK_REC);
+
+  space = wait_lock->un_member.rec_lock.space;
+  page_no = wait_lock->un_member.rec_lock.page_no;
+  heap_no = lock_rec_find_set_bit(wait_lock);
+
+  bit_offset = heap_no / 8;
+  bit_mask = static_cast<ulint>(1 << (heap_no % 8));
+
+  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+       lock != wait_lock && !lock_get_wait(lock);
+       lock = lock_rec_get_next_on_page_const(lock)) {
+
+    const byte* p = (const byte*) &lock[1];
+
+    if (heap_no < lock_rec_get_n_bits(lock)
+        && (p[bit_offset] & bit_mask)
+        && lock_has_to_wait(wait_lock, lock)) {
+
+      return(lock);
+    }
+  }
+
+  return(NULL);
+}
+
 /*************************************************************//**
 Grants a lock to a waiting lock request and releases the waiting transaction.
 The caller must hold lock_sys->mutex but not lock->trx->mutex. */
@@ -2686,6 +2743,25 @@ lock_rec_move_to_front(
 }
 
 static
+void
+lock_rec_move_to_front(
+  lock_t *lock_to_move,
+  ulint rec_fold)
+{
+  if (lock_to_move != NULL)
+  {
+    // Move the target lock to the head of the list
+    hash_cell_t* cell = hash_get_nth_cell(lock_sys->rec_hash,
+                                          hash_calc_hash(rec_fold, lock_sys->rec_hash));
+    if (lock_to_move != cell->node) {
+      lock_t *next = (lock_t *) cell->node;
+      cell->node = lock_to_move;
+      lock_to_move = next;
+    }
+  }
+}
+
+static
 bool
 compare_by_time_so_far(
   lock_t *lock1,
@@ -2735,6 +2811,7 @@ lock_rec_dequeue_from_page(
 	ulint		space;
 	ulint		page_no;
 	lock_t*		lock;
+  lock_t*   previous = NULL;
 	trx_lock_t*	trx_lock;
 
 	ut_ad(lock_mutex_own());
@@ -2758,31 +2835,59 @@ lock_rec_dequeue_from_page(
 	MONITOR_INC(MONITOR_RECLOCK_REMOVED);
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
-  std::vector<lock_t *> wait_locks;
   
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
-       lock != NULL;
-       lock = lock_rec_get_next_on_page(lock)) {
-    if(lock_get_wait(lock)) {
-      wait_locks.push_back(lock);
+       lock != NULL;) {
+  
+    // If the lock is a wait lock on this page, and it is compatiable with
+    // the granted locks
+    if ((lock->un_member.rec_lock.space == space)
+        && (lock->un_member.rec_lock.page_no == page_no)
+        && lock_get_wait(lock)
+        && !lock_rec_has_to_wait_granted(lock)) {
+      
+        lock_grant(lock);
+      // Remove the lock from the list
+      if (previous != NULL) {
+        previous->hash = lock->hash;
+        // Move the lock to the head of the list
+        lock_rec_move_to_front(lock, rec_fold);
+      } else {
+        previous = lock;
+      }
+      // Move to the next lock
+      lock = static_cast<lock_t *>(HASH_GET_NEXT(hash, previous));
+    } else {
+      lock = static_cast<lock_t *>(HASH_GET_NEXT(hash, lock));
+      previous = lock;
     }
   }
   
-  if (wait_locks.size() > 0) {
-    lock_t *first_wait_lock = wait_locks[0];
-    for (auto lock : wait_locks)
-    {
-      if (lock_get_wait(lock)) {
-        if (first_wait_lock == NULL) {
-          first_wait_lock = lock;
-        }
-        if (!lock_rec_has_to_wait_in_queue(lock)) {
-          lock_grant(lock);
-          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
-        }
-      }
-    }
-  }
+//  std::vector<lock_t *> wait_locks;
+//  
+//  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+//       lock != NULL;
+//       lock = lock_rec_get_next_on_page(lock)) {
+//    if(lock_get_wait(lock)) {
+//      wait_locks.push_back(lock);
+//    }
+//  }
+//  
+//  if (wait_locks.size() > 0) {
+//    lock_t *first_wait_lock = wait_locks[0];
+//    for (auto lock : wait_locks)
+//    {
+//      if (lock_get_wait(lock)) {
+//        if (first_wait_lock == NULL) {
+//          first_wait_lock = lock;
+//        }
+//        if (!lock_rec_has_to_wait_in_queue(lock)) {
+//          lock_grant(lock);
+////          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+//        }
+//      }
+//    }
+//  }
   
 //  if (false) {
 //    /* Find the first lock on this paper. If we cannot find one, we can simply stop. */

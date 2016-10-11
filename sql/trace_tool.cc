@@ -153,7 +153,7 @@ TraceTool::TraceTool() : function_times()
 #else
   const int number_of_functions = NUMBER_OF_FUNCTIONS + 1;
 #endif
-  vector<int> function_time;
+  vector<long> function_time;
   function_time.push_back(0);
   for (int index = 0; index < number_of_functions; index++)
   {
@@ -254,7 +254,7 @@ void TraceTool::start_new_query()
     pthread_rwlock_wrlock(&data_lock);
     current_transaction_id = transaction_id++;
     transaction_start_times[current_transaction_id] = now_micro();
-    for (vector<vector<int> >::iterator iterator = function_times.begin();
+    for (auto iterator = function_times.begin();
          iterator != function_times.end();
          ++iterator)
     {
@@ -342,7 +342,7 @@ void TraceTool::end_transaction()
   long latency = difftime(trans_start, now);
   pthread_rwlock_rdlock(&data_lock);
   function_times.back()[current_transaction_id] = latency;
-  if (!commit_successful)
+  if (!commit_successful || latency == 0)
   {
     transaction_start_times[current_transaction_id] = 0;
   }
@@ -365,6 +365,10 @@ void TraceTool::add_record(int function_index, long duration)
 
 void TraceTool::write_latency(string dir)
 {
+  if (transaction_start_times.size() < 200) {
+    function_times.clear();
+    return;
+  }
   ofstream tpcc_log;
   ofstream new_order_log;
   ofstream payment_log;
@@ -383,7 +387,7 @@ void TraceTool::write_latency(string dir)
   for (ulint index = 0; index < transaction_start_times.size(); ++index)
   {
     ulint start_time = transaction_start_times[index];
-    if (start_time > 0)
+    if (start_time > 0 && function_times.back()[index] > 0)
     {
       tpcc_log << start_time << endl;
       switch (transaction_types[index])
@@ -410,7 +414,7 @@ void TraceTool::write_latency(string dir)
   }
   
   int function_index = 0;
-  for (vector<vector<int> >::iterator iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
+  for (auto iterator = function_times.begin(); iterator != function_times.end(); ++iterator)
   {
     ulint number_of_transactions = iterator->size();
     for (ulint index = 0; index < number_of_transactions; ++index)

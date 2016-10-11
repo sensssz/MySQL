@@ -85,7 +85,7 @@ private:
     
     ofstream log_file;                      /*!< An log file for outputing debug messages. */
     
-    vector<vector<int> > function_times;  /*!< Stores the running time of the child functions
+    vector<vector<long> > function_times;  /*!< Stores the running time of the child functions
                                                  and also transaction latency (the last one). */
     vector<ulint> transaction_start_times;  /*!< Stores the start time of transactions. */
     vector<transaction_type> transaction_types;/*!< Stores the transaction types of transactions. */
