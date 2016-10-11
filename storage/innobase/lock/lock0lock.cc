@@ -2844,9 +2844,10 @@ lock_rec_dequeue_from_page(
     if ((lock->un_member.rec_lock.space == space)
         && (lock->un_member.rec_lock.page_no == page_no)
         && lock_get_wait(lock)
-        && !lock_rec_has_to_wait_granted(lock)) {
+        && !lock_rec_has_to_wait_in_queue(lock)) {
       
         lock_grant(lock);
+      
       // Remove the lock from the list
       if (previous != NULL) {
         previous->hash = lock->hash;
@@ -2858,8 +2859,8 @@ lock_rec_dequeue_from_page(
       // Move to the next lock
       lock = static_cast<lock_t *>(HASH_GET_NEXT(hash, previous));
     } else {
-      lock = static_cast<lock_t *>(HASH_GET_NEXT(hash, lock));
       previous = lock;
+      lock = static_cast<lock_t *>(HASH_GET_NEXT(hash, lock));
     }
   }
   
