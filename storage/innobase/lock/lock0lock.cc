@@ -2756,7 +2756,7 @@ lock_rec_move_to_front(
     if (lock_to_move != cell->node) {
       lock_t *next = (lock_t *) cell->node;
       cell->node = lock_to_move;
-      lock_to_move = next;
+      lock_to_move->hash = next;
     }
   }
 }
