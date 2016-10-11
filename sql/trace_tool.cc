@@ -200,9 +200,6 @@ void *TraceTool::check_write_log(void *arg)
       /* Reset the global transaction ID. */
       transaction_id = 0;
       
-      memset(num_trans, 0, TRX_TYPES * sizeof(long));
-      memset(mean_latency, 0, TRX_TYPES * sizeof(double));
-      
       /* Dump data in the old instance to log files and
          reclaim memory. */
       old_instace->write_log();
@@ -297,9 +294,9 @@ void TraceTool::set_query(const char *new_query)
     }
     else
     {
-//      type = NONE;
-//      commit_successful = false;
-      type = NEW_ORDER;
+      type = NONE;
+      commit_successful = false;
+//      type = NEW_ORDER;
     }
     
     pthread_rwlock_rdlock(&data_lock);
@@ -476,4 +473,10 @@ void TraceTool::write_log()
 //  time_so_far.clear();
   
   write_latency("latency/");
+  ofstream num_trans_file("latency/num_trans");
+  num_trans_file << num_trans[0] << endl;
+  num_trans_file.close();
+  
+  memset(num_trans, 0, TRX_TYPES * sizeof(long));
+  memset(mean_latency, 0, TRX_TYPES * sizeof(double));
 }

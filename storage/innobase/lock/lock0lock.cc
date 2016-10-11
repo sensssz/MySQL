@@ -1801,7 +1801,7 @@ lock_number_of_rows_locked(
 NULL has lowest priority.
 If neither of them is wait lock, the first one has higher priority.
 If only one of them is a wait lock, it has lower priority.
-Otherwise, the one with older transaction has higher priority. */
+Otherwise, the one with an older transaction has higher priority. */
 bool
 has_higher_priority(
   lock_t *lock1,
@@ -1830,7 +1830,7 @@ has_higher_priority(
 
 static
 void
-lock_rec_insert_by_age(
+lock_rec_insert_by_trx_age(
   lock_t *in_lock,
   bool wait)
 {
@@ -1942,7 +1942,7 @@ lock_rec_create(
 
 //  HASH_INSERT(lock_t, hash, lock_sys->rec_hash,
 //        lock_rec_fold(space, page_no), lock);
-  lock_rec_insert_by_age(lock, type_mode & LOCK_WAIT);
+  lock_rec_insert_by_trx_age(lock, type_mode & LOCK_WAIT);
 
   if (!caller_owns_trx_mutex) {
     trx_mutex_enter(trx);
@@ -2836,27 +2836,36 @@ lock_rec_dequeue_from_page(
   MONITOR_DEC(MONITOR_NUM_RECLOCK);
   
   
+//  for (lock = lock_rec_get_first_on_page_addr(space, page_no);
+//       lock != NULL;
+//       lock = lock_rec_get_next_on_page(lock)) {
+//    if(lock_get_wait(lock) &&
+//       !lock_rec_has_to_wait_in_queue(lock)) {
+//      lock_grant(lock);
+//    }
+//  }
+  
   for (lock = lock_rec_get_first_on_page_addr(space, page_no);
        lock != NULL;) {
   
-    // If the lock is a wait lock on this page, and it is compatiable with
-    // the granted locks
+    // If the lock is a wait lock on this page, and it does not need to wait
     if ((lock->un_member.rec_lock.space == space)
         && (lock->un_member.rec_lock.page_no == page_no)
         && lock_get_wait(lock)
         && !lock_rec_has_to_wait_in_queue(lock)) {
       
-        lock_grant(lock);
+      lock_grant(lock);
+      TraceTool::get_instance()->num_trans[0]++;
       
-      // Remove the lock from the list
       if (previous != NULL) {
-        previous->hash = lock->hash;
         // Move the lock to the head of the list
+        HASH_GET_NEXT(hash, previous) = HASH_GET_NEXT(hash, lock);
         lock_rec_move_to_front(lock, rec_fold);
       } else {
+        // Already at the head of the list.
         previous = lock;
       }
-      // Move to the next lock
+      // Move on to the next lock
       lock = static_cast<lock_t *>(HASH_GET_NEXT(hash, previous));
     } else {
       previous = lock;
@@ -2885,6 +2894,8 @@ lock_rec_dequeue_from_page(
 //        if (!lock_rec_has_to_wait_in_queue(lock)) {
 //          lock_grant(lock);
 ////          lock_rec_move_to_front(lock, first_wait_lock, rec_fold);
+//          hash_delete(lock, rec_fold);
+//          lock_rec_move_to_front(lock, rec_fold);
 //        }
 //      }
 //    }
@@ -4119,7 +4130,7 @@ lock_get_first_lock(
   }
 
   ut_a(lock != NULL);
-//  ut_a(lock != ctx->wait_lock);
+  ut_a(lock != ctx->wait_lock);
   ut_ad(lock_get_type_low(lock) == lock_get_type_low(ctx->wait_lock));
 
   return(lock);
